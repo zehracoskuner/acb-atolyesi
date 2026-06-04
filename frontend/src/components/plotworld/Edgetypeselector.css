@@ -1,0 +1,107 @@
+/* EdgeTypeSelector.css + CausalEdge.css */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
+
+/* ── Overlay ── */
+.ets-overlay {
+  position: fixed; inset: 0;
+  background: rgba(28,25,23,.35);
+  backdrop-filter: blur(3px);
+  z-index: 9000;
+  display: flex; align-items: center; justify-content: center;
+  animation: etsFade 140ms ease;
+}
+@keyframes etsFade { from { opacity:0; } to { opacity:1; } }
+
+/* ── Popup ── */
+.ets-popup {
+  background:    #faf8f5;
+  border:        1.5px solid #e2dcd4;
+  border-radius: 14px;
+  padding:       20px;
+  width:         320px;
+  box-shadow:    0 16px 48px rgba(0,0,0,.18), 0 4px 12px rgba(0,0,0,.08);
+  animation:     etsIn 180ms cubic-bezier(.34,1.56,.64,1);
+  font-family:   'DM Sans', sans-serif;
+}
+@keyframes etsIn {
+  from { opacity:0; transform:scale(.92) translateY(8px); }
+  to   { opacity:1; transform:scale(1)   translateY(0);   }
+}
+
+/* ── Header ── */
+.ets-header {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 14px;
+}
+.ets-header-icon  { font-size: 18px; color: #6b5f53; }
+.ets-header-title { font-size: 13px; font-weight: 600; color: #1c1917; }
+
+/* ── Grid ── */
+.ets-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px; margin-bottom: 12px;
+}
+
+.ets-item {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 12px 8px;
+  background: #fff; border: 1.5px solid #e8e2d9; border-radius: 10px;
+  cursor: pointer; font-family: inherit;
+  transition: border-color 150ms, box-shadow 150ms, transform 120ms;
+}
+.ets-item:hover {
+  box-shadow: 0 2px 10px rgba(0,0,0,.08);
+  transform:  translateY(-1px);
+}
+.ets-item:active { transform: translateY(0); }
+
+.ets-item-icon {
+  width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  transition: transform 150ms;
+}
+.ets-item:hover .ets-item-icon { transform: scale(1.1); }
+
+.ets-item-label {
+  font-size: 11px; font-weight: 600; color: #3d342c;
+  text-align: center; letter-spacing: .02em;
+}
+.ets-item-dash { font-size: 9px; color: #b8a99a; letter-spacing: .1em; }
+
+.ets-skip {
+  width: 100%; background: none; border: none;
+  border-top: 1px solid #e8e2d9;
+  padding: 10px 0 2px;
+  font-size: 11px; color: #9d8e82;
+  cursor: pointer; text-align: center; font-family: inherit;
+  transition: color 150ms;
+}
+.ets-skip:hover { color: #3d342c; }
+
+/* ── CausalEdge label ── */
+.ce-label        { display: flex; align-items: center; gap: 4px; cursor: default; }
+.ce-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px;
+  border-radius: 50%; border: 1px solid;
+  font-size: 8px; line-height: 1;
+  transition: transform 140ms, box-shadow 140ms;
+}
+.ce-label:hover .ce-icon { transform: scale(1.2); box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+
+.ce-type-label {
+  font-size: 10px; font-weight: 600; letter-spacing: .04em;
+  white-space: nowrap; font-family: 'DM Sans', sans-serif;
+  background: #faf8f5; border: 1px solid #e8e2d9;
+  padding: 2px 6px; border-radius: 5px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  animation: ceLabelIn 140ms ease;
+}
+@keyframes ceLabelIn {
+  from { opacity:0; transform:scale(.9); }
+  to   { opacity:1; transform:scale(1);  }
+}
+.ce-label--selected .ce-icon {
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 20%, transparent);
+}

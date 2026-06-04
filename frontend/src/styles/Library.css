@@ -1,0 +1,136 @@
+.library-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.library-header {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 1rem;
+}
+
+.library-header h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  color: #333;
+}
+
+.library-header p {
+  color: #666;
+}
+
+.library-empty {
+  text-align: center;
+  padding: 4rem 0;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.library-empty p {
+  margin-bottom: 1.5rem;
+  color: #555;
+  font-size: 1.1rem;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+  padding: 0.6rem 1.2rem;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 2rem;
+}
+
+.library-card {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: transform 0.2s;
+}
+
+.library-card:hover {
+  transform: translateY(-4px);
+}
+
+.library-card-img-link {
+  display: block;
+  height: 300px;
+  overflow: hidden;
+  background-color: #eee;
+}
+
+.library-cover, .library-cover-placeholder {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.library-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  font-size: 1.2rem;
+}
+
+.library-card-content {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.library-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #222;
+  text-decoration: none;
+  margin-bottom: 0.5rem;
+}
+
+.library-title:hover {
+  color: #007bff;
+}
+
+.library-author, .library-chapters {
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 0.2rem;
+}
+
+.library-card-actions {
+  margin-top: auto;
+  padding-top: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-read {
+  font-size: 0.9rem;
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.btn-remove {
+  background: none;
+  border: none;
+  color: #dc3545;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn-remove:hover {
+  text-decoration: underline;
+}

@@ -1,0 +1,28 @@
+# Bağımlılıklar
+node_modules/
+dist/
+build/
+
+# Ortam Değişkenleri (TÜM ALT KLASÖRLER DAHİL)
+**/.env
+**/.env.local
+**/.env.production
+**/.env.*.local
+.env
+.env.*
+
+# Backend Spesifik
+backend/.env
+backend/node_modules/
+
+# Frontend Spesifik
+frontend/.env
+frontend/node_modules/
+
+# Sistem ve Editör
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+not.txt
+*.log

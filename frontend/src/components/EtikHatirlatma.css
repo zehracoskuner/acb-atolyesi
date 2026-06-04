@@ -1,0 +1,76 @@
+/* ─── EtikHatirlatma.css ─────────────────────────────────────────────── */
+/* Yorum alanı ve paylaşım modalı için küçük etik hatırlatma bandı       */
+
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&display=swap");
+
+.etik-hatirlatma {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 4px;
+  border-left: 3px solid transparent;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 0.88rem;
+  font-weight: 300;
+  line-height: 1.55;
+  transition: opacity 0.2s;
+}
+
+/* ── Yorum varyantı — sıcak toprak tonu ─────────────────────────────── */
+.etik-hatirlatma--yorum {
+  background: rgba(122, 74, 37, 0.06);
+  border-left-color: rgba(122, 74, 37, 0.45);
+  color: #3e3320;
+}
+
+.etik-hatirlatma--yorum .etik-hatirlatma__vurgu {
+  font-style: italic;
+  color: #7a4a25;
+}
+
+.etik-hatirlatma--yorum .etik-hatirlatma__link {
+  color: #7a4a25;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(122, 74, 37, 0.4);
+  padding-bottom: 1px;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.etik-hatirlatma--yorum .etik-hatirlatma__link:hover {
+  color: #1c1509;
+  border-bottom-color: #1c1509;
+}
+
+/* ── Paylaşım varyantı — orman yeşili tonu ───────────────────────────── */
+.etik-hatirlatma--paylasim {
+  background: rgba(53, 87, 74, 0.06);
+  border-left-color: rgba(53, 87, 74, 0.45);
+  color: #3e3320;
+}
+
+.etik-hatirlatma--paylasim .etik-hatirlatma__vurgu {
+  font-style: italic;
+  color: #35574a;
+}
+
+.etik-hatirlatma--paylasim .etik-hatirlatma__link {
+  color: #35574a;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(53, 87, 74, 0.4);
+  padding-bottom: 1px;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.etik-hatirlatma--paylasim .etik-hatirlatma__link:hover {
+  color: #1c1509;
+  border-bottom-color: #1c1509;
+}
+
+/* ── İkon ────────────────────────────────────────────────────────────── */
+.etik-hatirlatma__icon {
+  font-size: 0.9rem;
+  margin-top: 1px;
+  flex-shrink: 0;
+  opacity: 0.75;
+}

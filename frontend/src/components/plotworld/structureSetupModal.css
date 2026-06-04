@@ -1,0 +1,308 @@
+/* StructureSetupModal.css */
+
+.ssm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(28,25,23,0.55);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.ssm-modal {
+  background: #fffdf9;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 620px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.ssm-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid #f0ebe3;
+}
+
+.ssm-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a8998a;
+  margin-bottom: 4px;
+}
+
+.ssm-title {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1c1917;
+}
+
+.ssm-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #a8998a;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+
+.ssm-close:hover { color: #1c1917; }
+
+/* Şablon kartları */
+.ssm-templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  padding: 20px 24px 0;
+}
+
+.ssm-card {
+  position: relative;
+  background: #faf7f2;
+  border: 1.5px solid #e2d9ce;
+  border-radius: 10px;
+  padding: 12px 12px 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.ssm-card:hover {
+  border-color: #c4b9ad;
+  background: #f5f0e8;
+}
+
+.ssm-card--active {
+  border-color: #6d28d9;
+  background: #faf7f2;
+  box-shadow: 0 0 0 2px #ddd6fe;
+}
+
+.ssm-card-acts {
+  display: flex;
+  gap: 3px;
+  height: 6px;
+  border-radius: 100px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.ssm-act-strip {
+  border-radius: 100px;
+  min-width: 6px;
+}
+
+.ssm-card-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1c1917;
+  margin-bottom: 3px;
+}
+
+.ssm-card-desc {
+  font-size: 11px;
+  color: #78716c;
+  line-height: 1.45;
+}
+
+.ssm-card-check {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 18px;
+  height: 18px;
+  background: #6d28d9;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+/* Önizleme */
+.ssm-preview {
+  padding: 16px 24px 0;
+}
+
+.ssm-preview-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #a8998a;
+  margin-bottom: 8px;
+}
+
+.ssm-preview-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ssm-preview-act {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: #f0ebe3;
+  border-radius: 100px;
+}
+
+.ssm-preview-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ssm-preview-roman {
+  font-size: 11px;
+  font-weight: 700;
+  color: #57534e;
+}
+
+.ssm-preview-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #292524;
+}
+
+/* Özel yapı editörü */
+.ssm-custom {
+  padding: 16px 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ssm-custom-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ssm-color-pick {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #e2d9ce;
+  padding: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+  background: none;
+}
+
+.ssm-act-input {
+  flex: 1;
+  padding: 7px 10px;
+  background: #faf7f2;
+  border: 1px solid #e2d9ce;
+  border-radius: 7px;
+  font-size: 13px;
+  color: #1c1917;
+  font-family: "DM Sans", sans-serif;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.ssm-act-input:focus { border-color: #6d28d9; }
+
+.ssm-act-input--roman {
+  flex: 0 0 56px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.ssm-remove-act {
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: #a8998a;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+
+.ssm-remove-act:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.ssm-remove-act:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.ssm-add-act {
+  align-self: flex-start;
+  padding: 7px 14px;
+  background: none;
+  border: 1px dashed #c4b9ad;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #78716c;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.ssm-add-act:hover { background: #f0ebe3; }
+
+/* Uyarı */
+.ssm-warning {
+  margin: 16px 24px 0;
+  padding: 10px 14px;
+  background: #fef9e7;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #92620a;
+  line-height: 1.5;
+}
+
+/* Footer */
+.ssm-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 20px 24px;
+}
+
+.ssm-btn {
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.12s;
+}
+
+.ssm-btn--ghost {
+  background: none;
+  border-color: #e2d9ce;
+  color: #57534e;
+}
+
+.ssm-btn--ghost:hover { background: #f0ebe3; }
+
+.ssm-btn--primary {
+  background: #1c1917;
+  color: #faf7f2;
+}
+
+.ssm-btn--primary:hover { background: #292524; }

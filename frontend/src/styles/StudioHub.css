@@ -1,0 +1,597 @@
+/* ══════════════════════════════════════════════════════
+   StudioHub.css — ACB Atölyesi Çalışmalarım + Atölye
+   Sekmeli hub: çalışma yönetimi + serbest yazı
+   (Premium & Modernized Edition)
+══════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,500;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&display=swap');
+
+:root {
+  /* Renk Paleti */
+  --paper:        #fcfaf6; /* Biraz daha aydınlık ve ferah bir kağıt tonu */
+  --paper-2:      #f5f0e8;
+  --paper-3:      #e6dfd1;
+  --ink:          #1a1209;
+  --ink-2:        #3d2f1a;
+  --ink-3:        #7a6e5f;
+  --ink-4:        #a39b8c;
+  --ink-5:        #d4cfc6;
+  
+  /* Vurgu Renkleri */
+  --gold:         #c59b27; /* Biraz daha zengin bir altın sarısı */
+  --gold-soft:    rgba(197, 155, 39, 0.08);
+  --gold-border:  rgba(197, 155, 39, 0.25);
+  --green:        #166534;
+  --red:          #b91c1c;
+  
+  /* Gölgeler & Geçişler */
+  --shadow-sm:    0 2px 8px rgba(26, 18, 9, 0.04);
+  --shadow-md:    0 8px 24px rgba(26, 18, 9, 0.08), 0 2px 8px rgba(26, 18, 9, 0.04);
+  --transition:   0.3s cubic-bezier(0.25, 1, 0.5, 1); /* Daha pürüzsüz yaylanma */
+}
+
+/* ═══════════════════════════════
+   LAYOUT & BASE
+═══════════════════════════════ */
+.studio-root {
+  background:  var(--paper);
+  font-family: 'DM Sans', sans-serif;
+  color:       var(--ink);
+  min-height:  100vh;
+  /* Tipografi İyileştirmeleri */
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.studio-root * {
+  box-sizing: border-box;
+}
+
+.studio-main {
+  max-width:    1200px;
+  margin:       0 auto;
+  padding:      2.5rem 2rem;
+}
+
+/* ─── Splash (Loading) ── */
+.studio-splash {
+  display:         flex;
+  flex-direction:  column;
+  align-items:     center;
+  justify-content: center;
+  min-height:      100vh;
+  background:      var(--paper);
+  color:           var(--ink-4);
+  gap:             20px;
+}
+.studio-splash-ring {
+  width:           44px;
+  height:          44px;
+  border-radius:   50%;
+  border:          3px solid var(--paper-3);
+  border-top-color: var(--gold);
+  animation:       spin 0.8s cubic-bezier(0.6, 0.2, 0.4, 0.8) infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+/* ═══════════════════════════════
+   SEKMELER
+═══════════════════════════════ */
+.studio-tabs-wrap {
+  margin-bottom:  2rem;
+  border-bottom:  1px solid var(--paper-3);
+  padding-bottom: 1rem;
+}
+
+.studio-tabs {
+  display:   flex;
+  gap:       1.5rem;
+}
+
+.studio-tab {
+  padding:       .5rem 0;
+  background:    transparent;
+  border:        none;
+  border-bottom: 2px solid transparent;
+  font-family:   'DM Sans', sans-serif;
+  font-size:     1rem;
+  font-weight:   500;
+  color:         var(--ink-4);
+  cursor:        pointer;
+  transition:    all var(--transition);
+  position:      relative;
+}
+.studio-tab:hover {
+  color: var(--ink-2);
+}
+.studio-tab.active {
+  color:         var(--ink);
+  border-bottom-color: var(--gold);
+  font-weight:   600;
+}
+
+/* ═══════════════════════════════
+   TAB CONTENT
+═══════════════════════════════ */
+.studio-tab-content {
+  animation: fadeIn .3s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ─── Header ── */
+.studio-header {
+  display:         flex;
+  justify-content: space-between;
+  align-items:     center;
+  margin-bottom:   2rem;
+}
+.studio-header h2 {
+  font-family: 'Playfair Display', serif;
+  font-size:   1.5rem;
+  font-weight: 700;
+}
+
+.studio-btn-new {
+  padding:       .55rem 1.3rem;
+  background:    var(--ink);
+  border:        none;
+  border-radius: 6px;
+  font-family:   'DM Sans', sans-serif;
+  font-size:     .85rem;
+  font-weight:   500;
+  color:         var(--paper);
+  cursor:        pointer;
+  transition:    background var(--transition);
+}
+.studio-btn-new:hover { background: var(--ink-2); }
+
+/* ─── Error ── */
+.studio-error {
+  padding:       1rem;
+  background:    rgba(153,27,27,.10);
+  border:        1px solid rgba(153,27,27,.2);
+  border-radius: 6px;
+  color:         var(--red);
+  font-size:     .85rem;
+  margin-bottom: 1.5rem;
+}
+
+/* ─── Empty ── */
+.studio-empty {
+  display:         flex;
+  flex-direction:  column;
+  align-items:     center;
+  justify-content: center;
+  min-height:      300px;
+  text-align:      center;
+  gap:             12px;
+}
+.studio-empty-icon {
+  font-size: 3rem;
+}
+.studio-empty p {
+  font-family: 'Lora', serif;
+  font-style:  italic;
+  color:       var(--ink-4);
+  max-width:   320px;
+}
+
+/* ═══════════════════════════════
+   GRID (Çalışmalarım)
+═══════════════════════════════ */
+.studio-grid {
+  display:     grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap:         1.5rem;
+}
+
+.studio-work-card {
+  background:      var(--paper-2);
+  border:          1px solid var(--paper-3);
+  border-radius:   10px;
+  overflow:        hidden;
+  cursor:          pointer;
+  transition:      all var(--transition);
+  animation:       cardIn .4s ease both;
+}
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.studio-work-card:hover {
+  border-color: var(--gold-border);
+  box-shadow:   var(--shadow-md);
+  transform:    translateY(-2px);
+}
+
+.studio-work-cover {
+  position:  relative;
+  width:     100%;
+  aspect-ratio: 3/4;
+  background: var(--paper-3);
+  overflow:  hidden;
+}
+.studio-work-cover img {
+  width:     100%;
+  height:    100%;
+  object-fit: cover;
+}
+
+.studio-work-placeholder {
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  height:          100%;
+  position:        relative;
+  background:      linear-gradient(135deg, var(--paper-2), var(--paper-3));
+}
+.studio-work-pattern {
+  position:  absolute;
+  inset:     0;
+  opacity:   .3;
+  background-image: 
+    linear-gradient(45deg, var(--paper-3) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--paper-3) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--paper-3) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--paper-3) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+.studio-work-initials {
+  font-family:   'Playfair Display', serif;
+  font-size:     2.5rem;
+  font-weight:   700;
+  color:         var(--gold);
+  z-index:       1;
+  position:      relative;
+}
+
+.studio-work-status {
+  position:       absolute;
+  top:            10px;
+  right:          10px;
+  font-family:    'DM Sans', sans-serif;
+  font-size:      .65rem;
+  font-weight:    600;
+  padding:        4px 10px;
+  border-radius:  10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.studio-work-status.published {
+  background: rgba(22,101,52,.20);
+  color:      #166534;
+}
+.studio-work-status.draft {
+  background: rgba(148,163,184,.15);
+  color:      #6b7280;
+}
+
+.studio-work-title {
+  font-family: 'Playfair Display', serif;
+  font-size:   1rem;
+  font-weight: 700;
+  padding:     1rem 1rem .5rem;
+  margin:      0;
+  color:       var(--ink);
+  line-height: 1.3;
+}
+
+.studio-work-meta {
+  display:         flex;
+  justify-content: space-between;
+  align-items:     center;
+  padding:         0 1rem 1rem;
+  font-family:     'DM Sans', sans-serif;
+  font-size:       .75rem;
+  color:           var(--ink-4);
+}
+.studio-meta-sep {
+  margin: 0 .35rem;
+}
+
+.studio-btn-delete {
+  background:  transparent;
+  border:      none;
+  color:       var(--red);
+  cursor:      pointer;
+  padding:     4px;
+  border-radius: 4px;
+  transition:  all .15s;
+  display:     flex;
+  align-items: center;
+  opacity:     0;
+}
+.studio-work-card:hover .studio-btn-delete { opacity: 1; }
+.studio-btn-delete:hover { background: rgba(153,27,27,.10); }
+
+
+/* ═══════════════════════════════
+   ATÖLYE (EDITOR YÜZÜ)
+═══════════════════════════════ */
+.studio-atelier-wrap {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap:     2.5rem;
+  min-height: calc(100vh - 250px);
+}
+
+/* ─── Sol: Editör ── */
+.atelier-editor-side {
+  display:         flex;
+  flex-direction:  column;
+  background:      var(--paper);
+  border:          1px solid var(--paper-3);
+  border-radius:   12px;
+  box-shadow:      var(--shadow-sm);
+  overflow:        hidden;
+}
+
+.atelier-editor-top {
+  padding:        2rem 2.5rem 0.5rem;
+  flex-shrink:    0;
+}
+
+.atelier-title {
+  width:         100%;
+  background:    transparent;
+  border:        none;
+  border-bottom: 2px solid var(--paper-3);
+  font-family:   'Playfair Display', serif;
+  font-size:     1.75rem;
+  font-weight:   700;
+  color:         var(--ink);
+  outline:       none;
+  padding:       0 0 0.8rem;
+  transition:    border-color var(--transition);
+}
+.atelier-title:focus { 
+  border-bottom-color: var(--gold); 
+}
+.atelier-title::placeholder { 
+  color: var(--ink-5); 
+  font-weight: 400; 
+  font-style: italic; 
+}
+
+.atelier-textarea {
+  flex:          1;
+  display:       block;
+  width:         100%;
+  background:    transparent;
+  border:        none;
+  font-family:   'Crimson Pro', serif;
+  font-size:     1.15rem;
+  line-height:   1.8;
+  color:         var(--ink-2);
+  outline:       none;
+  resize:        none;
+  padding:       1.5rem 2.5rem;
+  letter-spacing: 0.01em;
+  overflow-y:    auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-5) transparent;
+}
+.atelier-textarea::-webkit-scrollbar       { width: 6px; }
+.atelier-textarea::-webkit-scrollbar-thumb { background: var(--ink-5); border-radius: 4px; }
+.atelier-textarea::-webkit-scrollbar-track { background: transparent; }
+.atelier-textarea::placeholder { color: var(--ink-4); font-style: italic; opacity: 0.7;}
+
+.atelier-footer {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  padding:         1rem 2.5rem;
+  background:      var(--paper-2);
+  border-top:      1px solid var(--paper-3);
+  flex-shrink:     0;
+  gap:             1rem;
+}
+
+.atelier-save-status {
+  font-family: 'DM Sans', sans-serif;
+  font-size:   0.8rem;
+  font-weight: 500;
+  min-height:  20px;
+}
+.atelier-save-status .saved { color: var(--green); }
+.atelier-save-status .error { color: var(--red); }
+
+.atelier-btn-save {
+  padding:       0.6rem 1.5rem;
+  background:    var(--ink);
+  border:        none;
+  border-radius: 8px;
+  font-family:   'DM Sans', sans-serif;
+  font-size:     0.9rem;
+  font-weight:   600;
+  color:         var(--paper);
+  cursor:        pointer;
+  white-space:   nowrap;
+  transition:    all var(--transition);
+}
+.atelier-btn-save:hover:not(:disabled) { 
+  background: var(--ink-2); 
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.atelier-btn-save:active:not(:disabled) { transform: translateY(1px); }
+.atelier-btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ─── Sağ: Sidebar ── */
+.atelier-sidebar {
+  display:         flex;
+  flex-direction:  column;
+  gap:             2rem;
+}
+
+.atelier-sidebar-head h3 {
+  font-family: 'Playfair Display', serif;
+  font-size:   1.1rem;
+  font-weight: 700;
+  color:       var(--ink);
+  margin:      0;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--gold-soft);
+}
+
+.atelier-tips {
+  display:         flex;
+  flex-direction:  column;
+  gap:             1rem;
+}
+
+.tip-item {
+  background:    var(--paper-2);
+  border:        1px solid var(--paper-3);
+  border-radius: 10px;
+  padding:       1.2rem;
+  box-shadow:    var(--shadow-sm);
+  transition:    transform 0.2s ease;
+}
+.tip-item:hover { transform: translateX(4px); border-color: var(--gold-border); }
+
+.tip-item strong {
+  font-family: 'DM Sans', sans-serif;
+  font-size:   0.95rem;
+  font-weight: 600;
+  color:       var(--gold);
+  display:     block;
+  margin-bottom: 0.4rem;
+}
+.tip-item p {
+  font-family: 'Lora', serif;
+  font-style:  italic;
+  font-size:   0.85rem;
+  color:       var(--ink-3);
+  line-height: 1.6;
+  margin:      0;
+}
+
+/* ─── Esere Bağla ── */
+.atelier-link-work {
+  background:    linear-gradient(145deg, var(--paper), var(--gold-soft));
+  border:        1px solid var(--gold-border);
+  border-radius: 10px;
+  padding:       1.2rem;
+}
+.atelier-link-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size:   0.85rem;
+  font-weight: 600;
+  color:       var(--ink-2);
+  display:     block;
+  margin-bottom: 0.6rem;
+}
+.atelier-link-select {
+  width:         100%;
+  padding:       0.7rem 1rem;
+  background:    var(--paper);
+  border:        1px solid var(--paper-3);
+  border-radius: 8px;
+  font-family:   'DM Sans', sans-serif;
+  font-size:     0.85rem;
+  color:         var(--ink);
+  cursor:        pointer;
+  appearance:    none;
+  outline:       none;
+  transition:    border-color 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a6e5f' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:   no-repeat;
+  background-position: right 12px center;
+  padding-right:       32px;
+}
+.atelier-link-select:focus {
+  border-color: var(--gold);
+}
+
+.atelier-sidebar-divider {
+  height:     1px;
+  background: linear-gradient(to right, transparent, var(--paper-3), transparent);
+}
+
+.atelier-sidebar-extra {
+  display:         flex;
+  flex-direction:  column;
+  gap:             1.2rem;
+}
+.atelier-muted {
+  font-family: 'Lora', serif;
+  font-style:  italic;
+  font-size:   0.85rem;
+  color:       var(--ink-4);
+  line-height: 1.6;
+  margin:      0;
+  text-align:  center;
+}
+
+.atelier-btn-notlar {
+  padding:       0.7rem 1.2rem;
+  background:    transparent;
+  border:        1px solid var(--gold);
+  border-radius: 8px;
+  font-family:   'DM Sans', sans-serif;
+  font-size:     0.85rem;
+  font-weight:   600;
+  color:         var(--gold);
+  cursor:        pointer;
+  transition:    all var(--transition);
+  text-align:    center;
+}
+.atelier-btn-notlar:hover { 
+  background: var(--gold); 
+  color:      var(--paper);
+  box-shadow: 0 4px 12px rgba(197, 155, 39, 0.2);
+}
+
+/* ═══════════════════════════════
+   RESPONSIVE
+═══════════════════════════════ */
+@media (max-width: 1024px) {
+  .studio-atelier-wrap {
+    grid-template-columns: 1fr;
+  }
+  .atelier-sidebar {
+    display:               grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows:    auto;
+    gap:                   1.5rem;
+  }
+  .atelier-sidebar-head,
+  .atelier-sidebar-divider { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  .studio-main {
+    padding: 1.5rem 1rem;
+  }
+  .studio-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap:                   1.2rem;
+  }
+  .atelier-sidebar {
+    display: flex;
+    gap:     1.5rem;
+  }
+  .atelier-editor-top {
+    padding: 1.5rem 1.5rem 0.5rem;
+  }
+  .atelier-textarea {
+    padding: 1.5rem;
+  }
+  .atelier-footer {
+    padding: 1rem 1.5rem;
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+}
+.studio-btn-edit-inline {
+  background: none; 
+  border: none; 
+  cursor: pointer; 
+  color: inherit;
+}

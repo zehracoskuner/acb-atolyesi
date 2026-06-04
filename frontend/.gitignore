@@ -1,0 +1,5 @@
+# Ortam değişkenleri - Klasör fark etmeksizin tüm .env dosyalarını gizle
+**/.env
+**/.env.local
+**/.env.production
+**/.env.*.local

@@ -1,0 +1,375 @@
+/* ════════════════════════════════════════════════
+   ReportModal.css
+   Zehra'nın krem/perkamen paleti ile uyumlu
+   DM Serif Display + Cormorant Garamond tipografisi
+════════════════════════════════════════════════ */
+
+/* ── Backdrop ── */
+.rpm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(30, 22, 10, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: rpm-fade-in 0.18s ease;
+}
+
+@keyframes rpm-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Modal kutusu ── */
+.rpm-modal {
+  background: #faf8f4;
+  border: 1px solid #e8e0d0;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow:
+    0 4px 6px rgba(30, 22, 10, 0.06),
+    0 12px 40px rgba(30, 22, 10, 0.14);
+  animation: rpm-slide-up 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow: hidden;
+}
+
+@keyframes rpm-slide-up {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+/* ── Header ── */
+.rpm-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.4rem 1rem;
+  border-bottom: 1px solid #ede6d6;
+}
+
+.rpm-header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+
+.rpm-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #fef2e8;
+  color: #c0510a;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.rpm-title {
+  font-family: "DM Serif Display", Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 400;
+  color: #2c1f0f;
+  margin: 0 0 0.15rem;
+  line-height: 1.3;
+}
+
+.rpm-subtitle {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 0.8rem;
+  color: #8a7560;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.rpm-target-name {
+  color: #5a3e28;
+  font-style: italic;
+}
+
+.rpm-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #9a8570;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.rpm-close:hover {
+  background: #ede6d6;
+  color: #2c1f0f;
+}
+
+/* ── Body ── */
+.rpm-body {
+  padding: 1.2rem 1.4rem 1.4rem;
+}
+
+.rpm-lead {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 0.875rem;
+  color: #5a3e28;
+  margin: 0 0 1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ── Sebepler (radio group) ── */
+.rpm-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1.1rem;
+}
+
+.rpm-reason {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e8e0d0;
+  background: #fdf9f5;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.rpm-reason:hover {
+  border-color: #c9a87a;
+  background: #fdf4ea;
+}
+.rpm-reason--selected {
+  border-color: #c0510a;
+  background: #fef5ee;
+}
+
+.rpm-radio-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.rpm-radio-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #c9a87a;
+  flex-shrink: 0;
+  position: relative;
+  transition: border-color 0.15s;
+}
+.rpm-reason--selected .rpm-radio-dot {
+  border-color: #c0510a;
+}
+.rpm-reason--selected .rpm-radio-dot::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #c0510a;
+}
+
+.rpm-reason-label {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 0.875rem;
+  color: #3d2a18;
+  line-height: 1.3;
+}
+.rpm-reason--selected .rpm-reason-label {
+  color: #7a2d00;
+  font-weight: 600;
+}
+
+/* ── Açıklama alanı ── */
+.rpm-desc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+}
+
+.rpm-label {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #5a3e28;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.rpm-optional {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: #9a8570;
+  font-style: italic;
+}
+
+.rpm-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid #e0d6c5;
+  background: #fdf9f5;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 0.875rem;
+  color: #2c1f0f;
+  line-height: 1.55;
+  resize: vertical;
+  min-height: 72px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.rpm-textarea:focus {
+  outline: none;
+  border-color: #c9a87a;
+  box-shadow: 0 0 0 3px rgba(192, 81, 10, 0.08);
+}
+.rpm-textarea::placeholder {
+  color: #b8a88e;
+}
+
+.rpm-char-count {
+  font-size: 0.72rem;
+  color: #9a8570;
+  text-align: right;
+  font-family: "Inconsolata", monospace;
+}
+
+/* ── Hata ── */
+.rpm-error {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 0.82rem;
+  color: #c0510a;
+  background: #fef2e8;
+  border: 1px solid #f5c6a0;
+  border-radius: 7px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+/* ── Footer ── */
+.rpm-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #ede6d6;
+}
+
+/* ── Butonlar ── */
+.rpm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 8px;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s, box-shadow 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.rpm-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.rpm-btn--ghost {
+  background: transparent;
+  color: #7a6550;
+  border: 1px solid #d9ceba;
+}
+.rpm-btn--ghost:hover:not(:disabled) {
+  background: #f0e8d8;
+  color: #3d2a18;
+}
+
+.rpm-btn--primary {
+  background: #5a3e28;
+  color: #fdf9f5;
+  box-shadow: 0 1px 3px rgba(30,22,10,0.15);
+}
+.rpm-btn--primary:hover:not(:disabled) {
+  background: #3d2a18;
+}
+
+.rpm-btn--danger {
+  background: #c0510a;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(192, 81, 10, 0.25);
+}
+.rpm-btn--danger:hover:not(:disabled) {
+  background: #9d3f06;
+  box-shadow: 0 2px 6px rgba(192, 81, 10, 0.3);
+}
+
+/* ── Spinner ── */
+.rpm-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: rpm-spin 0.65s linear infinite;
+}
+@keyframes rpm-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Başarı ekranı ── */
+.rpm-success {
+  padding: 2rem 1.4rem 1.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.6rem;
+}
+
+.rpm-success-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #edf7f0;
+  color: #2a7a4b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.rpm-success-title {
+  font-family: "DM Serif Display", Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 400;
+  color: #2c1f0f;
+  margin: 0;
+}
+
+.rpm-success-text {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 0.875rem;
+  color: #6b5540;
+  line-height: 1.6;
+  margin: 0 0 0.5rem;
+  max-width: 320px;
+}

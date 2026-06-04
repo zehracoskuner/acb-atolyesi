@@ -1,0 +1,459 @@
+/* ════════════════════════════════════════════
+   Read.css — Yorum & Beğeni eklentileri
+   Bu satırları mevcut Read.css dosyanın sonuna ekle
+   ════════════════════════════════════════════ */
+
+/* ── Bölüm Beğeni ── */
+.rd-chapter-like-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 2rem 0 1.5rem;
+}
+
+.rd-chapter-like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border-radius: 50px;
+  border: 1.5px solid rgba(255,255,255,0.18);
+  background: transparent;
+  color: inherit;
+  font-size: 0.95rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.02em;
+}
+
+.rd-chapter-like-btn:hover {
+  border-color: #e05c7a;
+  color: #e05c7a;
+  background: rgba(224, 92, 122, 0.08);
+}
+
+.rd-chapter-like-btn.liked {
+  border-color: #e05c7a;
+  color: #e05c7a;
+  background: rgba(224, 92, 122, 0.12);
+}
+
+.rd-chapter-like-btn svg {
+  transition: transform 0.2s ease;
+}
+
+.rd-chapter-like-btn.liked svg {
+  transform: scale(1.15);
+}
+
+.rd-like-count {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  background: rgba(255,255,255,0.1);
+  padding: 1px 7px;
+  border-radius: 20px;
+}
+
+.rd-chapter-like-hint {
+  font-size: 0.78rem;
+  opacity: 0.45;
+  margin: 0;
+}
+
+/* Sepia & Light temalarında renk uyumu */
+.rd-theme-sepia .rd-chapter-like-btn,
+.rd-theme-light .rd-chapter-like-btn {
+  border-color: rgba(0,0,0,0.18);
+  color: inherit;
+}
+
+.rd-theme-sepia .rd-chapter-like-btn:hover,
+.rd-theme-light .rd-chapter-like-btn:hover,
+.rd-theme-sepia .rd-chapter-like-btn.liked,
+.rd-theme-light .rd-chapter-like-btn.liked {
+  border-color: #c0385a;
+  color: #c0385a;
+  background: rgba(192, 56, 90, 0.08);
+}
+
+.rd-theme-sepia .rd-like-count,
+.rd-theme-light .rd-like-count {
+  background: rgba(0,0,0,0.08);
+}
+
+/* ── Yorumlar Bölümü ── */
+.rd-comments-section {
+  margin-top: 3.5rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.rd-theme-sepia .rd-comments-section,
+.rd-theme-light .rd-comments-section {
+  border-top-color: rgba(0,0,0,0.1);
+}
+
+.rd-comments-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  margin: 0 0 1.5rem;
+}
+
+.rd-comments-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.12);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.rd-theme-sepia .rd-comments-count,
+.rd-theme-light .rd-comments-count {
+  background: rgba(0,0,0,0.1);
+}
+
+/* Yorum yazma kutusu */
+.rd-comment-composer {
+  margin-bottom: 2rem;
+}
+
+.rd-comment-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.rd-comment-input:focus {
+  border-color: rgba(255,255,255,0.28);
+}
+
+.rd-theme-sepia .rd-comment-input,
+.rd-theme-light .rd-comment-input {
+  border-color: rgba(0,0,0,0.14);
+  background: rgba(0,0,0,0.03);
+}
+
+.rd-theme-sepia .rd-comment-input:focus,
+.rd-theme-light .rd-comment-input:focus {
+  border-color: rgba(0,0,0,0.3);
+}
+
+.rd-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.rd-char-count {
+  font-size: 0.75rem;
+  opacity: 0.4;
+}
+
+.rd-comment-submit {
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08);
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.rd-comment-submit:hover:not(:disabled) {
+  background: rgba(255,255,255,0.14);
+}
+
+.rd-comment-submit:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.rd-theme-sepia .rd-comment-submit,
+.rd-theme-light .rd-comment-submit {
+  border-color: rgba(0,0,0,0.2);
+  background: rgba(0,0,0,0.06);
+}
+
+.rd-theme-sepia .rd-comment-submit:hover:not(:disabled),
+.rd-theme-light .rd-comment-submit:hover:not(:disabled) {
+  background: rgba(0,0,0,0.1);
+}
+
+.rd-comment-cancel {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.82rem;
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.rd-comment-cancel:hover { opacity: 0.8; }
+
+.rd-comments-login-note {
+  font-size: 0.88rem;
+  opacity: 0.5;
+  margin-bottom: 1.5rem;
+}
+
+.rd-comments-login-note a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.rd-comments-loading,
+.rd-comments-empty {
+  text-align: center;
+  opacity: 0.4;
+  font-size: 0.88rem;
+  padding: 1.5rem 0;
+}
+
+.rd-comments-loading {
+  display: flex;
+  justify-content: center;
+}
+
+/* Yorum listesi */
+.rd-comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Yorum kartı */
+.rd-comment-card {
+  display: flex;
+  gap: 12px;
+  padding: 1.1rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.rd-theme-sepia .rd-comment-card,
+.rd-theme-light .rd-comment-card {
+  border-bottom-color: rgba(0,0,0,0.07);
+}
+
+.rd-comment-card:last-child {
+  border-bottom: none;
+}
+
+/* Avatar */
+.rd-comment-avatar {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  overflow: hidden;
+  letter-spacing: 0.03em;
+}
+
+.rd-comment-avatar--sm {
+  width: 26px;
+  height: 26px;
+  font-size: 0.62rem;
+}
+
+.rd-comment-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rd-theme-sepia .rd-comment-avatar,
+.rd-theme-light .rd-comment-avatar {
+  background: rgba(0,0,0,0.1);
+}
+
+.rd-comment-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.rd-comment-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.rd-comment-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.rd-comment-date {
+  font-size: 0.75rem;
+  opacity: 0.4;
+}
+
+.rd-comment-text {
+  font-size: 0.9rem;
+  line-height: 1.65;
+  margin: 0 0 8px;
+  word-break: break-word;
+}
+
+/* Aksiyon butonları */
+.rd-comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rd-comment-like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.78rem;
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.rd-comment-like-btn:hover { opacity: 0.8; }
+
+.rd-comment-like-btn.liked {
+  opacity: 1;
+  color: #e05c7a;
+}
+
+.rd-comment-reply-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.78rem;
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.rd-comment-reply-trigger:hover { opacity: 0.85; }
+
+/* Yanıt formu */
+.rd-reply-form {
+  margin-top: 10px;
+}
+
+.rd-reply-input {
+  font-size: 0.85rem;
+  min-height: 60px;
+}
+
+.rd-reply-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Yanıtlar */
+.rd-replies {
+  margin-top: 10px;
+  padding-left: 14px;
+  border-left: 2px solid rgba(255,255,255,0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.rd-theme-sepia .rd-replies,
+.rd-theme-light .rd-replies {
+  border-left-color: rgba(0,0,0,0.1);
+}
+
+.rd-reply-card {
+  display: flex;
+  gap: 10px;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.rd-theme-sepia .rd-reply-card,
+.rd-theme-light .rd-reply-card {
+  border-bottom-color: rgba(0,0,0,0.05);
+}
+
+.rd-reply-card:last-child {
+  border-bottom: none;
+}
+
+/* Daha fazla yükle */
+.rd-load-more {
+  display: block;
+  width: 100%;
+  margin-top: 1rem;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.85rem;
+  opacity: 0.6;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.rd-load-more:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(255,255,255,0.04);
+}
+
+.rd-theme-sepia .rd-load-more,
+.rd-theme-light .rd-load-more {
+  border-color: rgba(0,0,0,0.12);
+}
+
+.rd-theme-sepia .rd-load-more:hover:not(:disabled),
+.rd-theme-light .rd-load-more:hover:not(:disabled) {
+  background: rgba(0,0,0,0.04);
+}

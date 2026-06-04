@@ -1,0 +1,572 @@
+/* ══════════════════════════════════════════════
+   CharactersUniverse.css
+   Açık: Vintage Gazete · Koyu: Neon Noir
+══════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=DM+Sans:wght@300;400;500&family=Playfair+Display:ital,wght@0,700;1,400&display=swap');
+
+/* ════════════════════════════
+   CSS DEĞİŞKENLERİ
+════════════════════════════ */
+
+.universe-root[data-theme="light"] {
+  --bg:          #ede8d8;
+  --bg-ui:       rgba(237,232,216,.96);
+  --border:      rgba(30,20,10,.15);
+  --border-ui:   rgba(30,20,10,.22);
+  --ink:         #140c04;
+  --ink-2:       #3a2a14;
+  --ink-3:       #6a5430;
+  --ink-faint:   rgba(20,12,4,.3);
+  --red:         #b91c1c;
+  --red-soft:    rgba(185,28,28,.1);
+  --node-bg:     #f8f3e4;
+  --node-shadow: 0 3px 10px rgba(0,0,0,.22), 0 1px 3px rgba(0,0,0,.12);
+  --node-hover:  0 8px 28px rgba(0,0,0,.28);
+  /* Overlay her iki temada koyu kalır — okunabilirlik için */
+  --overlay-bg:   #2a1c0a;
+  --overlay-text: #f0e8d0;
+  --overlay-sub:  rgba(240,232,208,.45);
+  --toast-bg:     #1a1008;
+  --toast-text:   #f0e8d0;
+  --scene-tint:   rgba(185,28,28,.025);
+}
+
+.universe-root[data-theme="dark"] {
+  --bg:          #0a0610;
+  --bg-ui:       rgba(10,6,16,.97);
+  --border:      rgba(160,100,220,.12);
+  --border-ui:   rgba(160,100,220,.22);
+  --ink:         #e8dff5;
+  --ink-2:       #c0aee0;
+  --ink-3:       #7858a8;
+  --ink-faint:   rgba(200,180,240,.2);
+  --red:         #c084fc;
+  --red-soft:    rgba(192,132,252,.1);
+  --node-bg:     #110918;
+  --node-shadow: 0 0 0 1px rgba(160,100,220,.15), 0 4px 20px rgba(0,0,0,.75);
+  --node-hover:  0 0 0 1px rgba(192,132,252,.4), 0 0 24px rgba(192,132,252,.15), 0 8px 28px rgba(0,0,0,.85);
+  --overlay-bg:   #110918;
+  --overlay-text: #e8dff5;
+  --overlay-sub:  rgba(232,223,245,.35);
+  --toast-bg:     #110918;
+  --toast-text:   #e8dff5;
+  --scene-tint:   rgba(192,132,252,.04);
+}
+
+/* ════════════
+   TEMEL YAPI
+════════════ */
+.universe-root {
+  width: 100vw;
+  min-height: 100vh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  font-family: 'DM Sans', sans-serif;
+  overflow: hidden;
+  position: relative;
+  transition: background .3s;
+}
+
+.universe-loading {
+  color: var(--ink-3);
+  font-family: 'DM Sans', sans-serif;
+  font-size: .85rem;
+}
+
+/* Gazete çizgileri (açık) */
+.universe-root[data-theme="light"]::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 30px, rgba(20,12,4,.025) 30px, rgba(20,12,4,.025) 31px),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 250 250' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E");
+  background-size: auto, 180px;
+  pointer-events: none; z-index: 0;
+}
+
+/* Gotik sis (koyu) */
+.universe-root[data-theme="dark"]::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    radial-gradient(ellipse at 15% 15%, rgba(120,60,200,.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 85% 85%, rgba(80,30,160,.07) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(60,20,100,.05) 0%, transparent 70%),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.55' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.025'/%3E%3C/svg%3E");
+  background-size: cover, cover, cover, 220px;
+  pointer-events: none; z-index: 0;
+}
+
+/* ════════════
+   TOPBAR
+════════════ */
+.universe-topbar {
+  position: relative; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 16px;
+  background: var(--bg-ui);
+  border-bottom: 1px solid var(--border-ui);
+  backdrop-filter: blur(10px);
+  flex-wrap: wrap; gap: 8px;
+}
+.u-title {
+  font-family: 'Playfair Display', serif;
+  font-size: .95rem; font-weight: 700; color: var(--ink);
+}
+.u-sub { font-size: .62rem; color: var(--ink-3); margin-top: 1px; }
+.universe-actions { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+
+.u-theme-toggle {
+  padding: 4px 10px;
+  background: transparent; border: 1px solid var(--border-ui); border-radius: 20px;
+  color: var(--ink-3); font-family: 'DM Sans', sans-serif; font-size: .68rem;
+  cursor: pointer; transition: all .2s;
+}
+.u-theme-toggle:hover { color: var(--red); border-color: var(--red); }
+
+.u-btn {
+  padding: 5px 11px;
+  background: var(--red-soft); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--ink-2); font-family: 'DM Sans', sans-serif; font-size: .71rem; font-weight: 500;
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.u-btn:hover  { border-color: var(--red); color: var(--red); }
+.u-btn--on    { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+
+/* Destructive — iki adımlı onay */
+.u-btn--destructive {
+  background: transparent; border-color: rgba(180,50,50,.2); color: var(--ink-3);
+}
+.u-btn--destructive:hover {
+  border-color: rgba(220,38,38,.45); color: #f87171;
+  background: rgba(220,38,38,.06);
+}
+.u-btn--confirm {
+  border-color: #ef4444 !important; color: #ef4444 !important;
+  background: rgba(239,68,68,.12) !important;
+  animation: pulse-danger .65s ease infinite alternate;
+}
+@keyframes pulse-danger {
+  from { box-shadow: none; }
+  to   { box-shadow: 0 0 10px rgba(239,68,68,.35); }
+}
+
+/* ════════════
+   CANVAS
+════════════ */
+.universe-canvas {
+  position: relative; z-index: 1;
+  flex: 1; overflow: hidden; cursor: default;
+  min-height: calc(100vh - 54px);
+  transition: background .4s;
+}
+
+/* Sahne Modu — ince tonal zemin + crosshair cursor */
+.universe-canvas--scene {
+  background: var(--scene-tint);
+  cursor: crosshair;
+}
+.universe-canvas--scene .character-node {
+  cursor: pointer !important;
+}
+
+/* ════════════
+   SVG İPLER
+════════════ */
+.edges-layer {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; overflow: visible;
+}
+.edge-path {
+  fill: none;
+  stroke-linecap: round;
+  opacity: .78;
+  transition: opacity .2s, stroke-width .2s;
+}
+.edge-shadow {
+  fill: none; stroke-linecap: round;
+  opacity: .09; filter: blur(2px);
+}
+.edge-path--preview {
+  stroke: var(--red); stroke-dasharray: 5 4; stroke-width: 1.5;
+  opacity: .55; animation: dash-anim .7s linear infinite;
+}
+@keyframes dash-anim { to { stroke-dashoffset: -18; } }
+.edge-group:hover .edge-path { opacity: 1; }
+
+/* Koyu: ip parlaması */
+.universe-root[data-theme="dark"] .edge-path {
+  filter: drop-shadow(0 0 3px rgba(160,100,220,.35));
+}
+
+/* Etiketler — iki katman: tür adı + kullanıcı notu */
+.edge-label {
+  font-family: 'Special Elite', cursive;
+  text-anchor: middle; pointer-events: none;
+  paint-order: stroke;
+  stroke: var(--bg); stroke-width: 3.5px; stroke-linejoin: round;
+}
+.edge-label--type {
+  font-size: 10px; fill: var(--ink-2);
+}
+.edge-label--custom {
+  font-size: 8.5px; fill: var(--ink-3);
+  font-style: italic;
+}
+/* Açık temada daha net kontrast */
+.universe-root[data-theme="light"] .edge-label--type  { fill: var(--ink); }
+.universe-root[data-theme="light"] .edge-label--custom{ fill: var(--ink-3); }
+
+.edge-pin { cursor: pointer; transition: r .15s; }
+.edge-pin:hover { r: 7; }
+
+/* ════════════════════
+   KARAKTER KARTLARI
+════════════════════ */
+
+/* Ortak: rotasyon CSS variable'dan */
+.character-node {
+  position: absolute;
+  transform: rotate(var(--node-rotation, 0deg));
+  transition: box-shadow .15s, transform .15s;
+}
+.character-node--dragging {
+  transform: rotate(0deg) scale(1.04) !important;
+  transition: none !important;
+}
+.character-node:hover {
+  z-index: 50 !important;
+  transform: rotate(0deg) scale(1.05) !important;
+  box-shadow: var(--node-hover) !important;
+}
+
+/* Açık: gazete kupürü */
+.universe-root[data-theme="light"] .character-node {
+  width: 126px;
+  background: var(--node-bg);
+  border-radius: 1px;
+  padding: 9px 9px 24px;
+  box-shadow: var(--node-shadow);
+  cursor: grab;
+  user-select: none;
+  border: 1px solid rgba(20,12,4,.12);
+  border-bottom: 3px solid rgba(20,12,4,.08);
+}
+.universe-root[data-theme="light"] .character-node:active { cursor: grabbing; }
+
+/* İğne */
+.universe-root[data-theme="light"] .character-node::before {
+  content: '';
+  position: absolute; top: -7px; left: 50%;
+  transform: translateX(-50%);
+  width: 10px; height: 10px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ff5555, #991111);
+  box-shadow: 0 2px 5px rgba(0,0,0,.4), 0 0 7px rgba(200,30,30,.3);
+  z-index: 5;
+}
+
+/* Koyu: neon kimlik kartı */
+.universe-root[data-theme="dark"] .character-node {
+  width: 126px;
+  background: var(--node-bg);
+  border-radius: 6px;
+  padding: 10px 10px 12px;
+  border: 1px solid var(--border);
+  box-shadow: var(--node-shadow);
+  cursor: grab;
+  user-select: none;
+}
+.universe-root[data-theme="dark"] .character-node:active { cursor: grabbing; }
+.universe-root[data-theme="dark"] .character-node:hover  { border-color: var(--red); }
+
+/* Renk şeridi üst */
+.universe-root[data-theme="dark"] .character-node::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: var(--node-color, #c084fc);
+  border-radius: 6px 6px 0 0;
+  box-shadow: 0 0 12px var(--node-color, rgba(192,132,252,.6));
+}
+.universe-root[data-theme="dark"] .character-node::after {
+  content: ''; position: absolute;
+  bottom: 0; left: 0; right: 0; height: 1px;
+  background: rgba(160,100,220,.15);
+  border-radius: 0 0 6px 6px;
+}
+
+/* Seçili (sahne modu) */
+.character-node--selected {
+  outline: 2px solid var(--red) !important;
+  outline-offset: 3px;
+  transform: rotate(0deg) scale(1.06) !important;
+}
+
+.node-name {
+  font-family: 'Special Elite', cursive;
+  font-size: .82rem; color: var(--ink);
+  line-height: 1.3; margin-bottom: 3px; word-break: break-word;
+}
+.node-role {
+  font-family: 'DM Sans', sans-serif;
+  font-size: .58rem; color: var(--ink-3); font-style: italic; line-height: 1.3;
+}
+
+/* ════════════════════
+   İLİŞKİ SEÇİCİ
+════════════════════ */
+.relation-picker {
+  position: absolute; z-index: 200;
+  background: var(--overlay-bg);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px; padding: 12px 13px;
+  min-width: 210px; max-width: 240px;
+  box-shadow: 0 16px 50px rgba(0,0,0,.65);
+}
+.rp-title {
+  font-family: 'DM Sans', sans-serif; font-size: .72rem;
+  color: var(--overlay-text);
+  margin-bottom: 8px;
+  display: flex; align-items: center; justify-content: space-between;
+  opacity: .65;
+}
+.rp-mini { font-size: .6rem; opacity: .5; }
+
+/* Strength slider */
+.rp-strength-row {
+  display: flex; align-items: center; gap: 7px;
+  margin-bottom: 7px;
+}
+.rp-strength-label {
+  font-family: 'DM Sans', sans-serif; font-size: .62rem;
+  color: var(--overlay-sub); white-space: nowrap; flex-shrink: 0;
+}
+.rp-slider {
+  flex: 1; height: 3px;
+  -webkit-appearance: none; appearance: none;
+  background: rgba(255,255,255,.12); border-radius: 2px; outline: none; cursor: pointer;
+}
+.rp-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--red); cursor: pointer;
+  box-shadow: 0 0 6px rgba(255,255,255,.2);
+}
+.rp-slider::-moz-range-thumb {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--red); cursor: pointer; border: none;
+}
+.rp-strength-val {
+  font-size: .65rem; color: var(--overlay-text); opacity: .7;
+  letter-spacing: .5px; white-space: nowrap; flex-shrink: 0;
+}
+
+/* Not inputu */
+.rp-label-input {
+  width: 100%; margin-bottom: 7px;
+  box-sizing: border-box;
+}
+
+.rp-list {
+  display: flex; flex-direction: column; gap: 1px;
+  margin-bottom: 7px; max-height: 190px; overflow-y: auto;
+}
+.rp-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 7px;
+  background: transparent; border: none; border-radius: 5px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: .73rem;
+  color: var(--overlay-text); opacity: .75;
+  transition: all .12s; text-align: left;
+}
+.rp-item:hover { background: rgba(255,255,255,.08); opacity: 1; }
+.rp-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+.rp-custom-wrap {
+  display: flex; gap: 4px;
+  padding-top: 7px; margin-bottom: 6px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.rp-custom-input {
+  flex: 1; min-width: 0; padding: 5px 7px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 5px; color: var(--overlay-text);
+  font-family: 'DM Sans', sans-serif; font-size: .71rem; outline: none;
+}
+.rp-custom-input:focus { border-color: var(--red); }
+.rp-custom-input::placeholder { opacity: .35; color: var(--overlay-text); }
+.rp-custom-btn {
+  padding: 5px 8px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 5px; color: var(--overlay-text);
+  font-family: 'DM Sans', sans-serif; font-size: .68rem;
+  cursor: pointer; white-space: nowrap; transition: background .15s;
+}
+.rp-custom-btn:hover { background: rgba(255,255,255,.14); }
+.rp-cancel {
+  display: block; width: 100%; padding: 4px;
+  background: transparent; border: 1px solid rgba(255,255,255,.06);
+  border-radius: 5px; color: rgba(255,255,255,.22);
+  font-family: 'DM Sans', sans-serif; font-size: .66rem;
+  cursor: pointer; transition: all .15s;
+}
+.rp-cancel:hover { color: #f87171; border-color: rgba(239,68,68,.3); }
+
+/* ════════════════════
+   KARAKTER EDİTÖRÜ
+   --overlay-bg her iki temada koyu, okunabilir
+════════════════════ */
+.char-editor-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.52); z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.char-editor {
+  background: var(--overlay-bg);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px; padding: 1.5rem;
+  width: 330px; max-width: 95vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,.7);
+}
+.ce-title {
+  font-family: 'Playfair Display', serif;
+  font-size: .95rem; font-weight: 700; color: var(--overlay-text);
+  margin-bottom: .9rem;
+}
+.ce-label {
+  display: block; font-size: .6rem; font-weight: 500;
+  color: var(--overlay-sub);
+  letter-spacing: .08em; text-transform: uppercase;
+  margin-bottom: .28rem; margin-top: .7rem;
+}
+.ce-input, .ce-textarea {
+  width: 100%; padding: 6px 9px;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.09);
+  border-radius: 6px; color: var(--overlay-text);
+  font-family: 'DM Sans', sans-serif; font-size: .83rem;
+  outline: none; box-sizing: border-box; transition: border .15s;
+}
+.ce-input:focus, .ce-textarea:focus { border-color: var(--red); }
+.ce-textarea { resize: vertical; line-height: 1.6; font-size: .78rem; }
+.ce-row { display: flex; gap: 7px; align-items: center; }
+.ce-color {
+  width: 32px; height: 32px; border: 1px solid rgba(255,255,255,.12);
+  border-radius: 5px; cursor: pointer; background: transparent;
+  padding: 2px; flex-shrink: 0;
+}
+.ce-actions {
+  display: flex; gap: 5px; justify-content: flex-end;
+  margin-top: .9rem; flex-wrap: wrap;
+}
+.ce-btn {
+  padding: 5px 12px; background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.09); border-radius: 6px;
+  color: rgba(255,255,255,.6);
+  font-family: 'DM Sans', sans-serif; font-size: .73rem;
+  cursor: pointer; transition: all .15s;
+}
+.ce-btn:hover         { background: rgba(255,255,255,.1); color: #fff; }
+.ce-btn--ghost        { background: transparent; border-color: transparent; color: rgba(255,255,255,.28); }
+.ce-btn--ghost:hover  { color: rgba(255,255,255,.55); }
+.ce-btn--danger       { background: rgba(220,38,38,.1); border-color: rgba(220,38,38,.22); color: #f87171; }
+.ce-btn--danger:hover { background: rgba(220,38,38,.22); }
+.ce-btn--primary      { background: rgba(255,255,255,.07); border-color: var(--red); color: var(--red); font-weight: 600; }
+.ce-btn--primary:hover { background: rgba(220,38,38,.18); }
+
+/* ════════════════
+   SAHNE MODALI
+════════════════ */
+.scene-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.58); z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(5px);
+}
+.scene-modal {
+  background: var(--overlay-bg); border: 1px solid rgba(255,255,255,.09);
+  border-radius: 12px; width: 490px; max-width: 95vw; max-height: 76vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,.7);
+}
+.scene-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 15px; border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.scene-title {
+  font-family: 'Playfair Display', serif;
+  font-size: .9rem; font-weight: 700; color: var(--overlay-text);
+}
+.scene-close {
+  background: none; border: none; color: rgba(255,255,255,.28);
+  cursor: pointer; transition: color .15s; font-size: 1rem; line-height: 1;
+}
+.scene-close:hover { color: #f87171; }
+.scene-body { flex: 1; overflow-y: auto; padding: 13px 15px; }
+.scene-pre {
+  font-family: 'DM Sans', sans-serif; font-size: .8rem;
+  color: rgba(255,255,255,.6); line-height: 1.75;
+  white-space: pre-wrap; word-break: break-word; margin: 0;
+}
+.scene-actions {
+  display: flex; gap: 6px; padding: 11px 15px;
+  border-top: 1px solid rgba(255,255,255,.04); flex-wrap: wrap;
+}
+.s-btn {
+  padding: 6px 13px; border-radius: 6px;
+  font-family: 'DM Sans', sans-serif; font-size: .73rem; font-weight: 500;
+  cursor: pointer; border: 1px solid; transition: all .15s;
+}
+.s-btn:disabled { opacity: .4; cursor: not-allowed; }
+.s-btn--primary { background: rgba(255,255,255,.06); border-color: var(--red); color: var(--red); }
+.s-btn--primary:hover:not(:disabled) { background: rgba(220,38,38,.18); }
+.s-btn--gold    { background: rgba(251,191,36,.07); border-color: rgba(251,191,36,.22); color: #fbbf24; }
+.s-btn--gold:hover:not(:disabled)    { background: rgba(251,191,36,.15); }
+.s-btn--ghost   { background: transparent; border-color: rgba(255,255,255,.07); color: rgba(255,255,255,.28); }
+.s-btn--ghost:hover { color: rgba(255,255,255,.55); }
+
+/* ════════════
+   TOAST — giriş + çıkış
+════════════ */
+.universe-toast {
+  position: fixed; bottom: 16px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--toast-bg); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px; padding: 6px 14px;
+  font-family: 'DM Sans', sans-serif; font-size: .73rem;
+  color: var(--toast-text); z-index: 999;
+  box-shadow: 0 4px 20px rgba(0,0,0,.5);
+  white-space: nowrap; pointer-events: none;
+  animation: toast-in .22s ease both;
+}
+.universe-toast--out {
+  animation: toast-out .3s ease both;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: .92; transform: translateX(-50%) translateY(0); }
+}
+@keyframes toast-out {
+  from { opacity: .92; transform: translateX(-50%) translateY(0); }
+  to   { opacity: 0;   transform: translateX(-50%) translateY(6px); }
+}
+
+/* ════════════
+   HINT
+════════════ */
+.universe-hint {
+  position: fixed; bottom: 10px; right: 12px;
+  font-family: 'DM Sans', sans-serif; font-size: .6rem;
+  color: var(--ink-faint); z-index: 5; pointer-events: none;
+  text-align: right; line-height: 1.6;
+}
+.universe-hint b { color: var(--ink-3); }
+
+/* ════════════
+   SCROLLBAR
+════════════ */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 2px; }
+::-webkit-scrollbar-track { background: transparent; }

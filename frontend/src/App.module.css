@@ -1,0 +1,78 @@
+.authPage {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  background: linear-gradient(to right, #f2fafa, #e2fdff);
+  padding: 24px; /* mobilde nefes */
+}
+
+.container {
+  background-color: rgb(219, 245, 242);
+  padding: 30px;
+  border-radius: 12px;
+  width: min(320px, 92vw);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  text-align: center;
+}
+
+.title {
+  margin: 0 0 12px;
+  font-weight: 800;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  margin: 10px 0;
+  border: 1px solid #cfd8dc;
+  border-radius: 8px;
+  background: #ffffff;
+  outline: none;
+  transition: box-shadow .15s ease, border-color .15s ease;
+}
+
+.input:focus {
+  border-color: #9adbd5;
+  box-shadow: 0 0 0 3px rgba(112, 199, 189, .25);
+}
+
+.button {
+  width: 100%;
+  padding: 10px 12px;
+  background-color: #70c7bd;
+  border: none;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: filter .15s ease, transform .06s ease;
+}
+
+.button:hover { filter: brightness(.98); }
+.button:active { transform: translateY(1px); }
+
+.inline {
+  margin-top: 10px;
+  font-size: 14px;
+}
+.link {
+  color: #0b63ff;
+  text-decoration: none;
+}
+.link:hover { text-decoration: underline; }
+
+.message {
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.footer {
+  margin-top: 32px;
+  color: #475569;
+  font-size: 14px;
+  text-align: center;
+  opacity: 0.9;
+}
+

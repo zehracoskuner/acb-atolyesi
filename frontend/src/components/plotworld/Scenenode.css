@@ -1,0 +1,322 @@
+/* ================================================================
+   SceneNode.css — import "./SceneNode.css" in SceneNode.jsx
+================================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@400;500;600&display=swap');
+
+/* ── Kart ── */
+.wn-node {
+  position:       relative;
+  width:          220px;
+  min-height:     110px;
+  background:     var(--card-bg, #faf8f5);
+  border:         1.5px solid #e2dcd4;
+  border-radius:  10px;
+  display:        flex;
+  flex-direction: column;
+  overflow:       hidden;
+  cursor:         default;
+  transition:     box-shadow 180ms ease, border-color 180ms ease, opacity 180ms ease;
+  font-family:    'DM Sans', sans-serif;
+}
+
+.wn-node--idea     { background-color: #faf8f5; border-color: #e8e0d4; }
+.wn-node--drafting { background-color: #fdfbf4; border-color: #e8dfc0; }
+.wn-node--writing  { background-color: #f8f9ff; border-color: #c8d4ee; }
+.wn-node--done     { background-color: #f5fbf7; border-color: #b8dfc5; }
+
+.wn-node--selected {
+  border-color: var(--act-color, #6d28d9);
+  box-shadow:   0 0 0 2.5px color-mix(in srgb, var(--act-color,#6d28d9) 20%, transparent),
+                0 4px 16px rgba(0,0,0,.10);
+}
+
+.wn-node--dimmed {
+  opacity:        0.32;
+  pointer-events: none;
+  filter:         grayscale(0.4);
+}
+
+.wn-node--hilite  { border-color: var(--act-color, #6d28d9); box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+.wn-node--expanded { min-height: 140px; }
+
+.wn-node:not(.wn-node--dimmed):hover {
+  box-shadow:   0 4px 20px rgba(0,0,0,.10);
+  border-color: color-mix(in srgb, var(--act-color,#888) 50%, #e2dcd4);
+}
+
+/* Alternatif dal */
+.wn-node--alt {
+  background-color: #fffdf5;
+  border:           1.5px dashed #ca8a04;
+  border-left:      none;
+}
+.wn-node--alt .wn-rail {
+  background: linear-gradient(180deg,#ca8a04 0%,#d97706 100%);
+}
+
+/* Status doku overlay */
+.wn-node--drafting::after,
+.wn-node--writing::after,
+.wn-node--done::after {
+  content:        "";
+  position:       absolute;
+  inset:          0;
+  border-radius:  10px;
+  pointer-events: none;
+}
+.wn-node--drafting::after { background: linear-gradient(135deg,rgba(245,215,140,.04) 0%,transparent 60%); }
+.wn-node--writing::after  { background: linear-gradient(135deg,rgba(99,102,241,.04)  0%,transparent 60%); }
+.wn-node--done::after     { background: linear-gradient(135deg,rgba(16,185,129,.05)  0%,transparent 60%); }
+
+/* ── Sol şerit ── */
+.wn-rail {
+  position:      absolute;
+  left: 0; top: 0; bottom: 0;
+  width:         4px;
+  background:    var(--act-color, #888);
+  border-radius: 10px 0 0 10px;
+}
+
+/* ── Alternatif pip ── */
+.wn-alt-pip {
+  position:       absolute;
+  top: 6px; right: 7px;
+  width:          14px;
+  height:         14px;
+  background:     #fef3c7;
+  border:         1px solid #ca8a04;
+  border-radius:  50%;
+}
+.wn-alt-pip::after {
+  content:   "🌿";
+  position:  absolute;
+  inset:     0;
+  display:   flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  line-height: 14px;
+  text-align: center;
+}
+
+/* ── Handles ── */
+.wn-handle {
+  width: 10px; height: 10px;
+  border: 2px solid #c4b9ae;
+  background: #faf8f5;
+  border-radius: 50%;
+  transition: border-color 150ms, background 150ms;
+}
+.wn-handle--t { left:  -5px; }
+.wn-handle--s { right: -5px; }
+.wn-node:hover .wn-handle {
+  border-color: var(--act-color, #888);
+  background:   color-mix(in srgb, var(--act-color,#888) 12%, white);
+}
+
+/* ── Gövde ── */
+.wn-inner {
+  padding:        10px 12px 6px 16px;
+  flex:           1;
+  display:        flex;
+  flex-direction: column;
+  gap:            5px;
+}
+
+.wn-act-row {
+  display:     flex;
+  align-items: center;
+  gap:         6px;
+  min-height:  16px;
+}
+
+.wn-act-label {
+  font-size:      9.5px;
+  font-weight:    600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity:        .9;
+  line-height:    1;
+}
+
+.wn-vol-pip {
+  display:       inline-block;
+  height:        3px;
+  border-radius: 2px;
+  opacity:       .7;
+  flex-shrink:   0;
+}
+
+/* Başlık — serif */
+.wn-title {
+  font-family:        'Lora', Georgia, serif;
+  font-size:          14px;
+  font-weight:        500;
+  color:              #1c1917;
+  line-height:        1.35;
+  word-break:         break-word;
+  display:            -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow:           hidden;
+}
+.wn-node--expanded .wn-title {
+  -webkit-line-clamp: unset;
+  overflow:           visible;
+}
+
+/* Amaç */
+.wn-goal {
+  display:     flex;
+  align-items: flex-start;
+  gap:         5px;
+  margin-top:  1px;
+}
+.wn-goal-mark {
+  font-size:   9px;
+  color:       #a8998a;
+  margin-top:  1.5px;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+.wn-goal-text {
+  font-size:          11px;
+  color:              #6b5f53;
+  line-height:        1.4;
+  display:            -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow:           hidden;
+}
+.wn-goal--empty .wn-goal-mark,
+.wn-goal--empty .wn-goal-text { color: #c4b9b0; font-style: italic; }
+
+/* Açıklama */
+.wn-desc {
+  font-size:   11px;
+  color:       #6b5f53;
+  line-height: 1.5;
+  border-top:  1px solid var(--card-accent, #e8e2d9);
+  margin-top:  4px;
+  padding-top: 6px;
+  white-space: pre-wrap;
+}
+
+/* ── Footer ── */
+.wn-footer {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  padding:         5px 10px 6px 16px;
+  border-top:      1px solid var(--card-accent, #e8e2d9);
+  gap:             6px;
+  min-height:      26px;
+}
+.wn-footer-l, .wn-footer-r {
+  display:     flex;
+  align-items: center;
+  gap:         5px;
+}
+
+.wn-status-pip  { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.wn-status-text { font-size: 9.5px; color: #9d8e82; font-weight: 500; letter-spacing: .03em; }
+
+/* Karakter noktaları */
+.wn-chardots    { display: flex; align-items: center; }
+.wn-chardot-wrap { position: relative; }
+.wn-chardot {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  border:        1.5px solid rgba(255,255,255,.8);
+  cursor:        default;
+  margin-left:   -3px;
+  transition:    transform 120ms;
+}
+.wn-chardots .wn-chardot-wrap:first-child .wn-chardot { margin-left: 0; }
+.wn-chardot:hover { transform: scale(1.15); z-index: 1; }
+
+.wn-chardot-tip {
+  position:       absolute;
+  bottom:         calc(100% + 4px);
+  left:           50%;
+  transform:      translateX(-50%);
+  background:     #1c1917;
+  color:          #fff;
+  font-size:      10px;
+  padding:        3px 7px;
+  border-radius:  4px;
+  white-space:    nowrap;
+  pointer-events: none;
+  z-index:        100;
+  box-shadow:     0 2px 8px rgba(0,0,0,.18);
+}
+.wn-chardot-tip::after {
+  content:       "";
+  position:      absolute;
+  top:           100%; left: 50%;
+  transform:     translateX(-50%);
+  border:        4px solid transparent;
+  border-top-color: #1c1917;
+}
+.wn-chardot-extra { font-size: 9px; color: #9d8e82; margin-left: 3px; }
+
+/* Bağlantı sayacı */
+.wn-conn     { display: flex; align-items: center; gap: 3px; font-size: 9.5px; font-weight: 500; opacity: .65; }
+.wn-conn-out { color: #6b5f53; }
+.wn-conn-in  { color: #9d8e82; }
+
+/* Genişlet */
+.wn-expand-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 8px; color: #b8a99a;
+  padding: 2px 3px; border-radius: 3px; line-height: 1;
+  transition: color 120ms, background 120ms;
+}
+.wn-expand-btn:hover { color: #6b5f53; background: rgba(0,0,0,.04); }
+
+/* ── Hover aksiyon bar ── */
+.wn-actions {
+  position:        absolute;
+  top:             -38px;
+  left:            50%;
+  transform:       translateX(-50%);
+  display:         flex;
+  align-items:     center;
+  gap:             3px;
+  background:      #1c1917ee;
+  border:          1px solid #3d342c;
+  border-radius:   8px;
+  padding:         5px 7px;
+  box-shadow:      0 4px 16px rgba(0,0,0,.22);
+  z-index:         50;
+  backdrop-filter: blur(6px);
+  animation:       wnIn 140ms ease;
+}
+@keyframes wnIn {
+  from { opacity:0; transform:translateX(-50%) translateY(4px); }
+  to   { opacity:1; transform:translateX(-50%) translateY(0);   }
+}
+
+.wn-act-btn {
+  background: none; border: none; cursor: pointer;
+  color: #d6cfc8; font-size: 13px;
+  width: 28px; height: 28px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  transition: color 120ms, background 120ms;
+}
+.wn-act-btn:hover                { color: #fff; background: rgba(255,255,255,.10); }
+.wn-act-btn--butterfly:hover     { background: rgba(109,40,217,.25); }
+.wn-act-btn--danger:hover        { color: #fca5a5; background: rgba(239,68,68,.18); }
+.wn-act-btn--butterfly           { position: relative; }
+.wn-act-btn--butterfly::before {
+  content: ""; position: absolute; left: -5px;
+  height: 14px; width: 1px;
+  background: rgba(255,255,255,.12); border-radius: 1px;
+}
+
+/* ── Edge stilleri ── */
+.react-flow__edge-path {
+  stroke: #c9c4bc !important;
+  stroke-width: 1.5px !important;
+}
+.react-flow__edge.selected .react-flow__edge-path { stroke: #6d28d9 !important; }

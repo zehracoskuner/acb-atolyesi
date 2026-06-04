@@ -1,0 +1,457 @@
+/* ══════════════════════════════════════════════════════
+   TopBar.css — ACB Atölyesi
+   Global navigasyon çubuğu
+══════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+
+/* ── Değişkenler ── */
+.topbar {
+  --ink:    #1a1209;
+  --paper:  #ede7d8;
+  --accent: #8b2500;
+  --muted:  #7a6e5f;
+  --rule:   #c8bfad;
+
+  position:      sticky;
+  top:           0;
+  z-index:       100;
+  background:    var(--paper);
+  border-bottom: 1px solid var(--rule);
+  box-shadow:    0 1px 0 rgba(0,0,0,.04), 0 4px 16px rgba(26,18,9,.06);
+  font-family:   'Crimson Pro', Georgia, serif;
+}
+
+/* Üst aksan çizgisi */
+.topbar::before {
+  content:    '';
+  display:    block;
+  height:     3px;
+  background: linear-gradient(90deg, var(--accent) 0%, #c44a00 50%, var(--accent) 100%);
+}
+
+/* ── İç düzen ── */
+.topbar-inner {
+  max-width:       1100px;
+  margin:          0 auto;
+  padding:         0 2rem;
+  height:          58px;
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  gap:             2rem;
+}
+
+/* ── Marka ── */
+.brand {
+  display:     flex;
+  align-items: baseline;
+  gap:         .6rem;
+  text-decoration: none;
+  color:       inherit;
+  flex-shrink: 0;
+}
+
+.logo {
+  font-family:    'Playfair Display', Georgia, serif;
+  font-size:      1.3rem;
+  font-weight:    700;
+  color:          var(--ink);
+  letter-spacing: -.01em;
+  line-height:    1;
+  transition:     color .2s;
+}
+.logo:hover { color: var(--accent); }
+
+.brand-divider {
+  width:      1px;
+  height:     13px;
+  background: var(--rule);
+  flex-shrink: 0;
+}
+
+.topbar-tag {
+  font-family:    'Crimson Pro', Georgia, serif;
+  font-size:      .76rem;
+  font-weight:    300;
+  color:          var(--muted);
+  letter-spacing: .06em;
+  text-transform: lowercase;
+  font-style:     italic;
+  white-space:    nowrap;
+}
+
+/* ── Nav ── */
+.nav {
+  display:     flex;
+  align-items: center;
+  gap:         .2rem;
+}
+
+.nav-link {
+  font-family:    'Crimson Pro', Georgia, serif;
+  font-size:      .98rem;
+  font-weight:    400;
+  color:          var(--muted);
+  text-decoration: none;
+  padding:        .32rem .8rem;
+  border-radius:  2px;
+  letter-spacing: .02em;
+  transition:     color .2s;
+  position:       relative;
+}
+
+/* Alt çizgi animasyonu */
+.nav-link::after {
+  content:    '';
+  position:   absolute;
+  bottom:     0;
+  left:       50%;
+  transform:  translateX(-50%) scaleX(0);
+  width:      55%;
+  height:     1px;
+  background: var(--accent);
+  transition: transform .22s ease;
+}
+.nav-link:hover        { color: var(--ink); }
+.nav-link:hover::after { transform: translateX(-50%) scaleX(1); }
+.nav-link.active       { color: var(--accent); font-style: italic; }
+.nav-link.active::after { transform: translateX(-50%) scaleX(1); }
+
+/* Atölyem CTA butonu */
+.nav-cta {
+  background:     var(--ink);
+  color:          var(--paper) !important;
+  font-style:     normal !important;
+  border-radius:  3px;
+  padding:        .32rem 1rem;
+  letter-spacing: .04em;
+  font-size:      .84rem;
+  text-transform: uppercase;
+  transition:     background .2s !important;
+}
+.nav-cta::after  { display: none; }
+.nav-cta:hover   { background: var(--accent) !important; }
+.nav-cta.active  { background: var(--accent) !important; }
+
+/* ── Sağ taraf ── */
+.nav-right {
+  display:     flex;
+  align-items: center;
+  gap:         .45rem;
+  position:    relative;
+  flex-shrink: 0;
+}
+
+/* ── İkon butonlar ── */
+.icon-btn {
+  width:           34px;
+  height:          34px;
+  border-radius:   50%;
+  background:      transparent;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  cursor:          pointer;
+  border:          1px solid var(--rule);
+  transition:      background .2s, border-color .2s;
+  flex-shrink:     0;
+  position:        relative;
+}
+.icon-btn:hover        { background: rgba(139,37,0,.07); border-color: var(--accent); }
+.icon-btn svg          { width: 15px; height: 15px; color: var(--muted); transition: color .2s; }
+.icon-btn:hover svg    { color: var(--accent); }
+.icon-btn.active       { background: rgba(139,37,0,.07); border-color: var(--accent); }
+.icon-btn.active svg   { color: var(--accent); }
+
+/* Bildirim rozeti */
+.notif-badge {
+  position:      absolute;
+  top:           -3px;
+  right:         -3px;
+  background:    var(--accent);
+  color:         var(--paper);
+  border-radius: 99px;
+  font-size:     .56rem;
+  font-family:   'Crimson Pro', serif;
+  min-width:     15px;
+  height:        15px;
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  border:        2px solid var(--paper);
+  pointer-events: none;
+  font-weight:   600;
+}
+
+/* ── Hesap Dropdown ── */
+.dropdown {
+  position:       absolute;
+  top:            calc(100% + 10px);
+  right:          0;
+  background:     var(--paper);
+  border:         1px solid var(--rule);
+  border-radius:  5px;
+  box-shadow:     0 8px 32px rgba(26,18,9,.13), 0 2px 8px rgba(26,18,9,.07);
+  min-width:      205px;
+  z-index:        200;
+  opacity:        0;
+  pointer-events: none;
+  transform:      translateY(-6px);
+  transition:     opacity .18s ease, transform .18s ease;
+}
+.dropdown.open {
+  opacity:        1;
+  pointer-events: all;
+  transform:      translateY(0);
+}
+
+.dropdown-header {
+  padding:       .8rem 1rem .6rem;
+  border-bottom: 1px solid var(--rule);
+}
+.d-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size:   .92rem;
+  font-weight: 700;
+  color:       var(--ink);
+  display:     block;
+}
+.d-email {
+  font-family:   'Crimson Pro', Georgia, serif;
+  font-size:     .75rem;
+  font-weight:   300;
+  color:         var(--muted);
+  font-style:    italic;
+  display:       block;
+  margin-top:    2px;
+  overflow:      hidden;
+  text-overflow: ellipsis;
+  white-space:   nowrap;
+}
+
+.dropdown-section         { padding: .35rem 0; }
+.dropdown-section + .dropdown-section { border-top: 1px solid var(--rule); }
+
+.dd-item {
+  display:     flex;
+  align-items: center;
+  gap:         .6rem;
+  padding:     .48rem 1rem;
+  cursor:      pointer;
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size:   .9rem;
+  color:       var(--muted);
+  text-decoration: none;
+  transition:  color .15s, background .15s;
+  background:  none;
+  border:      none;
+  width:       100%;
+  text-align:  left;
+}
+.dd-item:hover        { background: rgba(139,37,0,.06); color: var(--ink); }
+.dd-item svg          { width: 13px; height: 13px; flex-shrink: 0; opacity: .7; }
+.dd-item.danger       { color: #a32d2d; }
+.dd-item.danger:hover { background: rgba(163,45,45,.07); color: #791f1f; }
+
+/* ── Bildirim Paneli ── */
+.notif-panel {
+  position:       absolute;
+  top:            calc(100% + 10px);
+  right:          0;
+  width:          330px;
+  background:     var(--paper);
+  border:         1px solid var(--rule);
+  border-radius:  6px;
+  box-shadow:     0 8px 32px rgba(26,18,9,.13), 0 2px 8px rgba(26,18,9,.07);
+  z-index:        200;
+  opacity:        0;
+  pointer-events: none;
+  transform:      translateY(-6px);
+  transition:     opacity .18s ease, transform .18s ease;
+  overflow:       hidden;
+}
+.notif-panel.open {
+  opacity:        1;
+  pointer-events: all;
+  transform:      translateY(0);
+}
+
+.notif-panel-header {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  padding:         .7rem 1rem .55rem;
+  border-bottom:   1px solid var(--rule);
+}
+.notif-panel-title {
+  font-family: 'Playfair Display', serif;
+  font-size:   .88rem;
+  font-weight: 700;
+  color:       var(--ink);
+}
+.notif-mark-all {
+  font-family: 'Crimson Pro', serif;
+  font-size:   .72rem;
+  color:       var(--muted);
+  background:  none;
+  border:      none;
+  cursor:      pointer;
+  padding:     0;
+  transition:  color .15s;
+}
+.notif-mark-all:hover { color: var(--accent); }
+
+.notif-list {
+  max-height:    340px;
+  overflow-y:    auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+.notif-list::-webkit-scrollbar       { width: 3px; }
+.notif-list::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 2px; }
+
+.notif-item {
+  display:     flex;
+  align-items: flex-start;
+  gap:         .6rem;
+  padding:     .65rem 1rem;
+  border-bottom: 1px solid rgba(200,191,173,.3);
+  cursor:      pointer;
+  transition:  background .15s;
+  position:    relative;
+}
+.notif-item:last-child { border-bottom: none; }
+.notif-item:hover      { background: rgba(139,37,0,.04); }
+.notif-item.unread     { background: rgba(139,37,0,.03); }
+.notif-item.unread::before {
+  content:      '';
+  position:     absolute;
+  left:         0; top: 0; bottom: 0;
+  width:        3px;
+  background:   var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+
+.notif-item-icon {
+  font-size:       .9rem;
+  flex-shrink:     0;
+  width:           26px;
+  height:          26px;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  background:      rgba(200,191,173,.28);
+  border-radius:   50%;
+}
+
+.notif-item-body { flex: 1; min-width: 0; }
+.notif-item-text {
+  font-family: 'Crimson Pro', serif;
+  font-size:   .8rem;
+  color:       var(--ink);
+  line-height: 1.5;
+  margin:      0 0 2px;
+}
+.notif-item-time {
+  font-family: 'Crimson Pro', serif;
+  font-size:   .68rem;
+  color:       var(--muted);
+  font-style:  italic;
+}
+
+.notif-empty, .notif-loading {
+  padding:    1.8rem 1rem;
+  text-align: center;
+  font-family:'Crimson Pro', serif;
+  font-size:  .82rem;
+  color:      var(--muted);
+  font-style: italic;
+}
+
+.notif-panel-footer {
+  padding:    .55rem 1rem;
+  border-top: 1px solid var(--rule);
+  text-align: center;
+}
+.notif-panel-footer a {
+  font-family: 'Crimson Pro', serif;
+  font-size:   .78rem;
+  color:       var(--accent);
+  text-decoration: none;
+  font-style:  italic;
+}
+.notif-panel-footer a:hover { text-decoration: underline; }
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .topbar-tag   { display: none; }
+  .brand-divider { display: none; }
+  .topbar-inner { padding: 0 1rem; gap: 1rem; }
+  .notif-panel  { width: calc(100vw - 2rem); right: -1rem; }
+}
+/* ── TopBar.css'in SONUNA ekle ───────────────────────────────────────────── */
+
+/* Nav link'lerdeki ikonlar */
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.nav-link svg {
+  opacity: 0.65;
+  transition: opacity 0.15s ease;
+  flex-shrink: 0;
+}
+
+.nav-link:hover svg,
+.nav-link.active svg {
+  opacity: 1;
+}
+
+/* Brand butonu — Link'ten button'a geçti, görünüm aynı kalmalı */
+button.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+  font-family: inherit;
+  text-decoration: none;
+}
+
+button.brand:hover .logo {
+  opacity: 0.8;
+}
+
+.dd-item--admin {
+  color: #c0392b !important;
+}
+.dd-item--admin:hover {
+  background: rgba(192, 57, 43, 0.06) !important;
+}
+.dropdown-divider {
+  height: 1px;
+  background: rgba(60, 45, 30, 0.08);
+  margin: 0.25rem 0;
+}
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.nav-link svg {
+  opacity: 0.65;
+  transition: opacity 0.15s ease;
+  flex-shrink: 0;
+}
+.nav-link:hover svg,
+.nav-link.active svg {
+  opacity: 1;
+}
+button.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+  font-family: inherit;
+  text-decoration: none;
+}

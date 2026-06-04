@@ -1,0 +1,478 @@
+/* ══════════════════════════════════════════════
+   LogTab.css v2 — Günlük / Zaman Tüneli
+   ProfilePage.css'e ekle veya ayrı import et
+══════════════════════════════════════════════ */
+
+.log-tab {
+  max-width:      600px;
+  display:        flex;
+  flex-direction: column;
+  gap:            0;
+}
+
+/* ── Composer ── */
+.log-composer {
+  background:    #fff;
+  border:        1.5px solid var(--border-2);
+  border-radius: var(--radius);
+  padding:       14px 16px;
+  margin-bottom: 28px;
+  transition:    border-color .2s, box-shadow .2s;
+}
+.log-composer--open {
+  border-color: var(--gold-border);
+  box-shadow:   0 0 0 3px var(--gold-light);
+}
+
+.log-composer-input {
+  width:       100%;
+  border:      none;
+  outline:     none;
+  resize:      none;
+  font-family: 'Lora', serif;
+  font-size:   .95rem;
+  color:       var(--ink);
+  background:  transparent;
+  line-height: 1.7;
+  min-height:  52px;
+  max-height:  240px;
+  overflow-y:  auto;
+  box-sizing:  border-box;
+  display:     block;
+  width:       100%;
+}
+.log-composer-input::placeholder { color: var(--ink-4); font-style: italic; }
+
+.log-composer-toolbar {
+  border-top:      1px solid var(--border);
+  margin-top:      10px;
+  padding-top:     10px;
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  gap:             8px;
+  flex-wrap:       wrap;
+}
+
+.log-toolbar-selects { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+.log-toolbar-btns    { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.log-select {
+  padding:       5px 10px;
+  border:        1px solid var(--border-2);
+  border-radius: 6px;
+  font-family:   'DM Sans', sans-serif;
+  font-size:     .72rem;
+  color:         var(--ink-3);
+  background:    var(--bg);
+  outline:       none;
+  cursor:        pointer;
+  transition:    border-color .18s;
+  max-width:     180px;
+}
+.log-select:focus { border-color: var(--gold); }
+
+.log-char-count {
+  font-family: 'DM Sans', sans-serif;
+  font-size:   .72rem;
+  color:       var(--ink-4);
+  min-width:   30px;
+  text-align:  right;
+}
+.log-char-count--warn { color: #ba7517; }
+.log-char-count--over { color: var(--danger); font-weight: 600; }
+
+.log-btn-ghost {
+  padding:       5px 12px;
+  background:    transparent;
+  border:        1px solid var(--border-2);
+  border-radius: 6px;
+  font-family:   'DM Sans', sans-serif;
+  font-size:     .75rem;
+  color:         var(--ink-4);
+  cursor:        pointer;
+  transition:    all .18s;
+}
+.log-btn-ghost:hover { border-color: var(--border-2); color: var(--ink-3); background: var(--bg-2); }
+
+.log-btn-post {
+  padding:        6px 18px;
+  background:     var(--ink);
+  color:          #fff;
+  border:         none;
+  border-radius:  6px;
+  font-family:    'DM Sans', sans-serif;
+  font-size:      .78rem;
+  font-weight:    500;
+  cursor:         pointer;
+  transition:     background .18s;
+  letter-spacing: .03em;
+}
+.log-btn-post:hover    { background: var(--gold); }
+.log-btn-post:disabled { opacity: .4; cursor: not-allowed; }
+
+.log-error {
+  font-family: 'DM Sans', sans-serif;
+  font-size:   .75rem;
+  color:       var(--danger);
+  margin:      6px 0 0;
+}
+
+/* ── Timeline ── */
+.log-timeline {
+  position:       relative;
+  display:        flex;
+  flex-direction: column;
+  gap:            0;
+  padding-left:   24px;
+}
+
+/* Dikey çizgi */
+.log-timeline::before {
+  content:    '';
+  position:   absolute;
+  left:       7px;
+  top:        10px;
+  bottom:     10px;
+  width:      1.5px;
+  background: linear-gradient(to bottom, var(--gold-border), transparent);
+}
+
+/* ── Tek girdi ── */
+.log-entry {
+  position:    relative;
+  padding:     0 0 24px 0;
+  animation:   pf-fade-up .35s ease both;
+}
+
+/* Nokta */
+.log-entry-dot {
+  position:      absolute;
+  left:          -20px;
+  top:           8px;
+  width:         10px;
+  height:        10px;
+  border-radius: 50%;
+  background:    var(--gold);
+  border:        2px solid var(--bg);
+  box-shadow:    0 0 0 1px var(--gold-border);
+  z-index:       1;
+}
+
+.log-entry-card {
+  background:    #fff;
+  border:        1px solid var(--border);
+  border-radius: 10px;
+  padding:       14px 16px;
+  transition:    border-color .2s, box-shadow .2s;
+}
+.log-entry-card:hover {
+  border-color: var(--gold-border);
+  box-shadow:   var(--shadow-sm);
+}
+
+.log-entry-top {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  margin-bottom:   8px;
+}
+
+.log-entry-time {
+  font-family:    'DM Sans', sans-serif;
+  font-size:      .67rem;
+  color:          var(--ink-4);
+  letter-spacing: .03em;
+}
+
+.log-entry-actions { display: flex; align-items: center; gap: 6px; }
+
+.log-vis-badge {
+  display:     inline-flex;
+  align-items: center;
+  gap:         3px;
+  font-family: 'DM Sans', sans-serif;
+  font-size:   .62rem;
+  color:       var(--ink-4);
+  background:  var(--bg-2);
+  padding:     2px 7px;
+  border-radius: 20px;
+  border:      1px solid var(--border);
+}
+
+.log-delete-btn {
+  width:           24px;
+  height:          24px;
+  border-radius:   5px;
+  background:      transparent;
+  border:          none;
+  cursor:          pointer;
+  color:           var(--ink-4);
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  transition:      all .15s;
+}
+.log-delete-btn:hover { color: var(--danger); background: var(--danger-light); }
+
+.log-entry-content {
+  font-family: 'Lora', serif;
+  font-size:   .92rem;
+  color:       var(--ink-2);
+  line-height: 1.72;
+  margin:      0 0 10px;
+  white-space: pre-wrap;
+  word-break:  break-word;
+}
+
+/* Eser etiketi */
+.log-work-tag {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           7px;
+  padding:       4px 10px;
+  background:    var(--gold-light);
+  border:        1px solid var(--gold-border);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-family:   'DM Sans', sans-serif;
+  font-size:     .7rem;
+  color:         #7a5c00;
+  font-weight:   500;
+}
+.log-work-cover {
+  width:         16px;
+  height:        22px;
+  border-radius: 2px;
+  object-fit:    cover;
+  flex-shrink:   0;
+}
+
+.log-entry-footer { display: flex; gap: 12px; }
+
+.log-like-btn {
+  display:     inline-flex;
+  align-items: center;
+  gap:         5px;
+  background:  transparent;
+  border:      none;
+  cursor:      pointer;
+  color:       var(--ink-4);
+  font-family: 'DM Sans', sans-serif;
+  font-size:   .72rem;
+  padding:     2px 0;
+  transition:  color .15s;
+}
+.log-like-btn:hover    { color: #e24b4a; }
+.log-like-btn--active  { color: #e24b4a; }
+.log-like-btn:disabled { cursor: not-allowed; }
+
+/* ── Boş durum ── */
+.log-empty {
+  text-align:      center;
+  padding:         52px 0;
+  display:         flex;
+  flex-direction:  column;
+  align-items:     center;
+  gap:             12px;
+}
+.log-empty-icon { font-size: 2rem; opacity: .4; }
+.log-empty p {
+  font-family: 'Lora', serif;
+  font-size:   .88rem;
+  font-style:  italic;
+  color:       var(--ink-3);
+  margin:      0;
+  max-width:   300px;
+  line-height: 1.65;
+}
+
+/* ── Daha fazla ── */
+.log-load-more {
+  display:       block;
+  width:         100%;
+  margin-top:    8px;
+  padding:       10px;
+  background:    transparent;
+  border:        1px solid var(--border-2);
+  border-radius: 8px;
+  font-family:   'DM Sans', sans-serif;
+  font-size:     .78rem;
+  color:         var(--ink-3);
+  cursor:        pointer;
+  transition:    all .2s;
+}
+.log-load-more:hover    { border-color: var(--gold-border); color: var(--gold); background: var(--gold-light); }
+.log-load-more:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Yorum bölümü ── */
+.log-comments {
+  margin-top:  10px;
+  border-top:  1px solid var(--border);
+  padding-top: 10px;
+}
+
+.log-comment-toggle {
+  display:     inline-flex;
+  align-items: center;
+  gap:         5px;
+  background:  none;
+  border:      none;
+  cursor:      pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size:   .72rem;
+  color:       var(--ink-4);
+  padding:     0;
+  transition:  color .15s;
+}
+.log-comment-toggle:hover { color: var(--gold); }
+
+.log-comment-section { margin-top: 10px; }
+
+.log-comment-loading,
+.log-comment-empty {
+  font-family: 'DM Sans', sans-serif;
+  font-size:   .75rem;
+  color:       var(--ink-4);
+  font-style:  italic;
+  padding:     6px 0;
+  margin:      0;
+}
+
+.log-comment-list {
+  display:        flex;
+  flex-direction: column;
+  gap:            10px;
+  margin-bottom:  12px;
+}
+
+.log-comment-item {
+  display: flex;
+  gap:     10px;
+}
+
+.log-comment-avatar {
+  width:           28px;
+  height:          28px;
+  border-radius:   50%;
+  overflow:        hidden;
+  flex-shrink:     0;
+  background:      var(--bg-2);
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  font-family:     'Playfair Display', serif;
+  font-size:       .72rem;
+  font-weight:     700;
+  color:           var(--ink-3);
+}
+.log-comment-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.log-comment-body { flex: 1; min-width: 0; }
+
+.log-comment-header {
+  display:     flex;
+  align-items: center;
+  gap:         6px;
+  margin-bottom: 3px;
+}
+
+.log-comment-author {
+  font-family: 'DM Sans', sans-serif;
+  font-size:   .75rem;
+  font-weight: 500;
+  color:       var(--ink);
+}
+
+.log-comment-time {
+  font-family: 'DM Sans', sans-serif;
+  font-size:   .65rem;
+  color:       var(--ink-4);
+}
+
+.log-comment-delete {
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  width:           20px;
+  height:          20px;
+  border-radius:   4px;
+  background:      transparent;
+  border:          none;
+  cursor:          pointer;
+  color:           var(--ink-4);
+  transition:      all .15s;
+  margin-left:     auto;
+}
+.log-comment-delete:hover { color: var(--danger); background: var(--danger-light); }
+
+.log-comment-text {
+  font-family: 'Lora', serif;
+  font-size:   .85rem;
+  color:       var(--ink-2);
+  line-height: 1.6;
+  margin:      0;
+  word-break:  break-word;
+}
+
+/* Yorum formu */
+.log-comment-form { margin-top: 8px; }
+
+.log-comment-input-wrap {
+  display:       flex;
+  gap:           6px;
+  align-items:   center;
+}
+
+.log-comment-input {
+  flex:          1;
+  padding:       7px 12px;
+  border:        1px solid var(--border-2);
+  border-radius: 20px;
+  font-family:   'DM Sans', sans-serif;
+  font-size:     .82rem;
+  color:         var(--ink);
+  background:    var(--bg);
+  outline:       none;
+  transition:    border-color .18s, box-shadow .18s;
+}
+.log-comment-input:focus {
+  border-color: var(--gold);
+  box-shadow:   0 0 0 2px var(--gold-light);
+  background:   #fff;
+}
+.log-comment-input::placeholder { color: var(--ink-4); }
+
+.log-comment-submit {
+  width:           32px;
+  height:          32px;
+  border-radius:   50%;
+  background:      var(--ink);
+  border:          none;
+  cursor:          pointer;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  color:           #fff;
+  flex-shrink:     0;
+  transition:      background .18s;
+}
+.log-comment-submit:hover    { background: var(--gold); }
+.log-comment-submit:disabled { opacity: .4; cursor: not-allowed; }
+
+.log-comment-error {
+  font-family: 'DM Sans', sans-serif;
+  font-size:   .72rem;
+  color:       var(--danger);
+  margin:      4px 0 0 0;
+}
+
+.log-comment-login-hint {
+  font-family: 'DM Sans', sans-serif;
+  font-size:   .75rem;
+  color:       var(--ink-4);
+  margin:      8px 0 0;
+  font-style:  italic;
+}
+.log-comment-login-hint a { color: var(--gold); text-decoration: none; font-weight: 500; }
+.log-comment-login-hint a:hover { text-decoration: underline; }

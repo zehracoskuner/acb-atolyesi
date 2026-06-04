@@ -1,0 +1,39 @@
+.welcome-box {
+  background: white;
+  padding: 28px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  text-align: center;
+  width: 400px;
+}
+
+.welcome-title {
+  font-size: 20px;
+  margin-bottom: 11px;
+}
+
+.welcome-question {
+  font-size: 16px;
+  margin-bottom: 22px;
+}
+
+.choice-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.choice-buttons button {
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background-color: #8E7DBE;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.choice-buttons button:hover {
+  background-color: #929292;
+}

@@ -1,0 +1,575 @@
+// src/pages/PlotPage.jsx
+import { useState, useEffect, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../lib/api";
+
+/* ─── Sabit veriler ─── */
+const ACTS = [
+  { key: "beginning", label: "Başlangıç",  emoji: "🌅", desc: "Karakterler, dünya, çatışmanın tohumları" },
+  { key: "middle",    label: "Gelişme",    emoji: "⚡", desc: "Engeller, dönüm noktaları, gerilimin tırmanışı" },
+  { key: "end",       label: "Sonuç",      emoji: "🌙", desc: "Doruk, çözüm, kapanış" },
+];
+
+const STATUS_MAP = {
+  idea:     { label: "Fikir",       color: "#7c5cbf", bg: "rgba(124,92,191,.15)" },
+  drafting: { label: "Taslak",      color: "#bf9a5c", bg: "rgba(191,154,92,.15)"  },
+  writing:  { label: "Yazılıyor",   color: "#5cbfbf", bg: "rgba(92,191,191,.15)"  },
+  done:     { label: "Tamamlandı",  color: "#5cbf7a", bg: "rgba(92,191,122,.15)"  },
+};
+
+/* ─── Yardımcılar ─── */
+function StatusBadge({ status }) {
+  const s = STATUS_MAP[status] ?? STATUS_MAP.idea;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 4,
+      padding: "2px 8px", borderRadius: 20,
+      background: s.bg, color: s.color,
+      fontFamily: "'DM Sans', sans-serif",
+      fontSize: ".62rem", fontWeight: 600, letterSpacing: ".04em",
+    }}>
+      {s.label}
+    </span>
+  );
+}
+
+/* ─── Sahne ekleme formu ─── */
+function AddSceneForm({ act, chapters, onAdd, onCancel }) {
+  const [title,       setTitle]       = useState("");
+  const [description, setDescription] = useState("");
+  const [status,      setStatus]      = useState("idea");
+  const [chapterId,   setChapterId]   = useState("");
+  const [saving,      setSaving]      = useState(false);
+  const titleRef = useRef(null);
+
+  useEffect(() => { titleRef.current?.focus(); }, []);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setSaving(true);
+    try {
+      await onAdd({ act, title, description, status, chapterId: chapterId || null });
+      setTitle(""); setDescription(""); setStatus("idea"); setChapterId("");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={f.form}>
+      <input
+        ref={titleRef}
+        style={f.input}
+        placeholder="Sahne başlığı…"
+        value={title}
+        onChange={e => setTitle(e.target.value)}
+        maxLength={120}
+        required
+      />
+      <textarea
+        style={f.textarea}
+        placeholder="Kısa açıklama (isteğe bağlı)…"
+        value={description}
+        onChange={e => setDescription(e.target.value)}
+        maxLength={1000}
+        rows={2}
+      />
+      <div style={f.row}>
+        <select style={f.select} value={status} onChange={e => setStatus(e.target.value)}>
+          {Object.entries(STATUS_MAP).map(([k, v]) => (
+            <option key={k} value={k}>{v.label}</option>
+          ))}
+        </select>
+        {chapters.length > 0 && (
+          <select style={f.select} value={chapterId} onChange={e => setChapterId(e.target.value)}>
+            <option value="">Bölüm bağla…</option>
+            {chapters.map(c => (
+              <option key={c._id} value={c._id}>
+                {c.order ? `B${c.order} · ` : ""}{c.title}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      <div style={f.actions}>
+        <button type="button" style={f.cancelBtn} onClick={onCancel}>Vazgeç</button>
+        <button type="submit"  style={f.addBtn} disabled={!title.trim() || saving}>
+          {saving ? "…" : "Ekle"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/* ─── Sahne kartı ─── */
+function SceneCard({ scene, chapters, actKey, onUpdate, onDelete, onMove, otherActs }) {
+  const [editing,     setEditing]     = useState(false);
+  const [title,       setTitle]       = useState(scene.title);
+  const [description, setDescription] = useState(scene.description || "");
+  const [status,      setStatus]      = useState(scene.status);
+  const [chapterId,   setChapterId]   = useState(scene.chapter?._id || scene.chapter || "");
+  const [saving,      setSaving]      = useState(false);
+  const [menuOpen,    setMenuOpen]    = useState(false);
+
+  const chapterLabel = scene.chapter
+    ? `B${scene.chapter.order ?? "?"} · ${scene.chapter.title}`
+    : null;
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await onUpdate(scene._id, actKey, { title, description, status, chapterId: chapterId || null });
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={card.wrap}>
+      {!editing ? (
+        <>
+          <div style={card.top}>
+            <StatusBadge status={scene.status} />
+            <div style={{ position: "relative" }}>
+              <button style={card.menuBtn} onClick={() => setMenuOpen(v => !v)}>⋯</button>
+              {menuOpen && (
+                <div style={card.menu}>
+                  <button style={card.menuItem} onClick={() => { setEditing(true); setMenuOpen(false); }}>
+                    ✏️ Düzenle
+                  </button>
+                  {otherActs.map(a => (
+                    <button key={a.key} style={card.menuItem}
+                      onClick={() => { onMove(scene._id, actKey, a.key); setMenuOpen(false); }}>
+                      → {a.label}'a taşı
+                    </button>
+                  ))}
+                  <button style={{ ...card.menuItem, color: "#e24b4a" }}
+                    onClick={() => { onDelete(scene._id, actKey); setMenuOpen(false); }}>
+                    🗑 Sil
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p style={card.title}>{scene.title}</p>
+
+          {scene.description && (
+            <p style={card.desc}>{scene.description}</p>
+          )}
+
+          {chapterLabel && (
+            <div style={card.chapterTag}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+              </svg>
+              {chapterLabel}
+            </div>
+          )}
+        </>
+      ) : (
+        <div style={f.form}>
+          <input
+            style={f.input}
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            maxLength={120}
+            autoFocus
+          />
+          <textarea
+            style={f.textarea}
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            maxLength={1000}
+            rows={2}
+          />
+          <div style={f.row}>
+            <select style={f.select} value={status} onChange={e => setStatus(e.target.value)}>
+              {Object.entries(STATUS_MAP).map(([k, v]) => (
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+            {chapters.length > 0 && (
+              <select style={f.select} value={chapterId} onChange={e => setChapterId(e.target.value)}>
+                <option value="">Bölüm bağla…</option>
+                {chapters.map(c => (
+                  <option key={c._id} value={c._id}>
+                    {c.order ? `B${c.order} · ` : ""}{c.title}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div style={f.actions}>
+            <button style={f.cancelBtn} onClick={() => { setEditing(false); setTitle(scene.title); setDescription(scene.description || ""); }}>
+              Vazgeç
+            </button>
+            <button style={f.addBtn} onClick={handleSave} disabled={!title.trim() || saving}>
+              {saving ? "…" : "Kaydet"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   ANA SAYFA
+══════════════════════════════════════════════ */
+export default function PlotPage() {
+  const { workId } = useParams();
+  const navigate   = useNavigate();
+
+  const [acts,     setActs]     = useState({ beginning: [], middle: [], end: [] });
+  const [chapters, setChapters] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState("");
+  const [adding,   setAdding]   = useState(null); // hangi perdede form açık
+  const [view,     setView]     = useState('kanban'); // 'kanban' | 'timeline'
+
+  useEffect(() => {
+    apiGet(`/plots/${workId}`)
+      .then(res => {
+        const raw = res.plot?.acts ?? {};
+        // undefined sahneleri filtrele
+        setActs({
+          beginning: (raw.beginning ?? []).filter(s => s && s._id),
+          middle:    (raw.middle    ?? []).filter(s => s && s._id),
+          end:       (raw.end       ?? []).filter(s => s && s._id),
+        });
+        setChapters((res.chapters ?? []).filter(c => c && c._id));
+      })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [workId]);
+
+  /* ── Sahne ekle ── */
+  async function handleAdd({ act, title, description, status, chapterId }) {
+    try {
+      const res = await apiPost(`/plots/${workId}/scenes`, {
+        act, title, description, status, chapterId,
+      });
+      if (!res.scene?._id) throw new Error("Sahne kaydedilemedi.");
+      setActs(prev => ({
+        ...prev,
+        [act]: [...prev[act], res.scene],
+      }));
+      setAdding(null);
+    } catch(e) {
+      alert("Sahne eklenemedi: " + e.message);
+    }
+  }
+
+  /* ── Sahne güncelle ── */
+  async function handleUpdate(sceneId, actKey, fields) {
+    const res = await apiPatch(`/plots/${workId}/scenes/${sceneId}`, {
+      act: actKey, ...fields,
+    });
+    setActs(prev => ({
+      ...prev,
+      [actKey]: prev[actKey].map(s => s._id === sceneId ? { ...s, ...res.scene } : s),
+    }));
+  }
+
+  /* ── Sahne sil ── */
+  async function handleDelete(sceneId, actKey) {
+    if (!window.confirm("Bu sahneyi silmek istiyor musun?")) return;
+    await apiDelete(`/plots/${workId}/scenes/${sceneId}`);
+    setActs(prev => ({
+      ...prev,
+      [actKey]: prev[actKey].filter(s => s._id !== sceneId),
+    }));
+  }
+
+  /* ── Sahne taşı ── */
+  async function handleMove(sceneId, fromAct, toAct) {
+    const scene = acts[fromAct].find(s => s._id === sceneId);
+    if (!scene) return;
+    await apiPatch(`/plots/${workId}/scenes/${sceneId}/move`, { fromAct, toAct });
+    setActs(prev => ({
+      ...prev,
+      [fromAct]: prev[fromAct].filter(s => s._id !== sceneId),
+      [toAct]:   [...prev[toAct], { ...scene, order: prev[toAct].length }],
+    }));
+  }
+
+  const totalScenes = Object.values(acts).reduce((s, a) => s + a.length, 0);
+  const doneScenes  = Object.values(acts).flat().filter(s => s.status === "done").length;
+
+  if (loading) return (
+    <div style={pg.splash}>
+      <div style={pg.spinner} />
+    </div>
+  );
+
+  if (error) return (
+    <div style={pg.splash}>
+      <p style={{ color: "#7070a0", fontFamily: "'DM Sans', sans-serif" }}>⚠ {error}</p>
+      <button style={pg.backBtn} onClick={() => navigate(-1)}>Geri Dön</button>
+    </div>
+  );
+
+  return (
+    <div style={pg.root}>
+      {/* Başlık */}
+      <div style={pg.header}>
+        <button style={pg.backBtn} onClick={() => navigate(-1)}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Geri
+        </button>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: ".5rem" }}>
+            <h1 style={{ ...pg.title, margin: 0 }}>Olay Örgüsü</h1>
+            {/* Görünüm toggle */}
+            <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,.04)", padding: 3, borderRadius: 8, border: "1px solid rgba(255,255,255,.08)" }}>
+              <button
+                style={{ ...tog.btn, ...(view === "kanban" ? tog.active : {}) }}
+                onClick={() => setView("kanban")}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="18" rx="1"/><rect x="17" y="3" width="5" height="18" rx="1"/>
+                </svg>
+                Kanban
+              </button>
+              <button
+                style={{ ...tog.btn, ...(view === "timeline" ? tog.active : {}) }}
+                onClick={() => setView("timeline")}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="3" y1="12" x2="21" y2="12"/><circle cx="7" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="17" cy="12" r="2"/>
+                </svg>
+                Zaman Çizelgesi
+              </button>
+            </div>
+          </div>
+          {totalScenes > 0 && (
+            <div style={pg.progress}>
+              <div style={{ ...pg.progressBar, width: `${Math.round((doneScenes / totalScenes) * 100)}%` }} />
+            </div>
+          )}
+          {totalScenes > 0 && (
+            <p style={pg.progressText}>
+              {doneScenes} / {totalScenes} sahne tamamlandı
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Kanban */}
+      {view === 'kanban' && <div style={pg.kanban}>
+        {ACTS.map(act => {
+          const scenes    = acts[act.key] || [];
+          const otherActs = ACTS.filter(a => a.key !== act.key);
+          const isAdding  = adding === act.key;
+
+          return (
+            <div key={act.key} style={col.wrap}>
+              {/* Kolon başlığı */}
+              <div style={col.header}>
+                <div style={col.headerLeft}>
+                  <span style={col.emoji}>{act.emoji}</span>
+                  <div>
+                    <p style={col.title}>{act.label}</p>
+                    <p style={col.desc}>{act.desc}</p>
+                  </div>
+                </div>
+                <span style={col.count}>{scenes.length}</span>
+              </div>
+
+              {/* Sahneler */}
+              <div style={col.scenes}>
+                {scenes.length === 0 && !isAdding && (
+                  <div style={col.empty}>
+                    <p>Henüz sahne yok.</p>
+                    <p>Aşağıdan ekleyebilirsin.</p>
+                  </div>
+                )}
+
+                {scenes.map(scene => (
+                  <SceneCard
+                    key={scene._id}
+                    scene={scene}
+                    chapters={chapters}
+                    actKey={act.key}
+                    otherActs={otherActs}
+                    onUpdate={handleUpdate}
+                    onDelete={handleDelete}
+                    onMove={handleMove}
+                  />
+                ))}
+
+                {isAdding && (
+                  <AddSceneForm
+                    act={act.key}
+                    chapters={chapters}
+                    onAdd={handleAdd}
+                    onCancel={() => setAdding(null)}
+                  />
+                )}
+              </div>
+
+              {/* Ekle butonu */}
+              {!isAdding && (
+                <button style={col.addBtn} onClick={() => setAdding(act.key)}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M12 5v14M5 12h14" strokeLinecap="round"/>
+                  </svg>
+                  Sahne Ekle
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>}
+
+      {/* Zaman Çizelgesi */}
+      {view === 'timeline' && (
+        <div style={tl.root}>
+          {/* Eksen çizgisi */}
+          <div style={tl.axis} />
+
+          {ACTS.map((act, actIdx) => {
+            const scenes = acts[act.key] || [];
+            const actColor = actIdx === 0 ? "#c9a84c" : actIdx === 1 ? "#5cbfbf" : "#7c5cbf";
+            return (
+              <div key={act.key} style={tl.actWrap}>
+                {/* Perde başlığı */}
+                <div style={{ ...tl.actLabel, color: actColor }}>
+                  <div style={{ ...tl.actDot, background: actColor }} />
+                  <span>{act.emoji} {act.label}</span>
+                  <span style={tl.actCount}>{scenes.length} sahne</span>
+                </div>
+
+                {/* Sahneler yatay */}
+                <div style={tl.scenes}>
+                  {scenes.length === 0 ? (
+                    <div style={tl.empty}>Henüz sahne yok</div>
+                  ) : (
+                    scenes.map((scene, idx) => (
+                      <div key={scene._id} style={tl.card}>
+                        {/* Bağlantı çizgisi */}
+                        {idx < scenes.length - 1 && <div style={tl.connector} />}
+
+                        <div style={tl.cardInner}>
+                          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6, marginBottom: 6 }}>
+                            <StatusBadge status={scene.status} />
+                            <span style={tl.sceneNum}>{idx + 1}</span>
+                          </div>
+                          <p style={tl.sceneTitle}>{scene.title}</p>
+                          {scene.description && (
+                            <p style={tl.sceneDesc}>{scene.description.slice(0, 80)}{scene.description.length > 80 ? "…" : ""}</p>
+                          )}
+                          {scene.chapter && (
+                            <div style={tl.chTag}>
+                              📖 {scene.chapter.order ? `B${scene.chapter.order} · ` : ""}{scene.chapter.title}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  {/* Sahne ekle butonu */}
+                  <button style={tl.addBtn} onClick={() => { setView('kanban'); setAdding(act.key); }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 5v14M5 12h14" strokeLinecap="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500&display=swap');
+        @keyframes spin { to { transform: rotate(360deg); } }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+      `}</style>
+    </div>
+  );
+}
+
+/* ═══════════ STİLLER ═══════════ */
+/* Toggle butonları */
+const tog = {
+  btn:    { display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", background: "transparent", border: "none", borderRadius: 6, color: "#5a5a7a", fontFamily: "'DM Sans', sans-serif", fontSize: ".72rem", cursor: "pointer", transition: "all .15s" },
+  active: { background: "rgba(255,255,255,.1)", color: "#d0cec8" },
+};
+
+/* Zaman çizelgesi */
+const tl = {
+  root:       { maxWidth: 1200, margin: "0 auto", padding: "0 1.5rem 3rem", display: "flex", flexDirection: "column", gap: 0 },
+  axis:       { display: "none" },
+  actWrap:    { marginBottom: 0 },
+  actLabel:   { display: "flex", alignItems: "center", gap: 8, padding: "1.25rem 0 .75rem", fontFamily: "'Playfair Display', serif", fontSize: ".9rem", fontWeight: 700 },
+  actDot:     { width: 10, height: 10, borderRadius: "50%", flexShrink: 0 },
+  actCount:   { fontFamily: "'DM Sans', sans-serif", fontSize: ".65rem", color: "#3a3a5a", fontWeight: 400, marginLeft: 4 },
+  scenes:     { display: "flex", gap: 12, overflowX: "auto", paddingBottom: "1rem", paddingLeft: 18, position: "relative", alignItems: "flex-start" },
+  connector:  { position: "absolute", top: "50%", right: -12, width: 12, height: 1, background: "rgba(255,255,255,.1)", zIndex: 0 },
+  card:       { position: "relative", flexShrink: 0, width: 200 },
+  cardInner:  { background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 9, padding: "11px 13px", transition: "border-color .15s" },
+  sceneNum:   { fontFamily: "'DM Sans', sans-serif", fontSize: ".6rem", color: "#3a3a5a", background: "rgba(255,255,255,.06)", width: 18, height: 18, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  sceneTitle: { fontFamily: "'DM Sans', sans-serif", fontSize: ".85rem", fontWeight: 500, color: "#d0cec8", margin: "0 0 4px", lineHeight: 1.4 },
+  sceneDesc:  { fontFamily: "'DM Sans', sans-serif", fontSize: ".72rem", color: "#5a5a7a", margin: "0 0 6px", lineHeight: 1.5 },
+  chTag:      { fontFamily: "'DM Sans', sans-serif", fontSize: ".62rem", color: "#c9a84c", background: "rgba(201,168,76,.1)", padding: "2px 7px", borderRadius: 20, display: "inline-block", border: "1px solid rgba(201,168,76,.15)" },
+  empty:      { fontFamily: "'DM Sans', sans-serif", fontSize: ".72rem", color: "#3a3a5a", fontStyle: "italic", padding: "1rem 0" },
+  addBtn:     { width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,.04)", border: "1px dashed rgba(255,255,255,.1)", color: "#4a4a6a", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, alignSelf: "center", transition: "all .15s" },
+};
+
+const pg = {
+  root:         { minHeight: "100vh", background: "#09090f", fontFamily: "'DM Sans', sans-serif", color: "#e2e0da" },
+  splash:       { minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: "#09090f" },
+  spinner:      { width: 32, height: 32, border: "2px solid rgba(201,168,76,.2)", borderTopColor: "#c9a84c", borderRadius: "50%", animation: "spin 1s linear infinite" },
+  header:       { maxWidth: 1200, margin: "0 auto", padding: "2rem 1.5rem 1rem", display: "flex", alignItems: "flex-start", gap: "1.25rem" },
+  backBtn:      { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 8, color: "#9090b0", fontFamily: "'DM Sans', sans-serif", fontSize: ".78rem", cursor: "pointer", transition: "all .15s", flexShrink: 0, marginTop: 4 },
+  title:        { fontFamily: "'Playfair Display', serif", fontSize: "1.5rem", fontWeight: 700, color: "#e2e0da", margin: "0 0 .6rem" },
+  progress:     { height: 4, background: "rgba(255,255,255,.07)", borderRadius: 2, marginBottom: ".35rem", overflow: "hidden" },
+  progressBar:  { height: "100%", background: "linear-gradient(90deg, #c9a84c, #e8c878)", borderRadius: 2, transition: "width .4s ease" },
+  progressText: { fontFamily: "'DM Sans', sans-serif", fontSize: ".72rem", color: "#7070a0", margin: 0 },
+  kanban:       { maxWidth: 1200, margin: "0 auto", padding: "0 1.5rem 3rem", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, alignItems: "start" },
+};
+
+const col = {
+  wrap:    { background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column" },
+  header:  { padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  headerLeft: { display: "flex", alignItems: "flex-start", gap: 10 },
+  emoji:   { fontSize: "1.2rem", flexShrink: 0, marginTop: 2 },
+  title:   { fontFamily: "'Playfair Display', serif", fontSize: ".95rem", fontWeight: 700, color: "#e2e0da", margin: "0 0 2px" },
+  desc:    { fontFamily: "'DM Sans', sans-serif", fontSize: ".68rem", color: "#5a5a7a", margin: 0, lineHeight: 1.4 },
+  count:   { fontFamily: "'DM Sans', sans-serif", fontSize: ".72rem", color: "#5a5a7a", background: "rgba(255,255,255,.06)", padding: "2px 8px", borderRadius: 20, flexShrink: 0 },
+  scenes:  { padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8, minHeight: 80 },
+  empty:   { padding: "1.5rem 0", textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: ".72rem", color: "#3a3a5a", lineHeight: 1.7 },
+  addBtn:  { margin: "0 12px 12px", padding: "8px", background: "transparent", border: "1px dashed rgba(255,255,255,.1)", borderRadius: 8, color: "#5a5a7a", fontFamily: "'DM Sans', sans-serif", fontSize: ".75rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all .15s" },
+};
+
+const card = {
+  wrap:      { background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 9, padding: "11px 13px", transition: "border-color .15s, background .15s" },
+  top:       { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 },
+  title:     { fontFamily: "'DM Sans', sans-serif", fontSize: ".88rem", fontWeight: 500, color: "#d0cec8", margin: "0 0 5px", lineHeight: 1.4 },
+  desc:      { fontFamily: "'DM Sans', sans-serif", fontSize: ".75rem", color: "#6a6a8a", lineHeight: 1.55, margin: "0 0 7px" },
+  chapterTag:{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "'DM Sans', sans-serif", fontSize: ".65rem", color: "#c9a84c", background: "rgba(201,168,76,.1)", padding: "2px 8px", borderRadius: 20, border: "1px solid rgba(201,168,76,.2)" },
+  menuBtn:   { background: "none", border: "none", color: "#4a4a6a", cursor: "pointer", fontSize: ".9rem", padding: "2px 5px", borderRadius: 4, transition: "color .15s" },
+  menu:      { position: "absolute", right: 0, top: "100%", background: "#1a1a2e", border: "1px solid rgba(255,255,255,.1)", borderRadius: 8, minWidth: 160, zIndex: 10, boxShadow: "0 8px 24px rgba(0,0,0,.4)", overflow: "hidden" },
+  menuItem:  { display: "block", width: "100%", padding: "8px 14px", background: "none", border: "none", color: "#9090b0", fontFamily: "'DM Sans', sans-serif", fontSize: ".8rem", cursor: "pointer", textAlign: "left", transition: "background .12s" },
+};
+
+const f = {
+  form:      { display: "flex", flexDirection: "column", gap: 7 },
+  input:     { padding: "8px 10px", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 7, color: "#d0cec8", fontFamily: "'DM Sans', sans-serif", fontSize: ".85rem", outline: "none" },
+  textarea:  { padding: "8px 10px", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 7, color: "#d0cec8", fontFamily: "'DM Sans', sans-serif", fontSize: ".78rem", outline: "none", resize: "vertical", lineHeight: 1.55 },
+  row:       { display: "flex", gap: 6 },
+  select:    { flex: 1, padding: "6px 8px", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 7, color: "#9090b0", fontFamily: "'DM Sans', sans-serif", fontSize: ".75rem", outline: "none", cursor: "pointer" },
+  actions:   { display: "flex", gap: 6, justifyContent: "flex-end" },
+  cancelBtn: { padding: "5px 12px", background: "transparent", border: "1px solid rgba(255,255,255,.1)", borderRadius: 6, color: "#6a6a8a", fontFamily: "'DM Sans', sans-serif", fontSize: ".75rem", cursor: "pointer" },
+  addBtn:    { padding: "5px 14px", background: "#c9a84c", border: "none", borderRadius: 6, color: "#09090f", fontFamily: "'DM Sans', sans-serif", fontSize: ".75rem", fontWeight: 600, cursor: "pointer" },
+};
