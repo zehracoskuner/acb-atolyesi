@@ -219,13 +219,13 @@ function AiPanel({ scene, allScenes, characters, onClose }) {
    BAĞLI SAHNELER
 ══════════════════════════════════════════════════════════ */
 function ConnectedScenes({ scene, allScenes, actMeta, onNavigate }) {
+  const targetId = c => (c && typeof c === "object" ? c.target : c);
   const incoming = allScenes.filter(s =>
-    (s.connections || []).some(c => String(c) === String(scene._id))
+    (s.connections || []).some(c => String(targetId(c)) === String(scene._id))
   );
   const outgoing = allScenes.filter(s =>
-    (scene.connections || []).some(c => String(c) === String(s._id))
+    (scene.connections || []).some(c => String(targetId(c)) === String(s._id))
   );
-
   if (!incoming.length && !outgoing.length) return (
     <p className="sd-empty-sub">Henüz bağlantı yok.</p>
   );
@@ -277,6 +277,8 @@ export default function SceneDetailPage() {
   const [draftText, setDraftText] = useState("");
   const [saveState, setSaveState] = useState("saved");
   const timerRef = useRef(null);
+  const draftRef = useRef("");
+  const dirtyRef = useRef(false);
 
   const [showAI,     setShowAI]     = useState(false);
   const [rightPanel, setRightPanel] = useState("chars");
@@ -340,6 +342,7 @@ export default function SceneDetailPage() {
     try {
       await apiPatch(`/plots/${workId}/scenes/${sceneId}`, { draftText: text });
       setSaveState("saved");
+      dirtyRef.current = false;
     } catch {
       setSaveState("unsaved");
     }
@@ -349,9 +352,22 @@ export default function SceneDetailPage() {
     const text = e.target.value;
     setDraftText(text);
     setSaveState("unsaved");
+    draftRef.current = text;
+    dirtyRef.current = true;
+    clearTimeout(timerRef.current);
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => saveDraft(text), SAVE_DEBOUNCE_MS);
   }
+  /* Bekleyen taslağı kaybetme — sahne değişimi / sekme kapanışı */
+  useEffect(() => {
+    const flush = () => { if (dirtyRef.current) saveDraft(draftRef.current); };
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      clearTimeout(timerRef.current);
+      flush();
+    };
+  }, [saveDraft]);
 
   async function updateMeta(patch) {
     try {

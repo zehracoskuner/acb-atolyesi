@@ -25,13 +25,13 @@ import PlotDrawArea        from "../components/plotworld/PlotDrawArea";
 import CharacterArcPanel   from "../components/plotworld/CharacterArcPanel";
 import StructureSetupModal from "../components/plotworld/StructureSetupModal";
 import ButterflyModal      from "../components/plotworld/ButterflyModal";
-import GapAnalysisPanel    from "../components/plotworld/GapAnalysisPanel";
 import WorldEntryModal     from "../components/plotworld/WorldEntryModal";
 import CausalEdge       from "../components/plotworld/CausalEdge";
 import EdgeTypeSelector from "../components/plotworld/EdgeTypeSelector";
 import { EDGE_TYPES as EDGE_TYPE_META, DEFAULT_EDGE_TYPE } from "../components/plotworld/constants";
 import "../components/plotworld/SceneNode.css";
 import "../components/plotworld/EdgeTypeSelector.css";
+import AiAnalysisPanel    from "../components/plotworld/AiAnalysisPanel";
 
 import "../styles/PlotWorldPage.css";
 import "../components/plotworld/StructureSetupModal.css";
@@ -521,6 +521,11 @@ const onConnect = useCallback(({ source, target }) => {
       toast(`${failed.length} bağlantı kaldırılamadı.`, "error");
     }
   }, [workId, toast]);
+  const onNodesDelete = useCallback((deleted) => {
+    deleted.forEach(n => {
+      if (n.type === "sceneNode") handleDeleteSceneById(n.id);
+    });
+  }, [handleDeleteSceneById]);
 
 const onNodeClick = useCallback((_, node) => {
   if (node.type !== "sceneNode") return;
@@ -1114,10 +1119,10 @@ const onNodeClick = useCallback((_, node) => {
             className={`pw-mtab pw-mtab--ai ${showGapPanel ? "pw-mtab--ai-active" : ""}`}
             data-tour="plotworld-ai-btn"
             aria-pressed={showGapPanel}
-            aria-label="AI Boşluk Analizi"
+            aria-label="AI Analiz"
             onClick={() => setShowGapPanel(prev => !prev)}
           >
-            {showGapPanel ? "× Kapat" : "◈ AI Analiz"}
+            {showGapPanel ? "× Kapat" : "✦ AI Analiz"}
           </button>
 
           {/* Arama — sadece plot board'da */}
@@ -1135,9 +1140,9 @@ const onNodeClick = useCallback((_, node) => {
           </button>
         </nav>
 
-        {/* Gap Panel */}
+        {/* AI Analiz Paneli */}
         {showGapPanel && activeMain === "plot" && (
-          <GapAnalysisPanel
+          <AiAnalysisPanel
             nodes={nodes}
             actOrder={actOrder}
             actMeta={actMeta}
@@ -1220,6 +1225,7 @@ const onNodeClick = useCallback((_, node) => {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onEdgesDelete={onEdgesDelete}
+              onNodesDelete={onNodesDelete}
               onNodeClick={onNodeClick}
               onPaneClick={onPaneClick}
               nodeTypes={NODE_TYPES}
@@ -1389,6 +1395,7 @@ const onNodeClick = useCallback((_, node) => {
       {showStructureModal && (
         <StructureSetupModal
           currentTemplate={structure?.templateId}
+          currentActs={structure?.acts}
           onSave={handleStructureSave}
           onClose={() => setShowStructureModal(false)}
           isFirstTime={!worldData?.world?.structure}

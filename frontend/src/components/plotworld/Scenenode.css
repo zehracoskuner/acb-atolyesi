@@ -313,10 +313,3 @@
   height: 14px; width: 1px;
   background: rgba(255,255,255,.12); border-radius: 1px;
 }
-
-/* ── Edge stilleri ── */
-.react-flow__edge-path {
-  stroke: #c9c4bc !important;
-  stroke-width: 1.5px !important;
-}
-.react-flow__edge.selected .react-flow__edge-path { stroke: #6d28d9 !important; }

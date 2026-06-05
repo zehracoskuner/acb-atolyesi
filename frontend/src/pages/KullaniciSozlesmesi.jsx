@@ -84,6 +84,8 @@ ACB Atölyesi, hizmetin bütünlüğünü korumak amacıyla gerekli gördüğü 
       title: "Sorumluluk Sınırlaması",
       content: `Platform "olduğu gibi" sunulmaktadır. Hizmet kesintileri, veri kayıpları veya üçüncü taraf içeriklerinden kaynaklanabilecek zararlar için ACB Atölyesi'nin sorumluluğu, yasaların izin verdiği azami ölçüde sınırlandırılmıştır.
 
+Yapay zeka destekli özellikler, yazarlık sürecine yardımcı olmak amacıyla sunulur. Bu araçların önerileri kesin, hatasız veya hukuki ya da edebi açıdan bağlayıcı nitelikte değildir. Kullanıcı, yapay zeka önerilerini kendi takdirine göre değerlendirir ve uygulama sorumluluğu tamamen kullanıcıya aittir.
+
 Olası kesintilere karşı eserlerinizin yerel yedeklerini düzenli olarak almanızı şiddetle tavsiye ederiz.`,
     },
     {
@@ -159,7 +161,7 @@ Bu Sözleşme Türkiye Cumhuriyeti kanunlarına tabidir.`,
             <span className="footer-ornament">❧</span>
             <p>
               Sorularınız için{" "}
-              <a href="mailto:destek@acbatolyesi.com">destek@acbatolyesi.com</a>{" "}
+              <a href="mailto:acbatolyesi@gmail.com">acbatolyesi@gmail.com</a>{" "}
               adresine yazabilirsiniz.
             </p>
           </div>

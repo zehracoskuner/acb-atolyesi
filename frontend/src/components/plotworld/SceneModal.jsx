@@ -27,6 +27,7 @@ export default function SceneModal({
     charIds:     initial?.charIds     || [],
     description: initial?.desc        || "",
     status:      initial?.status      || "idea",
+    isAlternative: initial?.isAlternative  || false,
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -165,6 +166,23 @@ export default function SceneModal({
                 );
               })}
             </div>
+          </div>
+          {/* Alternatif dal */}
+          <div className="wm-field">
+            <label className="wm-label">Dal Tipi</label>
+            <button
+              type="button"
+              className={`wm-alt-btn ${form.isAlternative ? "wm-alt-btn--on" : ""}`}
+              onClick={() => set("isAlternative", !form.isAlternative)}
+              aria-pressed={form.isAlternative}
+            >
+              <span className="wm-alt-icon" aria-hidden="true">🌿</span>
+              Alternatif dal sahnesi
+              {form.isAlternative && <span className="wm-alt-check" aria-hidden="true">✓</span>}
+            </button>
+            <span className="wm-alt-hint">
+              "Ya olsaydı?" dalı — ana akışın dışında bir senaryo.
+            </span>
           </div>
 
           {/* Karakterler */}

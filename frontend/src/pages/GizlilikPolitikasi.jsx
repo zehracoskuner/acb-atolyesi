@@ -11,7 +11,18 @@ export default function GizlilikPolitikasi() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+
   const sections = [
+          {
+        id: "veri-sorumlusu",
+        number: "0",
+        title: "Veri Sorumlusu",
+        content: `Bu Gizlilik Politikası kapsamında kişisel verilerinizi işleyen veri sorumlusu ACB Atölyesi'dir.
+
+      KVKK kapsamındaki her türlü başvuru ve soru için acbatolyesi@gmail.com adresinden bizimle iletişime geçebilirsiniz.
+
+      Kişisel verileriniz; sözleşmenin kurulması ve ifası, hukuki yükümlülüklerin yerine getirilmesi, meşru menfaatlerimiz ve gerekli hâllerde açık rızanız hukuki sebeplerine dayanarak işlenmektedir.`,
+      },
     {
       id: "toplanan-veriler",
       number: "I",
@@ -87,7 +98,7 @@ Yasal bir yükümlülük bulunması halinde ilgili veriler mevzuatın öngördü
 • Kişisel verilerinizin silinmesini veya yok edilmesini talep etme
 • İşlemenin otomatik sistemler aracılığıyla yapılması nedeniyle aleyhinize sonuç doğurmasına itiraz etme
 
-Bu haklarınızı kullanmak için destek@acbatolyesi.com adresine yazabilirsiniz.`,
+Bu haklarınızı kullanmak için acbatolyesi@gmail.com adresine yazabilirsiniz.`,
     },
     {
       id: "guvenlik",
@@ -100,7 +111,7 @@ Bu haklarınızı kullanmak için destek@acbatolyesi.com adresine yazabilirsiniz
 • HTTPS üzerinden şifreli bağlantı zorunludur
 • Hassas işlemler için e-posta doğrulaması uygulanır
 
-Hiçbir sistem %100 güvenli değildir. Bir güvenlik açığı fark ederseniz lütfen güvenlik@acbatolyesi.com adresinden bize bildirin.`,
+Hiçbir sistem %100 güvenli değildir. Bir güvenlik açığı fark ederseniz lütfen acbatolyesi@gmail.com adresinden bize bildirin.`,
     },
   ];
 
@@ -165,7 +176,7 @@ Hiçbir sistem %100 güvenli değildir. Bir güvenlik açığı fark ederseniz l
             <span className="footer-ornament">❧</span>
             <p>
               KVKK başvuruları için{" "}
-              <a href="mailto:kvkk@acbatolyesi.com">kvkk@acbatolyesi.com</a>{" "}
+              <a href="mailto:acbatolyesi@gmail.com">acbatolyesi@gmail.com</a>{" "}
               adresini kullanabilirsiniz.
             </p>
           </div>

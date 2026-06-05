@@ -104,25 +104,33 @@
   border-bottom: 2px solid transparent;
   padding: .5rem .75rem .6rem;
   font-family: 'DM Sans', sans-serif;
-  font-size: .82rem;
+  font-size: .78rem;
   cursor: pointer;
   color: #a89880;
   display: flex;
   align-items: center;
   gap: .35rem;
   margin-bottom: -1px;
-  transition: color .15s;
-  letter-spacing: .01em;
+  transition: color .15s, background .15s, border-color .15s;
+  letter-spacing: .08em;
+  font-weight: 400;
+  text-transform: uppercase;
 }
 
 .ewm-tab:hover {
   color: #5a3e28;
+  background: #ede7dc;
+  border-radius: 3px 3px 0 0;
 }
 
 .ewm-tab--active {
-  color: #2c1f0e;
+  color: #8c6e4b;
   border-bottom-color: #8c6e4b;
-  font-weight: 500;
+  border-bottom-width: 3px;
+  font-weight: 600;
+  background: rgba(140, 110, 75, .10);
+  margin-bottom: -1px;
+  padding-bottom: .55rem;
 }
 
 .ewm-tab-icon {
@@ -130,12 +138,13 @@
 }
 
 .ewm-tab-badge {
-  background: #ede7dc;
-  color: #8c6e4b;
-  font-size: .7rem;
+  background: rgba(74, 122, 82, .14);
+  color: #4a7a52;
+  border: 1px solid rgba(74, 122, 82, .35);
+  font-size: .62rem;
   padding: 1px 6px;
   border-radius: 999px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* ── Gövde ── */
@@ -157,19 +166,39 @@
   gap: 0;
 }
 
+.ewm-section::before {
+  content: '';
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #8c6e4b 20%, #8c6e4b 80%, transparent);
+  margin-bottom: 1.2rem;
+  opacity: .4;
+  border-radius: 99px;
+}
+
+.ewm-section:first-child::before {
+  display: none;
+}
+
 /* ── Form alanları ── */
 .ewm-field {
-  margin-bottom: 1.1rem;
+  margin-bottom: 1.4rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid #ede7dc;
+}
+
+.ewm-field:last-of-type {
+  border-bottom: none;
 }
 
 .ewm-label {
   display: block;
   font-family: 'DM Sans', sans-serif;
-  font-size: .72rem;
+  font-size: .65rem;
   font-weight: 600;
-  color: #8c7a66;
+  color: #2c1f0e;
   text-transform: uppercase;
-  letter-spacing: .06em;
+  letter-spacing: .15em;
   margin-bottom: .4rem;
 }
 
@@ -210,10 +239,25 @@
 
 .ewm-select {
   cursor: pointer;
+  font-weight: 500;
+  border: 1.5px solid #c9b9a6;
+  background-color: rgba(140, 110, 75, .06);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238c7a66' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right .75rem center;
   padding-right: 2.25rem;
+}
+
+.ewm-select:hover {
+  border-color: #8c6e4b;
+  background-color: rgba(140, 110, 75, .10);
+}
+
+.ewm-select:focus {
+  border-color: #8c6e4b;
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(140, 110, 75, .14);
+  border-width: 1.5px;
 }
 
 .ewm-hint {
@@ -260,12 +304,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: .85rem 0;
-  border-bottom: 1px solid #ede7dc;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  background: #f5f0e8;
+  border: 1.5px solid #c9b9a6;
+  border-radius: 8px;
+  transition: border-color .15s, background .15s;
+  margin-bottom: .75rem;
+}
+
+.ewm-toggle-row:hover {
+  border-color: #8c6e4b;
+  background: linear-gradient(90deg, #f5f0e8, rgba(140, 110, 75, .10));
 }
 
 .ewm-toggle-row:last-of-type {
-  border-bottom: none;
+  margin-bottom: 0;
 }
 
 .ewm-toggle-info {
@@ -276,15 +330,15 @@
 
 .ewm-toggle-label {
   font-family: 'DM Sans', sans-serif;
-  font-size: .88rem;
+  font-size: .84rem;
   color: #2c1f0e;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .ewm-toggle-sub {
   font-family: 'DM Sans', sans-serif;
-  font-size: .78rem;
-  color: #a89880;
+  font-size: .72rem;
+  color: #8c7a66;
 }
 
 .ewm-toggle-sw {
@@ -360,12 +414,24 @@
 .ewm-ch-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: .6rem .75rem;
-  background: #fff;
+  gap: .6rem;
+  padding: .75rem .9rem;
+  background: #f5f0e8;
   border: 1px solid #ddd3c5;
   border-radius: 8px;
-  transition: opacity .15s;
+  transition: opacity .15s, border-color .15s, background .15s, box-shadow .15s;
+}
+
+.ewm-ch-item:hover {
+  border-color: #c9b9a6;
+  background: #fff;
+}
+
+.ewm-ch-item--on {
+  background: #fff;
+  border-color: #4a7a52;
+  border-width: 1.5px;
+  box-shadow: 0 0 0 2px rgba(74, 122, 82, .14);
 }
 
 .ewm-ch-item--off {
@@ -393,7 +459,8 @@
   background: transparent;
   border: none;
   font-family: 'DM Sans', sans-serif;
-  font-size: .85rem;
+  font-size: .98rem;
+  font-weight: 500;
   color: #2c1f0e;
   outline: none;
   min-width: 0;
@@ -437,6 +504,27 @@
 
 @keyframes ewm-spin {
   to { transform: rotate(360deg); }
+}
+
+
+/* ── Yayın uyarısı ── */
+.ewm-publish-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  padding: 1rem 1.1rem;
+  background: rgba(200, 131, 42, .15);
+  border: 1.5px solid #c8832a;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(200, 131, 42, .10);
+}
+
+.ewm-publish-warning-text {
+  font-family: 'DM Sans', sans-serif;
+  font-size: .76rem;
+  color: #9a641f;
+  font-weight: 400;
+  line-height: 1.5;
 }
 
 /* ── Alt bar ── */

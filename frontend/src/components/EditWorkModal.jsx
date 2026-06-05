@@ -1,4 +1,3 @@
-// src/components/EditWorkModal.jsx
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { apiGet, apiPatch, apiPut } from "../lib/api";
@@ -29,7 +28,7 @@ const TABS = [
   { id: "chapters", icon: "📋", label: "Bölümler"        },
 ];
 
-// ─── CSS ─────────────────────────────────────────────────────────────────────
+// ─── CSS (IYILEŞTIRILMIŞ) ─────────────────────────────────────────────────────
 const CSS = `
   :root {
     --ewm-surface:     #faf8f4;
@@ -98,21 +97,32 @@ const CSS = `
   .ewm-title { font-family: 'Cormorant Garamond', serif; font-size: 1.9rem; font-weight: 300; font-style: italic; color: var(--ewm-ink); margin: 0; line-height: 1.15; }
   .ewm-subtitle { font-family: 'DM Sans', sans-serif; font-size: 0.76rem; font-weight: 300; color: var(--ewm-ink-ghost); margin: 0.35rem 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+  /* ✅ TAB'LAR - DİKKAT ÇEKICI YAPILDI */
   .ewm-tabs { display: flex; padding: 1.25rem 2.25rem 0; border-bottom: 1px solid var(--ewm-border); margin-top: 1.25rem; }
-  .ewm-tab { font-family: 'DM Sans', sans-serif; font-size: 0.72rem; font-weight: 400; letter-spacing: 0.06em; color: var(--ewm-ink-ghost); background: none; border: none; border-bottom: 2px solid transparent; padding: 0.55rem 1rem 0.65rem; cursor: pointer; transition: color var(--ewm-t), border-color var(--ewm-t); display: flex; align-items: center; gap: 0.4rem; white-space: nowrap; margin-bottom: -1px; outline: none; }
-  .ewm-tab:hover { color: var(--ewm-ink-dim); }
-  .ewm-tab--active { color: var(--ewm-accent); border-bottom-color: var(--ewm-accent); font-weight: 500; }
-  .ewm-tab-badge { font-family: 'DM Sans', sans-serif; font-size: 0.58rem; font-weight: 600; background: var(--ewm-green-glow); color: var(--ewm-green); border: 1px solid rgba(74,124,89,0.25); border-radius: 99px; padding: 0.1rem 0.45rem; }
+  .ewm-tab { font-family: 'DM Sans', sans-serif; font-size: 0.78rem; font-weight: 400; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ewm-ink-ghost); background: none; border: none; border-bottom: 2px solid transparent; padding: 0.55rem 1rem 0.65rem; cursor: pointer; transition: all var(--ewm-t); display: flex; align-items: center; gap: 0.4rem; white-space: nowrap; margin-bottom: -1px; outline: none; }
+  .ewm-tab:hover { color: var(--ewm-ink-dim); background: var(--ewm-surface2); border-radius: 3px 3px 0 0; }
+  .ewm-tab--active { color: var(--ewm-accent); border-bottom-color: var(--ewm-accent); border-bottom-width: 3px; font-weight: 600; background: var(--ewm-accent-glow); margin-bottom: -2px; }
+  .ewm-tab-badge { font-family: 'DM Sans', sans-serif; font-size: 0.62rem; font-weight: 600; background: var(--ewm-green-glow); color: var(--ewm-green); border: 1px solid rgba(74,124,89,0.35); border-radius: 99px; padding: 0.1rem 0.5rem; }
 
+  /* ✅ BODY - SECTION AYRILMASI */
   .ewm-body { padding: 1.75rem 2.25rem 0; display: flex; flex-direction: column; gap: 1.4rem; }
-  .ewm-section { display: flex; flex-direction: column; gap: 1.4rem; }
+  .ewm-section { display: flex; flex-direction: column; gap: 1.4rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--ewm-surface3); }
+  .ewm-section:last-child { border-bottom: none; }
+  
   .ewm-field { display: flex; flex-direction: column; gap: 0.45rem; }
-  .ewm-label { font-family: 'DM Sans', sans-serif; font-size: 0.62rem; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ewm-ink-dim); }
+  
+  /* ✅ LABEL - DAHA KOYU VE KALINI */
+  .ewm-label { font-family: 'DM Sans', sans-serif; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ewm-ink); }
+  
   .ewm-input, .ewm-textarea, .ewm-select { font-family: 'Cormorant Garamond', serif; font-size: 1.08rem; font-weight: 400; color: var(--ewm-ink); background: var(--ewm-surface2); border: 1px solid var(--ewm-border); border-radius: var(--ewm-radius); padding: 0.68rem 0.9rem; width: 100%; box-sizing: border-box; transition: border-color var(--ewm-t), box-shadow var(--ewm-t), background var(--ewm-t); outline: none; appearance: none; }
   .ewm-input::placeholder, .ewm-textarea::placeholder { color: var(--ewm-ink-ghost); font-style: italic; }
   .ewm-input:focus, .ewm-textarea:focus, .ewm-select:focus { border-color: rgba(150,31,18,0.35); background: var(--ewm-surface); box-shadow: 0 0 0 3px var(--ewm-accent-glow); }
   .ewm-textarea { resize: vertical; min-height: 88px; line-height: 1.65; }
-  .ewm-select { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a89a8a' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.9rem center; padding-right: 2.2rem; }
+  
+  /* ✅ SELECT - SOFT ARKA PLAN + KALINI BORDER */
+  .ewm-select { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a89a8a' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.9rem center; padding-right: 2.2rem; font-weight: 500; border: 1.5px solid var(--ewm-border-hi); background-color: rgba(192,57,43,0.04); }
+  .ewm-select:hover { border-color: var(--ewm-accent); background-color: rgba(192,57,43,0.08); }
+  
   .ewm-hint { font-family: 'DM Sans', sans-serif; font-size: 0.68rem; font-weight: 300; color: var(--ewm-ink-ghost); margin: 0; }
   .ewm-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 
@@ -146,24 +156,28 @@ const CSS = `
   .ewm-genre-pill-remove { background: none; border: none; padding: 0; cursor: pointer; color: var(--ewm-green); opacity: 0.55; font-size: 0.65rem; line-height: 1; transition: opacity var(--ewm-t); display: flex; align-items: center; }
   .ewm-genre-pill-remove:hover { opacity: 1; }
 
-  .ewm-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.9rem 1rem; background: var(--ewm-surface2); border: 1px solid var(--ewm-border); border-radius: var(--ewm-radius); }
+  /* ✅ TOGGLE ROWS - DAHA VURGULU BORDERS + HOVER */
+  .ewm-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.1rem; background: var(--ewm-surface2); border: 1.5px solid var(--ewm-border-hi); border-radius: var(--ewm-radius); transition: all var(--ewm-t); }
+  .ewm-toggle-row:hover { border-color: var(--ewm-accent); background: linear-gradient(90deg, var(--ewm-surface2), var(--ewm-accent-glow)); }
   .ewm-toggle-info { display: flex; flex-direction: column; gap: 0.2rem; }
-  .ewm-toggle-label { font-family: 'DM Sans', sans-serif; font-size: 0.82rem; font-weight: 500; color: var(--ewm-ink); }
-  .ewm-toggle-sub { font-family: 'DM Sans', sans-serif; font-size: 0.7rem; font-weight: 300; color: var(--ewm-ink-ghost); }
+  .ewm-toggle-label { font-family: 'DM Sans', sans-serif; font-size: 0.84rem; font-weight: 600; color: var(--ewm-ink); }
+  .ewm-toggle-sub { font-family: 'DM Sans', sans-serif; font-size: 0.72rem; font-weight: 300; color: var(--ewm-ink-dim); }
   .ewm-toggle-sw { flex-shrink: 0; width: 36px; height: 20px; border-radius: 99px; border: 1px solid var(--ewm-border-hi); background: var(--ewm-surface3); cursor: pointer; position: relative; transition: background var(--ewm-t), border-color var(--ewm-t); outline: none; }
   .ewm-toggle-sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--ewm-ink-ghost); transition: transform var(--ewm-t), background var(--ewm-t); }
   .ewm-toggle-sw--on { background: var(--ewm-accent); border-color: var(--ewm-accent); }
   .ewm-toggle-sw--on::after { transform: translateX(16px); background: #faf8f4; }
 
+  /* ✅ PUBLISH WARNING - DAHA VURGULU */
   .ewm-publish-warning {
     display: flex; align-items: flex-start; gap: 0.6rem;
-    padding: 0.85rem 1rem;
-    background: rgba(200, 131, 42, 0.07);
-    border: 1px solid rgba(200, 131, 42, 0.25);
+    padding: 1rem 1.1rem;
+    background: rgba(200, 131, 42, 0.15);
+    border: 1.5px solid var(--ewm-orange);
     border-radius: var(--ewm-radius);
+    box-shadow: 0 2px 8px rgba(200,131,42,0.1);
   }
   .ewm-publish-warning-icon { font-size: 0.9rem; flex-shrink: 0; margin-top: 1px; }
-  .ewm-publish-warning-text { font-family: 'DM Sans', sans-serif; font-size: 0.74rem; font-weight: 300; color: var(--ewm-orange); line-height: 1.55; }
+  .ewm-publish-warning-text { font-family: 'DM Sans', sans-serif; font-size: 0.76rem; font-weight: 400; color: var(--ewm-orange); line-height: 1.55; }
 
   .ewm-ch-status {
     font-family: 'DM Sans', sans-serif; font-size: 0.58rem; font-weight: 500;
@@ -181,12 +195,14 @@ const CSS = `
   .ewm-btn-select-all:hover { opacity: 1; }
 
   .ewm-chapters-list { display: flex; flex-direction: column; gap: 0.35rem; }
-  .ewm-ch-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.8rem; border: 1px solid var(--ewm-border); border-radius: var(--ewm-radius); background: var(--ewm-surface2); transition: background var(--ewm-t), border-color var(--ewm-t); }
-  .ewm-ch-item--on  { background: var(--ewm-surface); border-color: var(--ewm-border-hi); }
+  /* ✅ CHAPTER ITEMS - SEÇILI'DE YEŞIL BORDER + SHADOW */
+  .ewm-ch-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.75rem 0.9rem; border: 1px solid var(--ewm-border); border-radius: var(--ewm-radius); background: var(--ewm-surface2); transition: all var(--ewm-t); }
+  .ewm-ch-item:hover { border-color: var(--ewm-border-hi); background: var(--ewm-surface); }
+  .ewm-ch-item--on  { background: var(--ewm-surface); border-color: var(--ewm-green); border-width: 1.5px; box-shadow: 0 0 0 2px var(--ewm-green-glow); }
   .ewm-ch-item--off { opacity: 0.55; }
   .ewm-ch-check { flex-shrink: 0; width: 14px; height: 14px; accent-color: var(--ewm-accent); cursor: pointer; }
   .ewm-ch-num { font-family: 'DM Sans', sans-serif; font-size: 0.68rem; font-weight: 300; color: var(--ewm-ink-ghost); flex-shrink: 0; min-width: 1.4rem; }
-  .ewm-ch-title { font-family: 'Cormorant Garamond', serif; font-size: 0.98rem; color: var(--ewm-ink); background: none; border: none; border-bottom: 1px solid transparent; padding: 0 0 1px; flex: 1; outline: none; transition: border-color var(--ewm-t); min-width: 0; }
+  .ewm-ch-title { font-family: 'Cormorant Garamond', serif; font-size: 0.98rem; font-weight: 500; color: var(--ewm-ink); background: none; border: none; border-bottom: 1px solid transparent; padding: 0 0 1px; flex: 1; outline: none; transition: border-color var(--ewm-t); min-width: 0; }
   .ewm-ch-title:focus { border-bottom-color: var(--ewm-accent); }
   .ewm-ch-title:disabled { cursor: default; color: var(--ewm-ink-ghost); }
 
@@ -248,8 +264,6 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
   const [selectedIds,  setSelectedIds]  = useState(new Set());
   const [customTitles, setCustomTitles] = useState({});
 
-  // FIX: chapters yüklendi mi takibi — work id bazlı, state yerine ref
-  // serializeWork "id" döndürüyor; _id yoksa id'ye düşüyoruz.
   const getWorkId = (w) => w?._id ?? w?.id ?? null;
   const loadedForWorkIdRef = useRef(null);
   const initialPublishedIdsRef = useRef(null);
@@ -284,7 +298,6 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
 
     setTitle(work.title ?? "");
     setDescription(work.description ?? "");
-    // serializeWork language/tags/color döndürmüyor — universe veya root'tan oku
     setLanguage(work.language ?? work.universe?.language ?? "tr");
     setTags(
       Array.isArray(work.tags)
@@ -299,27 +312,21 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
     setCustomTitles(work.customChapterTitles ?? {});
     setOpenGroups({});
 
-    // FIX: serializeWork genres'i universe.genres içinde saklıyor
     const raw = work.genres
       ?? work.universe?.genres
       ?? (work.genre ? [work.genre] : []);
     setGenres(Array.isArray(raw) ? raw : [raw].filter(Boolean));
 
-    // Bölüm önbelleğini sıfırla — yeni eser seçildiğinde eski veriyi gösterme
     setChapters([]);
     setChError("");
     setTab("meta");
     setSaveMsg(null);
 
-    // FIX: Bu work için henüz yüklenmedi işaretle
     loadedForWorkIdRef.current = null;
     initialPublishedIdsRef.current = work.publishedChapterIds?.length > 0
       ? new Set(work.publishedChapterIds.map(String))
       : null;
-    // getWorkId: serializeWork "id" döndürüyor, _id yoksa id kullan
-    // (useEffect içinde doğrudan çağıramayız, inline kullanıyoruz)
 
-    // publishedChapterIds varsa set et, yoksa bölümler yüklenince ayarlanacak
     if (work.publishedChapterIds?.length > 0) {
       setSelectedIds(new Set(work.publishedChapterIds.map(String)));
     } else {
@@ -327,39 +334,32 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
     }
   }, [work, isOpen]);
 
-  // FIX: Bölümleri yükle — ref bazlı kontrol, stale closure yok
   const loadChapters = useCallback(async () => {
     const workId = getWorkId(work);
     if (!workId) return;
 
-    // Bu work için zaten yüklendiyse tekrar gitme
     if (loadedForWorkIdRef.current === workId) return;
 
     setChLoading(true);
     setChError("");
 
     try {
-      // FIX: Doğru endpoint — GET /api/works/:id/chapters
       const res = await apiGet(`/works/${workId}/chapters`);
       const chs = res.items ?? res.data ?? res ?? [];
-
-      // Gelen veri dizi değilse güvenli düşüş
       const safeChapters = Array.isArray(chs) ? chs : [];
 
       setChapters(safeChapters);
 
-      // FIX: publishedChapterIds yoksa tüm bölümleri seçili başlat
       if (initialPublishedIdsRef.current === null) {
-  setSelectedIds(
-    new Set(
-      safeChapters
-        .filter((ch) => ch.status === "published")
-        .map((ch) => String(ch._id ?? ch.id))
-    )
-  );
-}
+        setSelectedIds(
+          new Set(
+            safeChapters
+              .filter((ch) => ch.status === "published")
+              .map((ch) => String(ch._id ?? ch.id))
+          )
+        );
+      }
 
-      // Başarılı yüklemeyi işaretle
       loadedForWorkIdRef.current = workId;
     } catch (err) {
       setChError(err.message || "Bölümler yüklenemedi.");
@@ -367,9 +367,8 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
     } finally {
       setChLoading(false);
     }
-  }, [work]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [work]);
 
-  // FIX: Tab değişince değil, doğrudan bölüm sekmesine geçilince yükle
   function handleTabChange(id) {
     setTab(id);
     if (id === "chapters") {
@@ -377,14 +376,12 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
     }
   }
 
-  // FIX: Hata sonrası "Tekrar dene" — önbelleği sıfırla
   function retryLoadChapters() {
     loadedForWorkIdRef.current = null;
     setChapters([]);
     loadChapters();
   }
 
-  // Tür yardımcıları
   const toggleGroup = (label) => setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
   const toggleGenre = (g) => {
     setGenres(prev => {
@@ -394,27 +391,25 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
     });
   };
 
-  // Bölüm yardımcıları
   function toggleChapter(id, status) {
-  if (status !== "published") return; // sadece yayınlanmış bölüm dahil edilebilir
-  setSelectedIds(prev => {
-    const next = new Set(prev);
-    next.has(String(id)) ? next.delete(String(id)) : next.add(String(id));
-    return next;
-  });
-}
+    if (status !== "published") return;
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(String(id)) ? next.delete(String(id)) : next.add(String(id));
+      return next;
+    });
+  }
 
-function toggleAll() {
-  const publishable = chapters
-    .filter(ch => ch.status === "published")
-    .map(ch => String(ch._id));
-  const hepsiSecili = publishable.length > 0 && publishable.every(id => selectedIds.has(id));
-  setSelectedIds(hepsiSecili ? new Set() : new Set(publishable));
-}
+  function toggleAll() {
+    const publishable = chapters
+      .filter(ch => ch.status === "published")
+      .map(ch => String(ch._id));
+    const hepsiSecili = publishable.length > 0 && publishable.every(id => selectedIds.has(id));
+    setSelectedIds(hepsiSecili ? new Set() : new Set(publishable));
+  }
 
   const showPublishWarning = status === "published" && chapters.length > 0 && selectedIds.size === 0;
 
-  // Kaydet
   async function handleSave() {
     if (!title.trim()) {
       setSaveMsg({ ok: false, text: "Başlık boş olamaz." });
@@ -449,8 +444,6 @@ function toggleAll() {
     try {
       const workId = getWorkId(work);
 
-      // FIX: Eser draft'a alınıyorsa ve önceki status published/pending ise
-      // tüm bölümleri de taslağa al — backend'e tek istek yeterli
       const wasPublished = work.status === "published" || work.status === "pending_review";
       if (status === "draft" && wasPublished) {
         await apiPut(`/works/${workId}/unpublish-all`);

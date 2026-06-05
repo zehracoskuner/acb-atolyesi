@@ -246,7 +246,7 @@ Kör Atölye, samimiyet güvenliğine dayalıdır. Bu güveni koruyun.`,
             <span className="footer-ornament">❧</span>
             <p>
               Etik ihlal bildirimleri için{" "}
-              <a href="mailto:etik@acbatolyesi.com">etik@acbatolyesi.com</a>
+              <a href="mailto:acbatolyesi@gmail.com">acbatolyesi@gmail.com</a>
             </p>
           </div>
         </main>

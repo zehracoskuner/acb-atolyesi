@@ -91,23 +91,39 @@ export default function WorkStudioPage() {
   const [showEditModal, setShowEditModal] = useState(false);
 
   const initPage = useCallback(async () => {
-    if (!isLoggedIn()) { navigate("/login"); return; }
-    try {
-      setLoading(true);
-      const [workRes, chRes] = await Promise.all([
-        apiGet(`/works/${workId}`),
-        apiGet(`/works/${workId}/chapters`),
-      ]);
-      setWork(workRes.item);
-      setStats(workRes.stats);
-      setChapters(chRes.items || []);
-    } catch (err) {
-      setError(err.message || "Çalışma yüklenemedi.");
-    } finally {
-      setLoading(false);
-      setTimeout(() => setMounted(true), 60);
-    }
-  }, [workId, navigate]);
+  if (!isLoggedIn()) {
+    navigate("/login");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    const [workRes, chRes, charRes, plotRes, noteRes] = await Promise.all([
+      apiGet(`/works/${workId}`),
+      apiGet(`/works/${workId}/chapters`),
+      apiGet(`/characters?workId=${workId}`),
+      apiGet(`/plots/${workId}`),
+      apiGet(`/works/${workId}/notes`),
+    ]);
+
+    setWork(workRes.item);
+
+    setStats({
+      ...(workRes.stats ?? {}),
+      characterCount: charRes.items?.length ?? 0,
+      plotCount: plotRes.plot?.scenes?.length ?? 0,
+      noteCount: noteRes.items?.length ?? 0,
+    });
+
+    setChapters(chRes.items || []);
+  } catch (err) {
+    setError(err.message || "Çalışma yüklenemedi.");
+  } finally {
+    setLoading(false);
+    setTimeout(() => setMounted(true), 60);
+  }
+}, [workId, navigate]);
 
   useEffect(() => { initPage(); }, [initPage]);
 
@@ -165,11 +181,39 @@ export default function WorkStudioPage() {
   };
 
   const tools = [
-    { icon: "📜", label: "Bölümler",            value: `${chapters.length}`,            unit: "bölüm",    path: `/work/${workId}/chapters`,   tourId: "atolyem-yaz-btn"   },
-    { icon: "👤", label: "Karakterler",          value: `${stats?.characterCount ?? 0}`, unit: "karakter", path: `/work/${workId}/characters`,  tourId: "atolyem-karakterler" },
-    { icon: "🧩", label: "Olay Örgüsü / Dünya", value: `${stats?.plotCount ?? 0}`,      unit: "olay",     path: `/work/${workId}/plot`,        tourId: "atolyem-plotworld"  },
-    { icon: "📝", label: "Notlar",               value: null,                            unit: null,       path: `/work/${workId}/notlarım`,    tourId: "atolyem-notlar"     },
-  ];
+  {
+    icon: "📜",
+    label: "Bölümler",
+    value: `${chapters.length}`,
+    unit: "bölüm",
+    path: `/work/${workId}/chapters`,
+    tourId: "atolyem-yaz-btn",
+  },
+  {
+    icon: "👤",
+    label: "Karakterler",
+    value: `${stats?.characterCount ?? 0}`,
+    unit: "karakter",
+    path: `/work/${workId}/characters`,
+    tourId: "atolyem-karakterler",
+  },
+  {
+    icon: "🧩",
+    label: "Olay Örgüsü / Dünya",
+    value: `${stats?.plotCount ?? 0}`,
+    unit: "olay",
+    path: `/work/${workId}/plot`,
+    tourId: "atolyem-plotworld",
+  },
+  {
+    icon: "📝",
+    label: "Notlar",
+    value: `${stats?.noteCount ?? 0}`,
+    unit: "not",
+    path: `/work/${workId}/notlarım`,
+    tourId: "atolyem-notlar",
+  },
+];
 
   return (
     <div className="ws-root" style={cssVars}>
@@ -243,17 +287,6 @@ export default function WorkStudioPage() {
 
           {/* Hero bilgi */}
           <div className="ws-hero-info">
-            <div className="ws-word-pill">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-              </svg>
-              {(stats?.totalWords ?? 0).toLocaleString("tr-TR")} kelime
-            </div>
-
             <h1 className="ws-hero-title" data-tour="atolyem-baslik">
               {work.title}
             </h1>

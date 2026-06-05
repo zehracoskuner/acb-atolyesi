@@ -1,5 +1,5 @@
 // components/plotworld/GapAnalysisPanel.jsx
-import { useState } from "react";
+import { useState , useEffect} from "react";
 import { apiPost }  from "../../lib/api";
 
 const GAP_TYPE_LABELS = {
@@ -18,8 +18,15 @@ export default function GapAnalysisPanel({
   workId,
   onAddScene,
   onClose,
+  embedded = false,
+  initialTab = "gap",
+  activeTab
 }) {
-  const [tab,        setTab]        = useState("gap");
+  
+  const [tab, setTab] = useState(activeTab || initialTab || "gap");
+  useEffect(() => {
+  if (activeTab) setTab(activeTab);
+}, [activeTab]);
   const [gapResult,  setGapResult]  = useState(null);
   const [suggestions,setSuggestions]= useState({});
   const [loadingGap, setLoadingGap] = useState(false);
@@ -79,31 +86,35 @@ export default function GapAnalysisPanel({
   }
 
   return (
-    <div className="gap-panel">
-      {/* Header */}
-      <div className="gap-panel-header">
-        <div className="gap-panel-title">
-          <span className="gap-panel-icon">◈</span>
-          AI Plot Analizi
-        </div>
-        <button className="gap-panel-close" onClick={onClose}>×</button>
-      </div>
+    <div className={`gap-panel ${embedded ? "gap-panel--embedded" : ""}`}>
+      {!embedded && (
+        <>
+          {/* Header */}
+          <div className="gap-panel-header">
+            <div className="gap-panel-title">
+              <span className="gap-panel-icon">◈</span>
+              AI Plot Analizi
+            </div>
+            <button className="gap-panel-close" onClick={onClose}>×</button>
+          </div>
 
-      {/* Tab bar */}
-      <div className="gap-tabs">
-        <button
-          className={`gap-tab ${tab === "gap" ? "gap-tab--active" : ""}`}
-          onClick={() => setTab("gap")}
-        >
-          Boşluk Tespiti
-        </button>
-        <button
-          className={`gap-tab ${tab === "suggest" ? "gap-tab--active" : ""}`}
-          onClick={() => setTab("suggest")}
-        >
-          Sahne Önerisi
-        </button>
-      </div>
+          {/* Tab bar */}
+          <div className="gap-tabs">
+            <button
+              className={`gap-tab ${tab === "gap" ? "gap-tab--active" : ""}`}
+              onClick={() => setTab("gap")}
+            >
+              Boşluk Tespiti
+            </button>
+            <button
+              className={`gap-tab ${tab === "suggest" ? "gap-tab--active" : ""}`}
+              onClick={() => setTab("suggest")}
+            >
+              Sahne Önerisi
+            </button>
+          </div>
+        </>
+      )}
 
       {/* ── GAP TAB ── */}
       {tab === "gap" && (

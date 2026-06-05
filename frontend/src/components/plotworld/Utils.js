@@ -49,6 +49,9 @@ export function layoutScenes(scenes, characterMap = {}, actOrder = []) {
         position,
         data: {
           label:   s.title,
+          goal:    s.goal        || "",
+          volume:  s.volume      || "",
+          isAlternative: s.isAlternative || false,
           chapter: s.chapter     || "",
           time:    s.time        || "",
           charIds: resolveCharIds(s.characters || []),

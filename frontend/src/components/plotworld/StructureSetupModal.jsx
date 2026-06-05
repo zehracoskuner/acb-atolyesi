@@ -10,6 +10,7 @@ const PALETTE = [
 
 export default function StructureSetupModal({
   currentTemplate,
+  currentActs,
   onSave,
   onClose,
   isFirstTime = false,
@@ -17,6 +18,7 @@ export default function StructureSetupModal({
   const [selected, setSelected] = useState(currentTemplate || DEFAULT_TEMPLATE);
 
   const [customActs, setCustomActs] = useState(() => {
+    if (currentTemplate === "serbest" && currentActs?.length) return currentActs;
     const serbest = STRUCTURE_TEMPLATES.serbest;
     return serbest?.acts?.length
       ? serbest.acts

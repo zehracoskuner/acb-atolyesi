@@ -30,6 +30,7 @@ export default function StoryCoachPanel({
   characters,
   workId,
   onClose,
+  embedded = false,
 }) {
   const [result,  setResult]  = useState(null);
   const [loading, setLoading] = useState(false);
@@ -81,16 +82,18 @@ export default function StoryCoachPanel({
   }
 
   return (
-    <div className="coach-panel">
+    <div className={`coach-panel ${embedded ? "coach-panel--embedded" : ""}`}>
 
       {/* Header */}
-      <div className="coach-header">
-        <div className="coach-title">
-          <span className="coach-icon">✦</span>
-          Hikâye Koçu
+      {!embedded && (
+        <div className="coach-header">
+          <div className="coach-title">
+            <span className="coach-icon">✦</span>
+            Hikâye Koçu
+          </div>
+          <button className="coach-close" onClick={onClose}>×</button>
         </div>
-        <button className="coach-close" onClick={onClose}>×</button>
-      </div>
+      )}
 
       {/* Body */}
       <div className="coach-body">
