@@ -374,12 +374,12 @@ export default function AtelierTab({ workId }) {
 
         {/* Sekmeler */}
         <div className="atelier-tabs" role="tablist">
-          {[
-            { id: ATELIER_TABS.ILHAM, label: "🏋️ Antrenman" },
-            { id: ATELIER_TABS.YORUM, label: "📋 Yorum" },
-            { id: ATELIER_TABS.SOHBET, label: "🎒 Kelime Çantası" },
-            { id: ATELIER_TABS.KOC, label: "🧭 Pusula" },
-          ].map((t) => (
+            {[
+              { id: ATELIER_TABS.ILHAM, label: "🏋️ Antrenman" },
+              { id: ATELIER_TABS.YORUM, label: "📋 Yorum" },
+              { id: ATELIER_TABS.SOHBET, label: "🎒 Kelime Çantası" },
+              { id: ATELIER_TABS.KOC, label: "🧭 Pusula" },
+            ].map((t) => (
             <button
               key={t.id}
               role="tab"
@@ -521,7 +521,7 @@ export default function AtelierTab({ workId }) {
                 )}
 
                 <p className="bag-hint">
-                  <strong>Sesim</strong> = üslubun, az uyarılır. <strong>Değnek</strong> = fazla yaslandığın, Pusula takip eder. <strong>Yok say</strong> = isim/terim (Lavinia, Estanova…), hiç sayılmaz.
+                  <strong>Sesim</strong> = üslubun, az uyarılır. <strong>Değnek</strong> = fazla yaslandığın, Pusula takip eder. <strong>Yok say</strong> = isim/terim (Mehmet, İstanbul gibi), hiç sayılmaz.
                 </p>
               </>
             )}

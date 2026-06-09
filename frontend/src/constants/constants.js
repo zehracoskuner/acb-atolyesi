@@ -1,18 +1,19 @@
 // src/constants/constants.js
 
-// AI Koçluk Sekmeleri (Sağ Panel)
-export const TABS = { 
-    ILHAM: "ilham", 
-    SOHBET: "sohbet", 
-    YORUM: "yorum" 
+// Atölye Sağ Panel Sekmeleri
+export const TABS = {
+  ILHAM: "ilham",
+  SOHBET: "sohbet",
+  YORUM: "yorum",
+  KOC: "koc",
 };
 
 // Works Sidebar Sekmeleri (Sol Panel)
 export const WORK_TABS = {
-    ANAHAT: "anahat",
-    KARAKTER: "karakter",
-    ORTAM: "ortam",
-    DOSYALAR: "dosyalar"
+  ANAHAT: "anahat",
+  KARAKTER: "karakter",
+  ORTAM: "ortam",
+  DOSYALAR: "dosyalar",
 };
 
 // Ton ve AI davranışı seçenekleri
@@ -23,6 +24,9 @@ export const TONES = [
   { value: "mizahi", label: "Mizahi" },
   { value: "gerilim", label: "Gerilim" },
   { value: "melankolik", label: "Melankolik" },
+  { value: "lirik", label: "Lirik" },
+  { value: "fantastik", label: "Fantastik" },
+  { value: "noir", label: "Noir" },
 ];
 
 export const STYLES = [
