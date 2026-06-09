@@ -1,6 +1,8 @@
 // src/hooks/useAICoach.js
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiPost, describeAiError } from "../lib/api";
+import { recordSignal } from "../lib/pusula";
+import { crutchSignals } from "../lib/kelimeCantasi";
 
 /* ── Sabitler ── */
 export const ATELIER_TABS = {
@@ -44,6 +46,7 @@ async function aiReviewReq({ text, focus }) {
     closingNote: data.closingNote || "",
     focus:       data.focus       || focus || "genel",
     focusLabel:  data.focusLabel  || "",
+    signal:      data.signal      || null,
   };
 }
 
@@ -121,6 +124,14 @@ function buildWordLocations(sentences) {
   return loc;
 }
 
+/* ── Rule id → Pusula becerisi (idle vb. kraft-dışı olanlar haritada yok → sinyal yok) ── */
+const RULE_SKILL = {
+  breathless_sentence: "ritim",
+  show_dont_tell:      "duygu",
+  echo_repeat:         "tekrar",
+  anaphora_fatigue:    "tekrar",
+};
+
 /* ══════════════════════════════════════════════
    HOOK
 ══════════════════════════════════════════════ */
@@ -149,6 +160,7 @@ export function useAICoach() {
   const lastWcAtInputRef  = useRef(0);
   const bubbleCooldownRef = useRef({ t: 0, key: "" });
   const noteCooldownRef   = useRef(new Map());
+  const crutchCooldownRef = useRef(new Map());
 
   const alertText = useDebounce(text, 1500);
 
@@ -181,6 +193,7 @@ export function useAICoach() {
       setLoadingAI(true);
       const data = await aiReviewReq({ text, focus });
       setReview(data);
+      if (data.signal) recordSignal({ ...data.signal, source: "review" });
       setTab(ATELIER_TABS.YORUM);
     } catch (err) {
       const { message } = describeAiError(err, { fallback: "Değerlendirme alınamadı." });
@@ -197,17 +210,19 @@ export function useAICoach() {
 
   /* ── Emit policies ── */
   const emitBubble = useCallback((a) => {
-    if (!coachEnabled) return;            // ← toggle kontrolü
+    if (!coachEnabled) return;
     const now = Date.now();
-    if (now - bubbleCooldownRef.current.t < 20000) return;
-    if (bubbleCooldownRef.current.key === a.key && now - bubbleCooldownRef.current.t < 120000) return;
+    if (now - bubbleCooldownRef.current.t < 10000) return;
+    if (bubbleCooldownRef.current.key === a.key && now - bubbleCooldownRef.current.t < 45000) return;
     bubbleCooldownRef.current = { t: now, key: a.key };
+    const skill = RULE_SKILL[a.id];
+    if (skill) recordSignal({ skill, severity: a.severity, source: "rule" });
     setLiveAlert(a);
     setTimeout(() => setLiveAlert(null), 4000);
   }, [coachEnabled]);
 
   const upsertNote = useCallback((n) => {
-    if (!coachEnabled) return;            // ← toggle kontrolü
+    if (!coachEnabled) return;
     const now   = Date.now();
     const last  = noteCooldownRef.current.get(n.key) || 0;
     if (now - last < 300000) {
@@ -215,6 +230,8 @@ export function useAICoach() {
       return;
     }
     noteCooldownRef.current.set(n.key, now);
+    const skill = RULE_SKILL[n.id];
+    if (skill) recordSignal({ skill, severity: n.severity, source: "rule" });
     setCoachNotes(prev => [{ ...n, ts: now, count: n.count || 1 }, ...prev].slice(0, 40));
   }, [coachEnabled]);
 
@@ -296,6 +313,20 @@ export function useAICoach() {
       }
     }
   }, [alertText, emitBubble, upsertNote, coachEnabled]);
+
+  /* ── Kelime Çantası → Pusula (değnek işaretli kelimeler) ── */
+  useEffect(() => {
+    if (!coachEnabled) return;
+    const t = (alertText || "").trim();
+    if (t.length < 30) return;
+    const now = Date.now();
+    for (const sig of crutchSignals(t)) {       // sadece "crutch" etiketli + 3+/6+ eşik
+      const last = crutchCooldownRef.current.get(sig.term) || 0;
+      if (now - last < 300000) continue;         // term başına 5dk throttle (sel yok)
+      crutchCooldownRef.current.set(sig.term, now);
+      recordSignal({ skill: "tekrar", severity: sig.severity, source: "wordbag" });
+    }
+  }, [alertText, coachEnabled]);
 
   /* ── Idle phases ── */
   useEffect(() => {

@@ -1,6 +1,9 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { apiPost, apiPut } from "../lib/api";
 import { useAICoach } from "../hooks/useAICoach";
+import { CONSTRAINT_CATEGORIES, ALL_CONSTRAINTS, constraintForSkill } from "../data/writingConstraints";
+import { getSkillScores, getTrajectory, skillLabel } from "../lib/pusula";
+import { analyzeWords, analyzePhrases, setPref, getPref } from "../lib/kelimeCantasi";
 
 /* ── SABİTLER ── */
 const ATELIER_TABS = { ILHAM: "ilham", SOHBET: "sohbet", YORUM: "yorum", KOC: "koc" };
@@ -11,13 +14,6 @@ const ILHAM_NOTES = [
   "Başlık En Sona Kalır: Baskısını at, şimdilik [Taslak] yaz ve devam et.",
 ];
 
-const CONSTRAINTS = [
-  "Sadece diyalog yazarak aynı sahneyi anlat.",
-  "Her cümle tam 7 kelime olsun.",
-  "Bir koku metaforunu mutlaka kullan.",
-  "Zaman kipini geçmişten şimdiye çevir.",
-  "Bir nesneyi karakter gibi konuştur.",
-];
 
 const REVIEW_FOCUS_OPTIONS = [
   { id: "genel",     label: "Genel" },
@@ -29,6 +25,8 @@ const REVIEW_FOCUS_OPTIONS = [
   { id: "tekrar",    label: "Tekrar" },
 ];
 
+const BUBBLE_TONE = { low: "#fef3c7", medium: "#e9d5ff", high: "#fecaca" };
+
 /* ── ANA BİLEŞEN ── */
 export default function AtelierTab({ workId }) {
   const {
@@ -36,15 +34,13 @@ export default function AtelierTab({ workId }) {
     title, setTitle,
     tab, setTab,
     loadingAI,
+    msg,
     tone, setTone,
     style, setStyle,
-    chatInput, setChatInput,
-    chat, sendChat,
     review, handleReview,
     reviewFocus, setReviewFocus,
     liveAlert,
     coachNotes, setCoachNotes,
-    chatBoxRef,
     coachEnabled, setCoachEnabled,
   } = useAICoach();
 
@@ -101,13 +97,61 @@ export default function AtelierTab({ workId }) {
   const routineProgress =
     routine.goalWords > 0 ? Math.min(1, routineWordsDone / routine.goalWords) : 0;
 
-  /* Kısıtlama egzersizi */
-  const [constraint, setConstraint] = useState("");
-  const pickConstraint = () => {
-    const c = CONSTRAINTS[Math.floor(Math.random() * CONSTRAINTS.length)];
-    setConstraint(c);
-    setTab(ATELIER_TABS.SOHBET);
-    setChatInput(`Bu kısıtla bir paragraf üretmeme yardımcı olur musun? Kısıt: ${c}`);
+  /* Antrenman: kategori + kısıt */
+  const [selectedCategory, setSelectedCategory] = useState("karakter");
+  const [pickedConstraint, setPickedConstraint] = useState(() => {
+    const pool = ALL_CONSTRAINTS.filter((x) => x.category === "karakter");
+    return pool[Math.floor(Math.random() * pool.length)];
+  });
+  const [activeTask, setActiveTask] = useState(null);
+
+  const rollConstraint = (categoryId = selectedCategory) => {
+    const pool = ALL_CONSTRAINTS.filter((x) => x.category === categoryId);
+    const src = pool.length ? pool : ALL_CONSTRAINTS;
+    setPickedConstraint(src[Math.floor(Math.random() * src.length)]);
+  };
+
+  const selectCategory = (categoryId) => {
+    setSelectedCategory(categoryId);
+    rollConstraint(categoryId);
+  };
+
+  const sendTaskToEditor = (withSprint = false) => {
+    if (!pickedConstraint) return;
+    setActiveTask(pickedConstraint);
+    requestAnimationFrame(() => editorRef.current?.focus());
+    if (withSprint) startRoutine("sprint");
+  };
+
+  /* Pusula — sinyal değiştikçe yeniden hesapla */
+  const [pusulaScores, setPusulaScores] = useState([]);
+  useEffect(() => {
+    setPusulaScores(getSkillScores());
+  }, [review, coachNotes, tab]);
+  const weakest = pusulaScores[0] || null;
+
+  const practiceWeakSkill = () => {
+    if (!weakest) return;
+    const c = constraintForSkill(weakest.skill);
+    if (!c) return;
+    setSelectedCategory(c.category);
+    setPickedConstraint(c);
+  };
+
+  /* Kelime Çantası */
+  const [bagTick, setBagTick] = useState(0);
+  const bagWords = useMemo(
+    () => (tab === ATELIER_TABS.SOHBET ? analyzeWords(text) : []),
+    [text, bagTick, tab]
+  );
+  const bagPhrases = useMemo(
+    () => (tab === ATELIER_TABS.SOHBET ? analyzePhrases(text) : []),
+    [text, bagTick, tab]
+  );
+  const tagTerm = (term, pref) => {
+    const current = getPref(term);
+    setPref(term, current === pref ? null : pref);
+    setBagTick((t) => t + 1);
   };
 
   /* Not kaydet */
@@ -139,23 +183,6 @@ export default function AtelierTab({ workId }) {
     }
   };
 
-  /* Bubble */
-  const [bubblePos, setBubblePos] = useState({ x: 24, y: 120 });
-  const [bubbleColor, setBubbleColor] = useState("#fde68a");
-  const BUBBLE_COLORS = ["#fde68a", "#bfdbfe", "#e9d5ff", "#bbf7d0", "#fecaca"];
-
-  useEffect(() => {
-    if (!liveAlert || !coachEnabled) return;
-    setBubbleColor(BUBBLE_COLORS[Math.floor(Math.random() * BUBBLE_COLORS.length)]);
-    const el = editorCardRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    setBubblePos({
-      x: 16 + Math.random() * Math.max(16, r.width - 260),
-      y: 110 + Math.random() * Math.max(110, r.height - 160),
-    });
-  }, [liveAlert, coachEnabled]);
-
   return (
     <div className="atelier-layout">
       {/* Sol: Editör */}
@@ -176,6 +203,23 @@ export default function AtelierTab({ workId }) {
           </button>
         </div>
 
+        {activeTask && (
+          <div className="atelier-task-banner">
+            <div className="task-banner-head">
+              <span className="task-banner-cat">🏋️ {activeTask.title}</span>
+              <button
+                className="task-banner-close"
+                onClick={() => setActiveTask(null)}
+                title="Görevi kaldır"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="task-banner-text">{activeTask.text}</p>
+            <span className="task-banner-focus">Odak: {activeTask.focus}</span>
+          </div>
+        )}
+
         <textarea
           ref={editorRef}
           className="atelier-textarea"
@@ -188,6 +232,10 @@ export default function AtelierTab({ workId }) {
           <span className="atelier-wordcount">{wordCount} kelime</span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {saveMsg && <span className="atelier-save-msg">{saveMsg}</span>}
+            {msg && <span className="atelier-save-msg">{msg}</span>}
+            {!msg && wordCount < 50 && (
+              <span className="atelier-save-msg">AI yorum için en az 50 kelime</span>
+            )}
             <button className="btn-atelier-save" onClick={saveNote}>
               💾 Nota Kaydet
             </button>
@@ -204,7 +252,7 @@ export default function AtelierTab({ workId }) {
         {coachEnabled && liveAlert && (
           <div
             className="live-bubble"
-            style={{ left: bubblePos.x, top: bubblePos.y, background: bubbleColor }}
+            style={{ background: BUBBLE_TONE[liveAlert.severity] || BUBBLE_TONE.medium }}
             role="status"
           >
             {liveAlert.message}
@@ -327,10 +375,10 @@ export default function AtelierTab({ workId }) {
         {/* Sekmeler */}
         <div className="atelier-tabs" role="tablist">
           {[
-            { id: ATELIER_TABS.ILHAM, label: "✨ İlham" },
+            { id: ATELIER_TABS.ILHAM, label: "🏋️ Antrenman" },
             { id: ATELIER_TABS.YORUM, label: "📋 Yorum" },
-            { id: ATELIER_TABS.SOHBET, label: "💬 Sohbet" },
-            { id: ATELIER_TABS.KOC, label: "🗒️ Koç" },
+            { id: ATELIER_TABS.SOHBET, label: "🎒 Kelime Çantası" },
+            { id: ATELIER_TABS.KOC, label: "🧭 Pusula" },
           ].map((t) => (
             <button
               key={t.id}
@@ -344,21 +392,53 @@ export default function AtelierTab({ workId }) {
           ))}
         </div>
 
-        {/* İlham */}
+        {/* Antrenman */}
         {tab === ATELIER_TABS.ILHAM && (
           <div className="atelier-panel">
-            <div className="ilham-card">
-              <h4 className="ilham-title">İç Eleştirmeni Sustur!</h4>
-              <ul className="ilham-list">
-                {ILHAM_NOTES.map((n, i) => (
-                  <li key={i}>{n}</li>
-                ))}
-              </ul>
-              <button className="btn-constraint" onClick={pickConstraint}>
-                📝 Rastgele Kısıtlama Egzersizi
-              </button>
-              {constraint && <div className="constraint-pill">{constraint}</div>}
+            {weakest && (
+              <div className="antrenman-suggestion">
+                🧭 Pusula'nın önerisi: <strong>{skillLabel(weakest.skill)}</strong>
+                <button className="btn-antrenman-suggest" onClick={practiceWeakSkill}>
+                  Bunu çalış
+                </button>
+              </div>
+            )}
+
+            <div className="antrenman-q">Bugün ne çalışmak istiyorsun?</div>
+
+            <div className="antrenman-cats">
+              {CONSTRAINT_CATEGORIES.map((c) => (
+                <button
+                  key={c.id}
+                  className={`antrenman-cat ${selectedCategory === c.id ? "active" : ""}`}
+                  onClick={() => selectCategory(c.id)}
+                >
+                  {c.title}
+                </button>
+              ))}
             </div>
+
+            {pickedConstraint && (
+              <div className="antrenman-exercise">
+                <div className="antrenman-ex-focus">{pickedConstraint.focus}</div>
+                <p className="antrenman-ex-text">{pickedConstraint.text}</p>
+                <div className="antrenman-ex-actions">
+                  <button className="btn-antrenman primary" onClick={() => sendTaskToEditor(false)}>
+                    ↧ Editöre Aktar
+                  </button>
+                  <button className="btn-antrenman" onClick={() => rollConstraint()}>
+                    🎲 Başka Kısıt
+                  </button>
+                  <button className="btn-antrenman" onClick={() => sendTaskToEditor(true)}>
+                    ▶ Aktar + Sprint
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <ul className="ilham-list antrenman-tips">
+              {ILHAM_NOTES.map((n, i) => (<li key={i}>{n}</li>))}
+            </ul>
           </div>
         )}
 
@@ -397,50 +477,116 @@ export default function AtelierTab({ workId }) {
           </div>
         )}
 
-        {/* Sohbet */}
+        {/* Kelime Çantası (eski Sohbet slotu) */}
         {tab === ATELIER_TABS.SOHBET && (
           <div className="atelier-panel">
-            <div ref={chatBoxRef} className="atelier-chat-box">
-              {chat.length === 0 && (
-                <p className="atelier-muted">AI ile metni hakkında sohbet edebilirsin.</p>
-              )}
-              {chat.map((m, i) => (
-                <div key={i} className={`chat-msg chat-msg--${m.role}`}>
-                  <strong>{m.role === "user" ? "Sen" : "AI"}</strong>
-                  {": "}
-                  {m.content}
-                </div>
-              ))}
-            </div>
-            <div className="atelier-chat-input-row">
-              <input
-                className="atelier-chat-input"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && chatInput.trim()) {
-                    e.preventDefault();
-                    sendChat();
-                  }
-                }}
-                placeholder="AI'ye sor…"
-              />
-              <button
-                className="btn-chat-send"
-                onClick={sendChat}
-                disabled={loadingAI || !chatInput.trim()}
-              >
-                {loadingAI ? "…" : "↑"}
-              </button>
-            </div>
+            {bagWords.length === 0 && bagPhrases.length === 0 ? (
+              <p className="atelier-muted">
+                Editöre yazdıkça sık kullandığın kelimeler burada belirir (en az 2 kez geçenler).
+              </p>
+            ) : (
+              <>
+                {bagWords.length > 0 && (
+                  <div className="bag-section">
+                    <div className="bag-section-title">Sık kullandıkların</div>
+                    {bagWords.map((w) => (
+                      <div key={w.term} className={`bag-row ${w.pref ? `bag-row--${w.pref}` : ""}`}>
+                        <span className="bag-term">{w.term}</span>
+                        <span className="bag-count">×{w.count}</span>
+                        <div className="bag-tags">
+                          <button className={`bag-tag ${w.pref === "voice" ? "on" : ""}`} onClick={() => tagTerm(w.term, "voice")}>Sesim</button>
+                          <button className={`bag-tag ${w.pref === "crutch" ? "on" : ""}`} onClick={() => tagTerm(w.term, "crutch")}>Değnek</button>
+                          <button className={`bag-tag ${w.pref === "ignore" ? "on" : ""}`} onClick={() => tagTerm(w.term, "ignore")}>Yok say</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {bagPhrases.length > 0 && (
+                  <div className="bag-section">
+                    <div className="bag-section-title">İfade izleri</div>
+                    {bagPhrases.map((p) => (
+                      <div key={p.term} className={`bag-row ${p.pref ? `bag-row--${p.pref}` : ""}`}>
+                        <span className="bag-term">{p.term}</span>
+                        <span className="bag-count">×{p.count}</span>
+                        <div className="bag-tags">
+                          <button className={`bag-tag ${p.pref === "voice" ? "on" : ""}`} onClick={() => tagTerm(p.term, "voice")}>Sesim</button>
+                          <button className={`bag-tag ${p.pref === "crutch" ? "on" : ""}`} onClick={() => tagTerm(p.term, "crutch")}>Değnek</button>
+                          <button className={`bag-tag ${p.pref === "ignore" ? "on" : ""}`} onClick={() => tagTerm(p.term, "ignore")}>Yok say</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <p className="bag-hint">
+                  <strong>Sesim</strong> = üslubun, az uyarılır. <strong>Değnek</strong> = fazla yaslandığın, Pusula takip eder. <strong>Yok say</strong> = isim/terim (Lavinia, Estanova…), hiç sayılmaz.
+                </p>
+              </>
+            )}
           </div>
         )}
 
-        {/* Koç Notları */}
+        {/* Gelişim Pusulası */}
         {tab === ATELIER_TABS.KOC && (
           <div className="atelier-panel">
-            <div className="koc-header">
-              <span className="atelier-muted">Koçun not defteri</span>
+            <div className="pusula-box">
+              <div className="pusula-title">🧭 Gelişim Pusulası</div>
+
+              {pusulaScores.length === 0 ? (
+                <p className="atelier-muted">
+                  Henüz yeterli sinyal yok. Yazdıkça ve AI yorumlattıkça pusula şekillenecek.
+                </p>
+              ) : (
+                <>
+                  {weakest && (() => {
+                    const traj = getTrajectory(weakest.skill);
+                    const trajLabel = {
+                      iyilesiyor: "↗ ilerliyorsun",
+                      kotulesiyor: "↘ dikkat",
+                      sabit: "→ sabit",
+                      yetersiz: "",
+                    }[traj.direction];
+                    return (
+                      <div className="pusula-weakest">
+                        <span className="pusula-weakest-label">En çok çalışman gereken alan</span>
+                        <div className="pusula-weakest-skill">
+                          {skillLabel(weakest.skill)}
+                          {trajLabel && <span className="pusula-traj">{trajLabel}</span>}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="pusula-bars">
+                    {pusulaScores.slice(0, 4).map((s) => (
+                      <div className="pusula-bar-row" key={s.skill}>
+                        <span className="pusula-bar-label">{skillLabel(s.skill)}</span>
+                        <div className="pusula-bar-track">
+                          <div
+                            className="pusula-bar-fill"
+                            style={{ width: `${(s.score / (pusulaScores[0].score || 1)) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {weakest && (
+                    <button
+                      className="btn-pusula-practice"
+                      onClick={() => { practiceWeakSkill(); setTab(ATELIER_TABS.ILHAM); }}
+                    >
+                      🏋️ Bu beceriyi Antrenman'da çalış
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="koc-header" style={{ marginTop: 16 }}>
+              <span className="atelier-muted">Canlı koç notları</span>
               <button
                 className="btn-koc-clear"
                 onClick={() => setCoachNotes([])}
@@ -449,11 +595,13 @@ export default function AtelierTab({ workId }) {
                 Temizle
               </button>
             </div>
+
             {!coachEnabled && (
               <p className="atelier-muted" style={{ marginBottom: 10 }}>
                 Koç modu kapalı — notlar gelmez. Üstteki toggle'dan aç.
               </p>
             )}
+
             {coachNotes.length === 0 ? (
               <p className="atelier-muted">Yazdıkça koç buraya sessizce not düşecek.</p>
             ) : (
@@ -461,21 +609,13 @@ export default function AtelierTab({ workId }) {
                 {coachNotes.map((n) => (
                   <div
                     key={n.key}
-                    className={`koc-note ${
-                      n.severity === "medium" ? "koc-note--medium" : "koc-note--low"
-                    }`}
+                    className={`koc-note ${n.severity === "medium" ? "koc-note--medium" : "koc-note--low"}`}
                   >
                     <div className="koc-note-head">
                       <span className="koc-note-icon">{n.icon || "📝"}</span>
                       <span className="koc-note-title">{n.title || "Not"}</span>
-                      {n.count > 1 && (
-                        <span className="koc-note-count">{n.count}×</span>
-                      )}
-                      <span
-                        className={`koc-note-badge ${
-                          n.severity === "medium" ? "badge--medium" : "badge--low"
-                        }`}
-                      >
+                      {n.count > 1 && <span className="koc-note-count">{n.count}×</span>}
+                      <span className={`koc-note-badge ${n.severity === "medium" ? "badge--medium" : "badge--low"}`}>
                         {n.severity === "medium" ? "Orta" : "Hafif"}
                       </span>
                     </div>

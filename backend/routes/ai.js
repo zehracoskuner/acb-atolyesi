@@ -74,6 +74,13 @@ const REVIEW_FOCUS = {
   },
 };
 
+/* ─── Pusula sinyali için whitelist ─── */
+const SIGNAL_SKILLS = new Set([
+  "karakter", "diyalog", "duygu", "ritim", "betimleme", "tekrar",
+  "altmetin", "atmosfer", "bakis", "zaman", "duyular", "kurgu", "etki",
+]);
+const SIGNAL_SEVERITY = new Set(["low", "medium", "high"]);
+
 /* ─── Gemini istemcisi ─── */
 let _genAI = null;
 
@@ -155,7 +162,7 @@ router.post("/chat",  ensureAuth, async (req, res) => {
   }
 });
 
-router.post("/review",  ensureAuth, async (req, res) => {
+router.post("/review", ensureAuth, async (req, res) => {
   const { text, focus } = req.body || {};
   if (!text || text.trim().length < 10)
     return res.status(400).json({ error: "text gerekli (min 10 karakter)" });
@@ -171,7 +178,11 @@ ${instruction}
 SADECE şu JSON:
 {
   "analysis":    "Tek akıcı paragraf — yukarıdaki odağa göre teknik yorum.",
-  "closingNote": "Yazara bu odakla ilgili 1 cümlelik yönlendirici kapanış."
+  "closingNote": "Yazara bu odakla ilgili 1 cümlelik yönlendirici kapanış.",
+  "weakness": {
+    "skill": "En çok gelişmesi gereken tek alan (odak belirliyse o odak): karakter|diyalog|duygu|ritim|betimleme|tekrar|altmetin|atmosfer|bakis|zaman|duyular|kurgu|etki",
+    "severity": "Bu alanın aciliyeti: low|medium|high"
+  }
 }
 Metin:
 ${text}
@@ -180,11 +191,20 @@ ${text}
   try {
     const raw    = await callGemini("", prompt);
     const parsed = parseJSON(raw);
+
+    const w = parsed.weakness || {};
+    const skill = f !== "genel"
+      ? f
+      : (SIGNAL_SKILLS.has(w.skill) ? w.skill : null);
+    const severity = SIGNAL_SEVERITY.has(w.severity) ? w.severity : "medium";
+    const signal = skill ? { skill, severity } : null;
+
     res.json({
       focus:       f,
       focusLabel:  label,
       analysis:    parsed.analysis    || "",
       closingNote: parsed.closingNote || "",
+      signal,
     });
   } catch (e) {
     const is429 = String(e?.message).includes("429");
