@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { apiGet, apiPatch, apiPost } from "../lib/api";
+import { apiGet, apiPatch, apiPost, describeAiError } from "../lib/api";
 import {
   BADGE_STYLES, STATUS_META, CHAR_PALETTE,
   buildActMeta, buildActOrder,
@@ -46,10 +46,10 @@ function AiPanel({ scene, allScenes, characters, onClose }) {
     setResult(null);
     setError(null);
     try {
-      const data = await apiPost(endpoint, body);
+      const data = await apiPost(endpoint, body, { timeoutMs: 25000 });
       setResult({ mode: m, ...data });
-    } catch {
-      setError("AI şu an yanıt veremiyor. Tekrar dene.");
+    } catch (e) {
+      setError(describeAiError(e, { fallback: "AI şu an yanıt veremiyor. Tekrar dene." }));
     } finally {
       setLoading(false);
     }
@@ -203,8 +203,8 @@ function AiPanel({ scene, allScenes, characters, onClose }) {
       {error && (
         <div className="sd-ai-result">
           <div className="sd-ai-error">
-            {error}
-            <button onClick={retry}>Tekrar Dene</button>
+            {error.message}
+            {error.retryable && <button onClick={retry}>Tekrar Dene</button>}
           </div>
         </div>
       )}
@@ -559,6 +559,12 @@ export default function SceneDetailPage() {
                 <span>Bölüm bağlı</span>
               </>
             )}
+            {chars > 600 && (
+              <>
+                <span className="sd-footer-sep">·</span>
+                <span>AI analizleri taslağın yalnızca ilk ~600-900 karakterini okur</span>
+              </>
+            )}
           </div>
         </main>
 
@@ -566,6 +572,7 @@ export default function SceneDetailPage() {
         <aside className={`sd-right ${showAI ? "sd-right--ai" : ""}`}>
           {showAI ? (
             <AiPanel
+              key={scene._id}
               scene={{ ...scene, draftText }}
               allScenes={allScenes}
               characters={characters}

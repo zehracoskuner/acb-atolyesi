@@ -1,6 +1,6 @@
 // components/plotworld/GapAnalysisPanel.jsx
 import { useState , useEffect} from "react";
-import { apiPost }  from "../../lib/api";
+import { apiPost, describeAiError } from "../../lib/api";
 
 const GAP_TYPE_LABELS = {
   missing_act:    { icon: "⬜", label: "Eksik Perde",            color: "#dc2626" },
@@ -53,10 +53,10 @@ export default function GapAnalysisPanel({
         allActLabels: Object.fromEntries(
           Object.entries(actMeta).map(([k, v]) => [k, v.label])
         ),
-      });
+      }, { timeoutMs: 25000 });
       setGapResult(res);
-    } catch {
-      setErrorGap("Analiz yapılamadı. Tekrar dene.");
+    } catch (e) {
+      setErrorGap(describeAiError(e));
     } finally {
       setLoadingGap(false);
     }
@@ -76,10 +76,13 @@ export default function GapAnalysisPanel({
         actLabel:    actMeta[actId]?.label || actId,
         existingScenes,
         characters:  characters.map(c => ({ name: c.name, role: c.role || "" })),
-      });
+      }, { timeoutMs: 25000 });
       setSuggestions(prev => ({ ...prev, [actId]: res.suggestions || [] }));
-    } catch {
-      setErrorSug(prev => ({ ...prev, [actId]: "Öneri alınamadı." }));
+    } catch (e) {
+      setErrorSug(prev => ({
+        ...prev,
+        [actId]: describeAiError(e, { fallback: "Öneri alınamadı.", timeoutMessage: "Öneri uzun sürdü, tekrar dene." }),
+      }));
     } finally {
       setLoadingSug(null);
     }
@@ -144,8 +147,8 @@ export default function GapAnalysisPanel({
 
           {errorGap && (
             <div className="gap-error">
-              {errorGap}
-              <button onClick={runGapAnalysis}>Tekrar Dene</button>
+              {errorGap.message}
+              {errorGap.retryable && <button onClick={runGapAnalysis}>Tekrar Dene</button>}
             </div>
           )}
 
@@ -226,7 +229,7 @@ export default function GapAnalysisPanel({
                   </button>
                 </div>
 
-                {err && <div className="sug-error">{err}</div>}
+                {err && <div className="sug-error">{err.message}</div>}
 
                 {sugs && sugs.length > 0 && (
                   <div className="sug-list">

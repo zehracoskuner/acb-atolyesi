@@ -9,6 +9,7 @@ import Chapter      from "../models/Chapter.js";
 import Report       from "../models/Report.js";
 import { sendMail } from "../services/emailService.js";
 import Notification from "../models/Notification.js";
+import Comment      from "../models/Comment.js";
 
 const router = Router();
 
@@ -126,6 +127,126 @@ router.patch("/users/:id/rol", async (req, res) => {
     });
   } catch (err) {
     console.error("Admin PATCH /users/:id/rol hatası:", err);
+    return res.status(500).json({ message: "Sunucu hatası." });
+  }
+});
+
+// GET /api/admin/users/:id/ban-status
+router.get("/users/:id/ban-status", async (req, res) => {
+  try {
+    if (!isValidId(req.params.id))
+      return res.status(400).json({ message: "Geçersiz kullanıcı ID." });
+
+    const userId = req.params.id;
+    const userReports    = await Report.countDocuments({ targetType: "user",    targetId: userId });
+    const workIds        = await Work.distinct("_id", { user: userId });
+    const workReports    = await Report.countDocuments({ targetType: "work",    targetId: { $in: workIds } });
+    const commentIds     = await Comment.distinct("_id", { author: userId });
+    const commentReports = await Report.countDocuments({ targetType: "comment", targetId: { $in: commentIds } });
+
+    const content = workReports + commentReports;
+    return res.json({ sikayet: { toplam: userReports + content, user: userReports, content } });
+  } catch (err) {
+    console.error("Admin ban-status hatası:", err);
+    return res.status(500).json({ message: "Sunucu hatası." });
+  }
+});
+
+// PATCH /api/admin/users/:id/ban
+router.patch("/users/:id/ban", async (req, res) => {
+  try {
+    if (!isValidId(req.params.id))
+      return res.status(400).json({ message: "Geçersiz kullanıcı ID." });
+    if (req.params.id === req.user.id)
+      return res.status(400).json({ message: "Kendinizi banlayamazsınız." });
+
+    const { type, reason } = req.body;
+    if (!["comment", "content", "full"].includes(type))
+      return res.status(400).json({ message: "Geçersiz ban türü." });
+    if (!reason?.trim())
+      return res.status(400).json({ message: "Ban sebebi zorunludur." });
+
+    const hedef = await User.findById(req.params.id);
+    if (!hedef) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+    if (hedef.role === "admin")
+      return res.status(400).json({ message: "Admin kullanıcısı banlanamaz." });
+
+    const now = new Date();
+    if (type === "comment") {
+      hedef.commentBanned = true;
+      hedef.banMeta.commentBannedAt  = now;
+      hedef.banMeta.commentBannedBy  = req.user.id;
+      hedef.banMeta.commentBanReason = reason.trim();
+    } else if (type === "content") {
+      hedef.contentBanned = true;
+      hedef.banMeta.contentBannedAt  = now;
+      hedef.banMeta.contentBannedBy  = req.user.id;
+      hedef.banMeta.contentBanReason = reason.trim();
+    } else {
+      hedef.role = "banned";
+      hedef.commentBanned = true;
+      hedef.contentBanned = true;
+      hedef.banMeta.fullBannedAt  = now;
+      hedef.banMeta.fullBannedBy  = req.user.id;
+      hedef.banMeta.fullBanReason = reason.trim();
+    }
+    hedef.markModified("banMeta");
+    await hedef.save();
+
+    const typeLabel = type === "comment" ? "Yorum Kısıtlaması" : type === "content" ? "İçerik Kısıtlaması" : "Tam Ban";
+    try {
+      await Notification.create({
+        recipient: hedef._id, sender: null, type: "warning",
+        text: `${typeLabel} uygulandı. Sebep: ${reason.trim()}`,
+        read: false,
+      });
+    } catch (e) { console.error("Ban bildirimi oluşturulamadı:", e.message); }
+
+    return res.json({ message: `${typeLabel} uygulandı.`, type });
+  } catch (err) {
+    console.error("Admin ban hatası:", err);
+    return res.status(500).json({ message: "Sunucu hatası." });
+  }
+});
+
+// PATCH /api/admin/users/:id/unban
+router.patch("/users/:id/unban", async (req, res) => {
+  try {
+    if (!isValidId(req.params.id))
+      return res.status(400).json({ message: "Geçersiz kullanıcı ID." });
+
+    const { type } = req.body;
+    if (!["comment", "content", "full"].includes(type))
+      return res.status(400).json({ message: "Geçersiz ban türü." });
+
+    const hedef = await User.findById(req.params.id);
+    if (!hedef) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+
+    if (type === "comment") {
+      hedef.commentBanned = false;
+      hedef.banMeta.commentBannedAt  = null;
+      hedef.banMeta.commentBannedBy  = null;
+      hedef.banMeta.commentBanReason = "";
+    } else if (type === "content") {
+      hedef.contentBanned = false;
+      hedef.banMeta.contentBannedAt  = null;
+      hedef.banMeta.contentBannedBy  = null;
+      hedef.banMeta.contentBanReason = "";
+    } else {
+      hedef.role = "user";
+      hedef.commentBanned = false;
+      hedef.contentBanned = false;
+      hedef.banMeta.fullBannedAt     = null; hedef.banMeta.fullBannedBy     = null; hedef.banMeta.fullBanReason    = "";
+      hedef.banMeta.commentBannedAt  = null; hedef.banMeta.commentBannedBy  = null; hedef.banMeta.commentBanReason = "";
+      hedef.banMeta.contentBannedAt  = null; hedef.banMeta.contentBannedBy  = null; hedef.banMeta.contentBanReason = "";
+    }
+    hedef.markModified("banMeta");
+    await hedef.save();
+
+    const typeLabel = type === "comment" ? "Yorum Kısıtlaması" : type === "content" ? "İçerik Kısıtlaması" : "Tam Ban";
+    return res.json({ message: `${typeLabel} kaldırıldı.`, type });
+  } catch (err) {
+    console.error("Admin unban hatası:", err);
     return res.status(500).json({ message: "Sunucu hatası." });
   }
 });
@@ -354,6 +475,22 @@ router.get("/reports", async (req, res) => {
               .lean();
             return { ...s, targetObj: w || null };
           }
+          if (s.targetType === "chapter") {
+            const c = await Chapter.findById(s.targetId)
+              .populate({ path: "work", populate: { path: "user", select: "kullaniciAdi email" } })
+              .select("title order work")
+              .lean();
+            return { ...s, targetObj: c || null };
+          }
+          if (s.targetType === "comment") {
+            const c = await Comment.findById(s.targetId)
+              .populate("author", "kullaniciAdi email avatarUrl")
+              .populate("work",   "title _id")
+              .populate("chapter","title order")
+              .select("+originalContent")
+              .lean();
+            return { ...s, targetObj: c || null };
+          }
         } catch { /* targetObj null kalır */ }
         return { ...s, targetObj: null };
       })
@@ -413,6 +550,38 @@ router.put("/reports/:id/dismiss", async (req, res) => {
   }
 });
 
+// DELETE /api/admin/reports/:id/comment  — yorumu soft-delete yap + şikayeti kapat
+router.delete("/reports/:id/comment", async (req, res) => {
+  try {
+    if (!isValidId(req.params.id))
+      return res.status(400).json({ message: "Geçersiz şikayet ID." });
+
+    const sikayet = await Report.findById(req.params.id);
+    if (!sikayet) return res.status(404).json({ message: "Şikayet bulunamadı." });
+    if (sikayet.targetType !== "comment")
+      return res.status(400).json({ message: "Bu şikayet bir yorum şikayeti değil." });
+
+    const yorum = await Comment.findById(sikayet.targetId);
+    if (yorum && !yorum.isDeleted) {
+      yorum.originalContent = yorum.content;
+      yorum.content         = "[Yorum kaldırıldı]";
+      yorum.isDeleted       = true;
+      yorum.deletedAt       = new Date();
+      yorum.deletedBy       = req.user.id;
+      await yorum.save();
+    }
+
+    await Report.findByIdAndUpdate(req.params.id, {
+      $set: { status: "resolved", resolvedBy: req.user.id, resolvedAt: new Date(), adminNote: "Yorum kaldırıldı." },
+    });
+
+    return res.json({ message: "Yorum kaldırıldı ve şikayet kapatıldı." });
+  } catch (err) {
+    console.error("Admin DELETE /reports/:id/comment hatası:", err);
+    return res.status(500).json({ message: "Sunucu hatası." });
+  }
+});
+
 /* ══════════════════════════════════════════════
    5. ESERİ TASLAĞA ALMA
 ══════════════════════════════════════════════ */
@@ -432,7 +601,7 @@ router.put("/works/:id/unpublish", async (req, res) => {
       { $set: { status: "draft", reviewNote: "" } }
     );
 
-    await Work.findByIdAndUpdate(req.params.id, { $set: { status: "draft" } });
+    await Work.findByIdAndUpdate(req.params.id, { $set: { status: "draft", publishedChapterIds: [] } });
 
     return res.json({
       message: `"${eser.title}" taslağa alındı.`,
@@ -541,9 +710,11 @@ router.get("/stories", async (req, res) => {
     const izinliStatusler = ["published", "archived", "draft", "pending_review", "rejected"];
 
     const filtre = {
-      ...(statusParam && statusParam !== "all" && izinliStatusler.includes(statusParam)
-        ? { status: statusParam }
-        : { status: { $in: ["published", "archived"] } }),
+      ...(statusParam === "all"
+        ? {}
+        : statusParam && izinliStatusler.includes(statusParam)
+          ? { status: statusParam }
+          : { status: { $in: ["published", "archived"] } }),
       ...(ara ? { title: { $regex: ara, $options: "i" } } : {}),
     };
 
@@ -614,7 +785,7 @@ router.put("/stories/:id/unpublish", async (req, res) => {
       { $set: { status: "draft", reviewNote: "" } }
     );
 
-    await Work.findByIdAndUpdate(req.params.id, { $set: { status: "draft" } });
+    await Work.findByIdAndUpdate(req.params.id, { $set: { status: "draft", publishedChapterIds: [] } });
 
     return res.json({
       message: `"${eser.title}" yayından kaldırıldı.`,

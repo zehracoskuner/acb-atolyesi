@@ -106,6 +106,7 @@ const cmnt = {
   time:    { fontFamily: "'DM Sans',sans-serif", fontSize: ".62rem", color: "#b0a898" },
   delBtn:  { marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#c4bdb2", padding: 0, display: "flex", alignItems: "center", transition: "color .15s" },
   text:    { fontFamily: "'Lora',serif", fontSize: ".82rem", color: "#44403c", lineHeight: 1.6, margin: 0 },
+  error:   { fontFamily: "'DM Sans',sans-serif", fontSize: ".72rem", color: "#c0392b", margin: "6px 0 0" },
   form:    { display: "flex", gap: 6, alignItems: "center", marginTop: 6 },
   input:   { flex: 1, padding: "6px 12px", border: "1px solid #e2ddd6", borderRadius: 20, fontFamily: "'DM Sans',sans-serif", fontSize: ".82rem", color: "#1a1209", background: "#faf8f4", outline: "none" },
   sendBtn: { width: 30, height: 30, borderRadius: "50%", background: "#1a1209", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", flexShrink: 0 },
@@ -117,6 +118,7 @@ function InlineComments({ logId, isLoggedIn }) {
   const [loading,  setLoading]  = useState(true);
   const [text,     setText]     = useState("");
   const [posting,  setPosting]  = useState(false);
+  const [error,    setError]    = useState("");
   const currentUser = getCurrentUser();
   const myId = currentUser?._id || currentUser?.id;
   const navigate = useNavigate();
@@ -132,12 +134,13 @@ function InlineComments({ logId, isLoggedIn }) {
     e.preventDefault();
     if (!text.trim() || posting) return;
     setPosting(true);
+    setError("");
     try {
       const res = await apiPost(`/logs/${logId}/comments`, { content: text.trim() });
       setComments(prev => [...prev, res.item]);
       setText("");
-    } catch {
-      // sessiz hata
+    } catch (err) {
+      setError(err.status === 403 ? "Yorum yapma yetkiniz kısıtlanmış." : "Yorum gönderilemedi.");
     } finally {
       setPosting(false);
     }
@@ -211,6 +214,7 @@ function InlineComments({ logId, isLoggedIn }) {
               <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
             </svg>
           </button>
+          {error && <p style={cmnt.error}>{error}</p>}
         </form>
       ) : (
         <p

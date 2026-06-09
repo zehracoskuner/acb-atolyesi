@@ -1,5 +1,6 @@
 // src/hooks/useAICoach.js
 import { useState, useEffect, useCallback, useRef } from "react";
+import { apiPost, describeAiError } from "../lib/api";
 
 /* ── Sabitler ── */
 export const ATELIER_TABS = {
@@ -19,9 +20,6 @@ function useDebounce(value, delay) {
   return deb;
 }
 
-/* ── API base ── */
-const API = import.meta.env.VITE_API_URL || "/api/ai";
-
 /* ── Prompt ── */
 function buildSystemPrompt(style, tone) {
   const base =
@@ -35,25 +33,18 @@ function buildSystemPrompt(style, tone) {
 
 /* ── API yardımcıları ── */
 async function aiChatReq({ input, context }) {
-  const r = await fetch(`${API}/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ input, context }),
-  });
-  if (!r.ok) throw new Error(`chat ${r.status}`);
-  const data = await r.json();
+  const data = await apiPost("/ai/chat", { input, context });
   return { reply: data.answer || "" };
 }
 
-async function aiReviewReq({ text }) {
-  const r = await fetch(`${API}/review`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || data.message || `review ${r.status}`);
-  return { analysis: data.analysis || "", closingNote: data.closingNote || "" };
+async function aiReviewReq({ text, focus }) {
+  const data = await apiPost("/ai/review", { text, focus });
+  return {
+    analysis:    data.analysis    || "",
+    closingNote: data.closingNote || "",
+    focus:       data.focus       || focus || "genel",
+    focusLabel:  data.focusLabel  || "",
+  };
 }
 
 /* ══════════════════════════════════════════════
@@ -146,6 +137,7 @@ export function useAICoach() {
   const [chatInput, setChatInput] = useState("");
   const [chat, setChat]     = useState([]);
   const [review, setReview] = useState(null);
+  const [reviewFocus, setReviewFocus] = useState("genel");
 
   const [liveAlert, setLiveAlert]     = useState(null);
   const [coachNotes, setCoachNotes]   = useState([]);
@@ -178,22 +170,24 @@ export function useAICoach() {
     } finally { setLoadingAI(false); }
   }, [chatInput, style, tone]);
 
-  const handleReview = useCallback(async () => {
+  const handleReview = useCallback(async (focusArg) => {
     if (!text.trim()) {
       setMsg("⚠️ Yorum için metin gerekli.");
       setTimeout(() => setMsg(""), 1500);
       return;
     }
+    const focus = typeof focusArg === "string" ? focusArg : reviewFocus;
     try {
       setLoadingAI(true);
-      const data = await aiReviewReq({ text });
+      const data = await aiReviewReq({ text, focus });
       setReview(data);
       setTab(ATELIER_TABS.YORUM);
     } catch (err) {
-      setMsg(`⚠️ ${err?.message || "Değerlendirme alınamadı."}`);
+      const { message } = describeAiError(err, { fallback: "Değerlendirme alınamadı." });
+      setMsg(`⚠️ ${message}`);
       setTimeout(() => setMsg(""), 2500);
     } finally { setLoadingAI(false); }
-  }, [text]);
+  }, [text, reviewFocus]);
 
   /* ── Input metrics ── */
   useEffect(() => {
@@ -353,6 +347,7 @@ export function useAICoach() {
     chatInput, setChatInput,
     chat, sendChat,
     review, handleReview,
+    reviewFocus, setReviewFocus,
     liveAlert,
     coachNotes, setCoachNotes,
     chatBoxRef,

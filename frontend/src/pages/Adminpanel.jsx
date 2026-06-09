@@ -1,7 +1,7 @@
 // src/pages/AdminPanel.jsx
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { adminGet, adminPut, adminPatch, adminDelete, apiGet, apiPut, apiPost } from "../lib/api";
+import { adminGet, adminPut, adminPatch, adminDelete, apiGet, apiPut, apiPost, apiDelete } from "../lib/api";
 
 /* ══════════════════════════════════════════════
    CSS
@@ -362,7 +362,7 @@ function ChapterContentModal({ item, onClose }) {
         </div>
         <div className="adm-modal-foot">
           <span style={{ fontSize:".68rem", color:"var(--adm-ink-ghost)" }}>
-            {item.content ? `${item.content.trim().split(/\s+/).length} kelime` : ""}
+            {item.content?.trim() ? `${item.content.trim().split(/\s+/).length} kelime` : ""}
           </span>
           <button className="adm-btn" onClick={onClose}>Kapat</button>
         </div>
@@ -448,12 +448,7 @@ function ReportDetailModal({ report, onClose, onResolve, onDismiss, onCommentDel
   async function handleDeleteComment() {
     setDeleting(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `${import.meta.env?.VITE_API_URL ?? "/api"}/admin/reports/${report._id}/comment`,
-        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!res.ok) throw new Error();
+      await apiDelete(`/admin/reports/${report._id}/comment`);
       onCommentDeleted?.(report._id);
       onClose();
     } catch {
@@ -631,6 +626,25 @@ function ReportDetailModal({ report, onClose, onResolve, onDismiss, onCommentDel
                 </>
               )}
  
+              {/* BÖLÜM */}
+              {isChapter && targetObj && (
+                <>
+                  <div>
+                    <div className="adm-report-name">
+                      {targetObj.title}{targetObj.order ? ` (Bölüm ${targetObj.order})` : ""}
+                    </div>
+                    <div className="adm-report-email">{targetObj.work?.title}</div>
+                    <div className="adm-report-email">{targetObj.work?.user?.kullaniciAdi || targetObj.work?.user?.email}</div>
+                  </div>
+                  {targetObj.work?._id && (
+                    <button className="adm-btn" style={{ marginTop: ".7rem", fontSize: ".63rem" }}
+                      onClick={() => window.open(`/story/${targetObj.work._id}`, "_blank")}>
+                      Esere Git ↗
+                    </button>
+                  )}
+                </>
+              )}
+
               {!targetObj && !isComment && (
                 <span style={{ fontSize: ".75rem", color: "var(--adm-ink-ghost)" }}>İçerik bulunamadı</span>
               )}
@@ -973,42 +987,9 @@ function ReviewQueue({ onRefresh }) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   ŞİKAYETLER  ←  Ana yenilenen bileşen
+   TargetSummary — modül seviyesi (Reports + diğer bileşenler)
 ════════════════════════════════════════════════════════════ */
-function Reports({ onRefresh }) {
-  const [items,        setItems]        = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [statusFilter, setStatusFilter] = useState("pending");
-  const [typeFilter,   setTypeFilter]   = useState("all");
-  const [page,         setPage]         = useState(1);
-  const [meta,         setMeta]         = useState({});
-  const [busy,         setBusy]         = useState({});
-  const [detail,       setDetail]       = useState(null);
- 
-  const load = useCallback(async (p = 1, sf = "pending", tf = "all") => {
-    setLoading(true);
-    try {
-      const res = await apiGet(`/admin/reports?sayfa=${p}&limit=15&status=${sf}&targetType=${tf}`);
-      setItems(res.sikayetler || []); setMeta(res.meta || {}); setPage(p);
-    } catch {} finally { setLoading(false); }
-  }, []);
- 
-  useEffect(() => { load(1, statusFilter, typeFilter); }, [statusFilter, typeFilter]);
- 
-  async function act(id, action) {
-    setBusy(b => ({ ...b, [id]: true }));
-    try {
-      await apiPut(`/admin/reports/${id}/${action}`);
-      setItems(prev => prev.map(i =>
-        i._id === id ? { ...i, status: action === "resolve" ? "resolved" : "dismissed" } : i
-      ));
-      setDetail(null);
-      onRefresh();
-    } catch (err) { alert(err.message); }
-    finally { setBusy(b => ({ ...b, [id]: false })); }
-  }
- 
-  function TargetSummary({ item }) {
+function TargetSummary({ item }) {
     const obj = item.targetObj;
     if (!obj) return <span style={{ color: "var(--adm-ink-ghost)", fontSize: ".7rem" }}>Silinmiş</span>;
  
@@ -1054,8 +1035,44 @@ function Reports({ onRefresh }) {
     );
  
     return <span className="adm-td-main" style={{ fontSize: ".75rem" }}>#{String(item.targetId).slice(-6)}</span>;
+}
+
+/* ════════════════════════════════════════════════════════════
+   ŞİKAYETLER  ←  Ana yenilenen bileşen
+════════════════════════════════════════════════════════════ */
+function Reports({ onRefresh }) {
+  const [items,        setItems]        = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [statusFilter, setStatusFilter] = useState("pending");
+  const [typeFilter,   setTypeFilter]   = useState("all");
+  const [page,         setPage]         = useState(1);
+  const [meta,         setMeta]         = useState({});
+  const [busy,         setBusy]         = useState({});
+  const [detail,       setDetail]       = useState(null);
+
+  const load = useCallback(async (p = 1, sf = "pending", tf = "all") => {
+    setLoading(true);
+    try {
+      const res = await apiGet(`/admin/reports?sayfa=${p}&limit=15&status=${sf}&targetType=${tf}`);
+      setItems(res.sikayetler || []); setMeta(res.meta || {}); setPage(p);
+    } catch {} finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(1, statusFilter, typeFilter); }, [statusFilter, typeFilter]);
+
+  async function act(id, action) {
+    setBusy(b => ({ ...b, [id]: true }));
+    try {
+      await apiPut(`/admin/reports/${id}/${action}`);
+      setItems(prev => prev.map(i =>
+        i._id === id ? { ...i, status: action === "resolve" ? "resolved" : "dismissed" } : i
+      ));
+      setDetail(null);
+      onRefresh();
+    } catch (err) { alert(err.message); }
+    finally { setBusy(b => ({ ...b, [id]: false })); }
   }
- 
+
   return (
     <>
       <div className="adm-section-head">
@@ -1333,7 +1350,7 @@ function Users() {
         const updates = {};
         if (type === "comment") updates.commentBanned = false;
         if (type === "content") updates.contentBanned = false;
-        if (type === "full")    updates.role = "user", updates.commentBanned = false, updates.contentBanned = false;
+        if (type === "full") { updates.role = "user"; updates.commentBanned = false; updates.contentBanned = false; }
         return { ...u, ...updates };
       }));
     } catch (err) { alert(err.message); }

@@ -105,6 +105,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
   const [collapsed,  setCollapsed]  = useState(true);
   const [replyText,  setReplyText]  = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [replyError, setReplyError] = useState("");
 
   // Düzenle
   const [editOpen,   setEditOpen]   = useState(false);
@@ -157,6 +158,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
   /* ── Yanıt ── */
   async function submitReply() {
     if (!replyText.trim() || submitting) return;
+    setReplyError("");
     setSubmitting(true);
     try {
       const res = await apiPost(`/comments/${workId}`, {
@@ -166,7 +168,9 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
       setReplyText("");
       setReplyOpen(false);
       setCollapsed(false);
-    } catch { /* sessiz */ } finally { setSubmitting(false); }
+    } catch (err) {
+      setReplyError(err.status === 403 ? "Yorum yapma yetkiniz kısıtlanmış." : "Yanıt gönderilemedi. Lütfen tekrar dene.");
+    } finally { setSubmitting(false); }
   }
 
   /* ── Düzenle ── */
@@ -426,9 +430,10 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
               rows={2}
               onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) submitReply(); }}
             />
+            {replyError && <p className="sdp-form-error">{replyError}</p>}
             <div className="sdp-reply-form-actions">
               <button className="sdp-btn sdp-btn--ghost"
-                onClick={() => { setReplyOpen(false); setReplyText(""); }}>İptal</button>
+                onClick={() => { setReplyOpen(false); setReplyText(""); setReplyError(""); }}>İptal</button>
               <button className="sdp-btn sdp-btn--primary sdp-btn--sm"
                 onClick={submitReply} disabled={submitting || !replyText.trim()}>
                 {submitting ? <span className="sdp-spinner" aria-hidden="true" /> : "Gönder"}
@@ -500,8 +505,8 @@ function CommentSection({ workId, currentUser }) {
       setComments(prev => [res.item, ...prev]);
       setTotal(t => t + 1);
       setText("");
-    } catch {
-      setError("Yorum gönderilemedi. Lütfen tekrar dene.");
+    } catch (err) {
+      setError(err.status === 403 ? "Yorum yapma yetkiniz kısıtlanmış." : "Yorum gönderilemedi. Lütfen tekrar dene.");
     } finally {
       setSubmitting(false);
     }

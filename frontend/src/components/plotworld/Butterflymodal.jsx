@@ -2,7 +2,7 @@
 // Kelebek Etkisi — seçili sahne için AI alternatif dal analizi
 
 import { useState } from "react";
-import { apiPost }  from "../../lib/api";
+import { apiPost, describeAiError } from "../../lib/api";
 
 /**
  * Props:
@@ -48,10 +48,10 @@ export default function ButterflyModal({ node, edges, nodes, actMeta, onClose })
         allActLabels: Object.fromEntries(
           Object.entries(actMeta).map(([k, v]) => [k, v.label])
         ),
-      });
+      }, { timeoutMs: 25000 });
       setBranches(res.branches || []);
-    } catch {
-      setError("Analiz yapılamadı. Tekrar dene.");
+    } catch (e) {
+      setError(describeAiError(e));
     } finally {
       setLoading(false);
     }
@@ -108,8 +108,8 @@ export default function ButterflyModal({ node, edges, nodes, actMeta, onClose })
           {/* Hata */}
           {error && (
             <div className="butterfly-error">
-              <span>{error}</span>
-              <button onClick={analyze}>Tekrar Dene</button>
+              <span>{error.message}</span>
+              {error.retryable && <button onClick={analyze}>Tekrar Dene</button>}
             </div>
           )}
 

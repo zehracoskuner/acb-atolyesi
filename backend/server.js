@@ -35,7 +35,6 @@ import drawingRouter        from "./routes/drawing.js";
 import beatsRoutes          from "./routes/beats.js";
 import notesRoutes          from "./routes/notes.js";
 import workNotesRoutes      from "./routes/workNotes.js";
-import storyRoutes          from "./routes/stories.js";
 import uploadRoutes         from "./routes/upload.js";
 import publicRouter         from "./routes/public.js";
 import libraryRouter        from "./routes/library.js";
@@ -84,12 +83,12 @@ app.use(cors({
 app.use((req, res, next) => {
   if (req.path.startsWith("/api/upload")) return next();
   if (req.path.startsWith("/api/drawing")) return next(); // ← ekle
-  express.json({ limit: "50mb" })(req, res, next);
+  express.json({ limit: "1mb" })(req, res, next);
 });
 app.use((req, res, next) => {
   if (req.path.startsWith("/api/upload")) return next();
   if (req.path.startsWith("/api/drawing")) return next(); // ← ekle
-  express.urlencoded({ limit: "50mb", extended: true })(req, res, next);
+  express.urlencoded({ limit: "1mb", extended: true })(req, res, next);
 });
 
 // ── NoSQL injection koruması ──
@@ -133,11 +132,13 @@ app.get("/api/health", (_, res) =>
 // ── Rate limit — auth (genel limiter'dan önce, daha kısıtlayıcı) ──
 app.use("/api/auth/login",    authLimiter);
 app.use("/api/auth/register", registerLimiter);
-app.set("trust proxy", 1);
 
 // ── Upload (limiterli, auth gerektirmez) ──
 app.use("/api/upload", uploadLimiter);
 app.use("/api/upload", uploadRoutes);
+
+// ── Genel API limiti — tüm /api/* için (public dahil) ──
+app.use("/api", generalLimiter);
 
 // ── Public (auth gerektirmez) ──
 app.use("/api/public", publicRouter);
@@ -147,9 +148,6 @@ app.use("/api/auth", authRoutes);
 app.use(`/api/${adminPath}`, ensureAuth, requireRole("admin"), adminRoutes);
 
 app.use("/api/moderator", ensureAuth, requireRole("admin", "moderator"), moderatorRouter);
-
-// ── Genel API limiti — tüm /api/* için ──
-app.use("/api", generalLimiter);
 
 // ── Write limitli route'lar ──
 app.use("/api/logs",     writeLimiter);
@@ -184,7 +182,6 @@ app.use("/api/chapters",      chapterRoutes);
 app.use("/api/chapters",      chapterLikesRouter);
 app.use("/api/characters",    charactersRoutes);
 app.use("/api/relationships", relationshipsRoutes);
-app.use("/api/stories",       storyRoutes);
 app.use("/api/quotes", quotesRouter);
 
 // ── Plot & Dünya ──

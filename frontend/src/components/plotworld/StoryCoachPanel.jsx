@@ -3,7 +3,7 @@
 // "AI Analiz" butonuyla açılır, tüm bağlamı gönderir
 
 import { useState }  from "react";
-import { apiPost, apiGet }   from "../../lib/api";
+import { apiPost, apiGet, describeAiError } from "../../lib/api";
 
 const SECTIONS = [
   { key: "momentum",  label: "Dramatik İvme",       icon: "▲" },
@@ -70,12 +70,12 @@ export default function StoryCoachPanel({
         allActLabels: Object.fromEntries(
           Object.entries(actMeta).map(([k, v]) => [k, v.label])
         ),
-      });
+      }, { timeoutMs: 25000 });
 
       setResult(res);
       setOpen("momentum"); // ilk seksiyon açık gelsin
-    } catch {
-      setError("Analiz yapılamadı. Tekrar dene.");
+    } catch (e) {
+      setError(describeAiError(e));
     } finally {
       setLoading(false);
     }
@@ -138,8 +138,8 @@ export default function StoryCoachPanel({
         {/* Hata */}
         {error && (
           <div className="coach-error">
-            {error}
-            <button onClick={runCoach}>Tekrar Dene</button>
+            {error.message}
+            {error.retryable && <button onClick={runCoach}>Tekrar Dene</button>}
           </div>
         )}
 

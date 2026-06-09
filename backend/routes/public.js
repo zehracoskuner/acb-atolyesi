@@ -56,7 +56,7 @@ router.get("/works/:id", async (req, res) => {
     if (!isValidId(req.params.id))
       return res.status(400).json({ message: "Geçersiz eser ID." });
 
-    const work = await Work.findById(req.params.id)
+    const work = await Work.findOne({ _id: req.params.id, status: "published" })
       .populate("user", "_id kullaniciAdi avatarUrl");
 
     if (!work) return res.status(404).json({ message: "Eser bulunamadı." });

@@ -35,6 +35,45 @@ Her analizinde yazara somut ve eyleme dönük bir yol açarsın.
 Abartılı övgü yok. Gerçeği söyle, ama yapıcı ol.
 `.trim();
 
+/* ─── Review odakları (whitelist) ─── */
+const REVIEW_FOCUS = {
+  genel: {
+    label: "Genel editör yorumu",
+    instruction:
+      "Metni bütünsel değerlendir: en güçlü yanı ne, en çok hangi yönü gelişebilir? Tek bir alana sıkışma.",
+  },
+  karakter: {
+    label: "Karakter gerçekçiliği",
+    instruction:
+      "Sadece karaktere odaklan: istek ve korkuları metinden okunuyor mu, davranışları tutarlı mı, duygular gösteriliyor mu yoksa etiketleniyor mu (örn. 'üzgündü' deyip geçmek)?",
+  },
+  diyalog: {
+    label: "Diyalog doğallığı",
+    instruction:
+      "Sadece diyaloğa odaklan: karakterlerin sesleri birbirinden ayrışıyor mu, alt metin var mı, replikler bilgi dökümüne kaçıyor mu, konuşma gerçekçi mi?",
+  },
+  duygu: {
+    label: "Duygu gösterimi",
+    instruction:
+      "Sadece duygu gösterimine odaklan: duygular doğrudan mı söyleniyor, yoksa beden dili, eylem ve seçimlerle mi sezdiriliyor? 'Göster, anlatma' ilkesiyle değerlendir.",
+  },
+  ritim: {
+    label: "Sahne ritmi",
+    instruction:
+      "Sadece tempo ve ritme odaklan: cümle uzunlukları çeşitleniyor mu, metin akıyor mu yoksa tıkanıyor mu, nerede hızlanmalı veya yavaşlamalı?",
+  },
+  betimleme: {
+    label: "Betimleme gücü",
+    instruction:
+      "Sadece betimlemeye odaklan: duyusal detaylar somut mu, mekân ruh hâlini taşıyor mu, betimleme klişeye mi kaçıyor yoksa özgün mü?",
+  },
+  tekrar: {
+    label: "Tekrarlar",
+    instruction:
+      "Sadece tekrarlara odaklan: aynı kelime veya yapı fazla mı tekrar ediyor, koltuk değneği kelimeler var mı, cümle başlangıçları monoton mu?",
+  },
+};
+
 /* ─── Gemini istemcisi ─── */
 let _genAI = null;
 
@@ -103,7 +142,7 @@ router.use(limiter);
    GENEL UÇLAR
 ══════════════════════════════════════════════ */
 
-router.post("/chat", async (req, res) => {
+router.post("/chat",  ensureAuth, async (req, res) => {
   const { input, context } = req.body || {};
   if (!input?.trim()) return res.status(400).json({ error: "input gerekli" });
   const prompt = `Bağlam: ${context || "(yok)"}\n\nKullanıcı sorusu: ${input}`;
@@ -116,17 +155,23 @@ router.post("/chat", async (req, res) => {
   }
 });
 
-router.post("/review", async (req, res) => {
-  const { text } = req.body || {};
+router.post("/review",  ensureAuth, async (req, res) => {
+  const { text, focus } = req.body || {};
   if (!text || text.trim().length < 10)
     return res.status(400).json({ error: "text gerekli (min 10 karakter)" });
 
+  const f = REVIEW_FOCUS[focus] ? focus : "genel";
+  const { label, instruction } = REVIEW_FOCUS[f];
+
   const prompt = `
 Metni okuyucu + editör + yazarlık koçu bakışıyla değerlendir.
+DEĞERLENDİRME ODAĞI: ${label}.
+${instruction}
+
 SADECE şu JSON:
 {
-  "analysis":    "Tek akıcı paragraf — teknik yorum.",
-  "closingNote": "Yazara 1 cümlelik yönlendirici kapanış."
+  "analysis":    "Tek akıcı paragraf — yukarıdaki odağa göre teknik yorum.",
+  "closingNote": "Yazara bu odakla ilgili 1 cümlelik yönlendirici kapanış."
 }
 Metin:
 ${text}
@@ -135,7 +180,12 @@ ${text}
   try {
     const raw    = await callGemini("", prompt);
     const parsed = parseJSON(raw);
-    res.json({ analysis: parsed.analysis || "", closingNote: parsed.closingNote || "" });
+    res.json({
+      focus:       f,
+      focusLabel:  label,
+      analysis:    parsed.analysis    || "",
+      closingNote: parsed.closingNote || "",
+    });
   } catch (e) {
     const is429 = String(e?.message).includes("429");
     console.error("[AI/review]", e?.message);

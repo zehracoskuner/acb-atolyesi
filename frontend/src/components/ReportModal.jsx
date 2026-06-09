@@ -14,7 +14,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 
-const API_BASE = import.meta.env?.VITE_API_URL ?? "/api";
+const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000/api";
 
 const REASON_OPTIONS = [
   { value: "spam",             label: "Spam / Reklam" },

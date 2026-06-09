@@ -1,6 +1,9 @@
 // routes/inlineComments.js
 import express       from "express";
 import InlineComment from "../models/InlineComment.js";
+import Chapter       from "../models/Chapter.js";
+import Work          from "../models/Work.js";
+import User          from "../models/User.js";
 import ensureAuth    from "../middlewares/ensureAuth.js";
 
 const router = express.Router();
@@ -10,6 +13,14 @@ router.get("/", async (req, res) => {
   const { chapterId } = req.query;
   if (!chapterId) return res.status(400).json({ error: "chapterId gerekli" });
   try {
+    const chapter = await Chapter.findById(chapterId).select("work").lean();
+    if (!chapter) return res.json({ items: [] });
+    const work = await Work.findById(chapter.work).select("status publishedChapterIds").lean();
+    const gorunur =
+      work?.status === "published" &&
+      (work.publishedChapterIds || []).some(id => String(id) === String(chapterId));
+    if (!gorunur) return res.json({ items: [] });
+
     const items = await InlineComment.find({ chapterId, status: { $ne: "rejected" } })
       .populate("author", "kullaniciAdi username avatarUrl")
       .sort({ paragraphIndex: 1, createdAt: 1 })
@@ -26,6 +37,10 @@ router.post("/", ensureAuth, async (req, res) => {
   if (!workId || !chapterId || paragraphIndex == null || !content?.trim())
     return res.status(400).json({ error: "workId, chapterId, paragraphIndex ve content gerekli" });
   try {
+    const dbUser = await User.findById(req.user.id).select("commentBanned").lean();
+    if (dbUser?.commentBanned)
+      return res.status(403).json({ message: "Yorum yapma yetkiniz kısıtlanmış." });
+
     const doc = await InlineComment.create({
       workId,
       chapterId,

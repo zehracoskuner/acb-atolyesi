@@ -28,7 +28,11 @@ async function apiFetch(path, options = {}) {
     },
     ...options,
   });
-  if (!res.ok) throw new Error(`Hata ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(`Hata ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 }
 const apiGet  = (path)       => apiFetch(path);
@@ -246,10 +250,19 @@ function InlineParagraph({ html, index, comments, onOpenDrawer }) {
     return d.textContent || "";
   }, [html]);
 
+  // İç blok elemanının text-align inline stilini dış sarmalayıcıya taşı;
+  // böylece .rd-paragraph { text-align: justify } CSS kuralını geçersiz kılar.
+  const alignStyle = useMemo(() => {
+    const d = document.createElement("div");
+    d.innerHTML = html;
+    const ta = d.firstElementChild?.style?.textAlign;
+    return ta ? { textAlign: ta } : undefined;
+  }, [html]);
+
   return (
     <div className={`rdic-para-wrap ${count > 0 ? "rdic-para-wrap--has-comments" : ""}`}>
       {/* html zaten cleanHtml'den geçti → güvenli */}
-      <div className="rd-paragraph" dangerouslySetInnerHTML={{ __html: html }} />
+      <div className="rd-paragraph" style={alignStyle} dangerouslySetInnerHTML={{ __html: html }} />
       <div className="rdic-gutter">
         {count > 0 && (
           <button className="rdic-bubble" onClick={() => onOpenDrawer(index, plain)} title={`${count} yorum`}>
@@ -269,27 +282,47 @@ function InlineParagraph({ html, index, comments, onOpenDrawer }) {
   );
 }
 
+// Bunlar gerçek paragraf/blok sınırı sayılır; geri kalan her şey (text node,
+// <b>/<i>/<span>/<a>/<br> vb. satır-içi öğeler) aynı paragraf tamponunda birikir.
+const RDIC_BLOCK_TAGS = new Set(["P", "DIV", "H1", "H2", "H3", "UL", "OL", "BLOCKQUOTE", "HR", "IMG"]);
+
 function InlineParagraphs({ text, chapterId, workId, commentMap, onOpenDrawer }) {
   const blocks = useMemo(() => {
     const clean = cleanHtml(text || "");      // ← tek kapı: önce temizle
     if (!clean.trim()) return [];
     const tmp = document.createElement("div");
     tmp.innerHTML = clean;
-    return Array.from(tmp.childNodes)
-      .map((node) => {
-        if (node.nodeType === Node.TEXT_NODE) {
-          const t = node.textContent.trim();
-          return t ? `<p>${t}</p>` : "";
-        }
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          // boş blokları (örn. <div><br></div>) at, ama gerçek <br>/<hr> kalsın
-          const hasText = node.textContent.trim();
-          const hasVoid = /<(br|hr|img)\b/i.test(node.outerHTML);
-          return hasText || hasVoid ? node.outerHTML : "";
-        }
-        return "";
-      })
-      .filter(Boolean);
+
+    const result = [];
+    let buffer = "";
+
+    const flush = () => {
+      const trimmed = buffer.trim();
+      if (trimmed) result.push(`<p>${trimmed}</p>`);
+      buffer = "";
+    };
+
+    for (const node of Array.from(tmp.childNodes)) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        buffer += node.textContent;
+        continue;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+
+      if (RDIC_BLOCK_TAGS.has(node.tagName)) {
+        flush();
+        // boş blokları (örn. <div><br></div>) at, ama gerçek <br>/<hr>/<img> kalsın
+        const hasText = node.textContent.trim();
+        const hasVoid = /<(br|hr|img)\b/i.test(node.outerHTML);
+        if (hasText || hasVoid) result.push(node.outerHTML);
+      } else {
+        // satır-içi öğe (b, i, span, a, code, ...) → tampona ekle, ayrı blok açma
+        buffer += node.outerHTML;
+      }
+    }
+    flush();
+
+    return result;
   }, [text]);
 
   if (!blocks.length)
@@ -339,18 +372,13 @@ function InlineCommentDrawer({ open, onClose, paragraph, chapterId, workId, curr
     setError("");
     setSubmit(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/inline-comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ workId, chapterId, paragraphIndex: paragraph.index, content: text.trim() }),
+      const data = await apiPost("/inline-comments", {
+        workId, chapterId, paragraphIndex: paragraph.index, content: text.trim(),
       });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
       onCommentAdded(data.item);
       setText("");
-    } catch {
-      setError("Gönderilemedi, tekrar dene.");
+    } catch (err) {
+      setError(err.status === 403 ? "Yorum yapma yetkiniz kısıtlanmış." : "Gönderilemedi, tekrar dene.");
     } finally {
       setSubmit(false);
     }
@@ -625,6 +653,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
   const [collapsed,  setCollapsed] = useState(true);
   const [replyText,  setReplyText] = useState("");
   const [submitting, setSubmit]    = useState(false);
+  const [replyError, setReplyError] = useState("");
   const [replies,    setReplies]   = useState(comment.replies ?? []);
 
   // Düzenle
@@ -672,6 +701,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
   /* ── Yanıt gönder ── */
   async function submitReply() {
     if (!replyText.trim() || submitting) return;
+    setReplyError("");
     setSubmit(true);
     try {
       const res = await apiPost(`/comments/${chapterId || workId}`, {
@@ -679,7 +709,9 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
       });
       setReplies(prev => [...prev, res.item]);
       setReplyText(""); setReplyOpen(false); setCollapsed(false);
-    } catch { /* sessiz */ } finally { setSubmit(false); }
+    } catch (err) {
+      setReplyError(err.status === 403 ? "Yorum yapma yetkiniz kısıtlanmış." : "Yanıt gönderilemedi. Lütfen tekrar dene.");
+    } finally { setSubmit(false); }
   }
 
   /* ── Düzenle kaydet ── */
@@ -934,8 +966,9 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
                 rows={2} autoFocus
                 onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) submitReply(); }}
               />
+              {replyError && <p className="rd-form-error">{replyError}</p>}
               <div className="rd-composer-actions">
-                <button className="rd-btn-ghost" onClick={() => { setReplyOpen(false); setReplyText(""); }}>İptal</button>
+                <button className="rd-btn-ghost" onClick={() => { setReplyOpen(false); setReplyText(""); setReplyError(""); }}>İptal</button>
                 <button className="rd-btn-primary" onClick={submitReply} disabled={submitting || !replyText.trim()}>
                   {submitting ? <span className="rd-spinner rd-spinner--sm" aria-hidden="true" /> : "Gönder"}
                 </button>
@@ -1002,8 +1035,8 @@ function CommentSection({ chapterId, workId }) {
       const res = await apiPost(`/comments/${chapterId}`, { content: text.trim(), workId });
       setComments(prev => [res.item, ...prev]);
       setTotal(t => t + 1); setText("");
-    } catch {
-      setError("Yorum gönderilemedi. Tekrar dene.");
+    } catch (err) {
+      setError(err.status === 403 ? "Yorum yapma yetkiniz kısıtlanmış." : "Yorum gönderilemedi. Tekrar dene.");
     } finally {
       setSubmitting(false);
     }

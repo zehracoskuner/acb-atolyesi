@@ -178,6 +178,12 @@ function chaptersReducer(state, action) {
 /* ══════════════════════════════════════════════════════════
    BUBBLE TOOLBAR  — sadece seçim varken çıkar
 ══════════════════════════════════════════════════════════ */
+
+// execCommand("justify*") bazı tarayıcılarda <center> veya align="" üretir;
+// her iki sanitizer da bunları sildiği için hizalama kaybolur.
+// Bunun yerine doğrudan style.textAlign ataması yapılır.
+const ALIGN_VALS = { justifyLeft: "left", justifyCenter: "center", justifyRight: "right" };
+
 function BubbleToolbar({ editorRef }) {
   const [pos,     setPos]     = useState(null); // { top, left }
   const [formats, setFormats] = useState({ bold:false, italic:false, underline:false, strike:false });
@@ -213,8 +219,30 @@ function BubbleToolbar({ editorRef }) {
   }, [editorRef]);
 
   function exec(cmd, val) {
-    editorRef.current?.focus();
-    document.execCommand("styleWithCSS", false, true); 
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+
+    if (cmd in ALIGN_VALS) {
+      // Hizalama komutlarını execCommand yerine doğrudan DOM'a yaz.
+      // execCommand("justify*") bazı Chrome sürümlerinde <center> veya
+      // align özelliği üretir; sanitize aşamasında her ikisi de silinir.
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        let node = sel.getRangeAt(0).commonAncestorContainer;
+        if (node.nodeType === Node.TEXT_NODE) node = node.parentNode;
+        while (node && node !== editorRef.current) {
+          if (/^(P|DIV|H[1-6]|LI|BLOCKQUOTE)$/.test(node.tagName || "")) {
+            node.style.textAlign = ALIGN_VALS[cmd];
+            break;
+          }
+          node = node.parentNode;
+        }
+      }
+      editorRef.current.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      return;
+    }
+
+    document.execCommand("styleWithCSS", false, true);
     document.execCommand(cmd, false, val ?? null);
     setFormats({
       bold:      document.queryCommandState("bold"),
@@ -242,15 +270,21 @@ function BubbleToolbar({ editorRef }) {
       <button className="bt-btn" onMouseDown={() => exec("formatBlock","h2")} title="Başlık 2">H2</button>
       <button className="bt-btn" onMouseDown={() => exec("formatBlock","div")} title="Normal">¶</button>
       <div className="bt-sep"/>
-      <button className="bt-btn" onMouseDown={() => exec("justifyLeft")}   title="Sola">
-        <svg width="11" height="11" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="1" width="14" height="2" rx="1"/><rect x="0" y="5" width="9"  height="2" rx="1"/><rect x="0" y="9" width="14" height="2" rx="1"/></svg>
+      <button className="bt-btn" onMouseDown={() => exec("justifyLeft")}   title="Sola hizala">
+        <svg width="11" height="11" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="1" width="14" height="2" rx="1"/><rect x="0" y="5" width="9" height="2" rx="1"/><rect x="0" y="9" width="14" height="2" rx="1"/></svg>
       </button>
       <button className="bt-btn" onMouseDown={() => exec("justifyCenter")} title="Ortala">
         <svg width="11" height="11" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="1" width="14" height="2" rx="1"/><rect x="2.5" y="5" width="9" height="2" rx="1"/><rect x="0" y="9" width="14" height="2" rx="1"/></svg>
       </button>
+      <button className="bt-btn" onMouseDown={() => exec("justifyRight")}  title="Sağa hizala">
+        <svg width="11" height="11" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="1" width="14" height="2" rx="1"/><rect x="5" y="5" width="9" height="2" rx="1"/><rect x="0" y="9" width="14" height="2" rx="1"/></svg>
+      </button>
       <div className="bt-sep"/>
-      <button className="bt-btn" onMouseDown={() => exec("insertUnorderedList")} title="Liste">
+      <button className="bt-btn" onMouseDown={() => exec("insertUnorderedList")} title="Madde işaretli liste">
         <svg width="11" height="11" viewBox="0 0 14 14" fill="currentColor"><circle cx="1.5" cy="3" r="1.5"/><rect x="4" y="2" width="10" height="2" rx="1"/><circle cx="1.5" cy="8" r="1.5"/><rect x="4" y="7" width="10" height="2" rx="1"/></svg>
+      </button>
+      <button className="bt-btn" onMouseDown={() => exec("insertOrderedList")} title="Numaralı liste">
+        <svg width="11" height="11" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="0" width="3" height="3" rx="0.5"/><rect x="5" y="1" width="9" height="2" rx="1"/><rect x="0" y="5" width="3" height="3" rx="0.5"/><rect x="5" y="6" width="9" height="2" rx="1"/><rect x="0" y="10" width="3" height="3" rx="0.5"/><rect x="5" y="11" width="9" height="2" rx="1"/></svg>
       </button>
       <button className="bt-btn" onMouseDown={() => exec("removeFormat")} title="Biçimi kaldır">
         <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 2h8l-3 5H5L3 2z"/><line x1="1" y1="12" x2="8" y2="12"/><line x1="11" y1="2" x2="13" y2="12"/></svg>

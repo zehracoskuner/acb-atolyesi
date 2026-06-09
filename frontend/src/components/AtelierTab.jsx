@@ -1,7 +1,3 @@
-// src/components/AtelierTab.jsx
-// Atölye sekmesi — ChaptersPage'den bağımsız, hiç dokunulmadı.
-// Orijinal mantık korundu, sadece kendi dosyasına taşındı.
-
 import { useState, useMemo, useRef, useEffect } from "react";
 import { apiPost, apiPut } from "../lib/api";
 import { useAICoach } from "../hooks/useAICoach";
@@ -23,6 +19,16 @@ const CONSTRAINTS = [
   "Bir nesneyi karakter gibi konuştur.",
 ];
 
+const REVIEW_FOCUS_OPTIONS = [
+  { id: "genel",     label: "Genel" },
+  { id: "karakter",  label: "Karakter" },
+  { id: "diyalog",   label: "Diyalog" },
+  { id: "duygu",     label: "Duygu" },
+  { id: "ritim",     label: "Ritim" },
+  { id: "betimleme", label: "Betimleme" },
+  { id: "tekrar",    label: "Tekrar" },
+];
+
 /* ── ANA BİLEŞEN ── */
 export default function AtelierTab({ workId }) {
   const {
@@ -35,6 +41,7 @@ export default function AtelierTab({ workId }) {
     chatInput, setChatInput,
     chat, sendChat,
     review, handleReview,
+    reviewFocus, setReviewFocus,
     liveAlert,
     coachNotes, setCoachNotes,
     chatBoxRef,
@@ -358,14 +365,26 @@ export default function AtelierTab({ workId }) {
         {/* AI Yorum */}
         {tab === ATELIER_TABS.YORUM && (
           <div className="atelier-panel">
+            <div className="review-focus-row">
+              {REVIEW_FOCUS_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  className={`review-focus-chip ${reviewFocus === o.id ? "active" : ""}`}
+                  onClick={() => setReviewFocus(o.id)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+
             {!review ? (
               <p className="atelier-muted">
-                Henüz yorum yok. Editör altındaki <strong>AI Yorumla</strong> butonuna bas.
+                Bir odak seç, sonra editör altındaki <strong>AI Yorumla</strong> butonuna bas.
               </p>
             ) : (
               <>
                 <div className="atelier-muted" style={{ marginBottom: 8 }}>
-                  🤖 AI Değerlendirme
+                  🤖 {review.focusLabel || "AI Değerlendirme"}
                 </div>
                 <p className="atelier-review-text">{review.analysis}</p>
                 {review.closingNote && (

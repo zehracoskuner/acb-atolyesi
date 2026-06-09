@@ -34,6 +34,8 @@ const GENRE_GROUPS = [
       "Trajedi",
       "Dram",
       "Mizah & Yergi",
+      "Spritüel",
+      "Dini",
     ],
   },
   {

@@ -31,6 +31,14 @@ async function handleAuthError() {
   window.location.href = "/login";
 }
 
+export function describeAiError(e, { fallback = "Analiz yapılamadı. Tekrar dene.", timeoutMessage = "Analiz uzun sürdü, tekrar dene." } = {}) {
+  if (e?.timeout) return { message: timeoutMessage, retryable: true };
+  if (e?.status === 401) return { message: "Oturumun düşmüş, yeniden giriş yapman gerekiyor.", retryable: false };
+  if (e?.status === 429) return { message: "Çok fazla istek var, az sonra tekrar dene.", retryable: true };
+  if (e?.status === 400) return { message: "Bu içerikle analiz yapılamıyor.", retryable: false };
+  return { message: fallback, retryable: true };
+}
+
 function getHeaders(includeContentType = true) {
   const token = localStorage.getItem("token");
   const headers = {};
@@ -56,19 +64,37 @@ export async function apiGet(path) {
 
   if (!res.ok) {
     if (res.status === 401) handleAuthError(); // await yok — arka planda çalışsın
-    throw new Error(data.message || `HTTP ${res.status}`);
+    const err = new Error(data.message || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
   }
 
   return data;
 }
 
-export async function apiPost(path, body) {
-  const res = await fetch(API_BASE + path, {
-    method: "POST",
-    headers: getHeaders(),
-    credentials: "include",
-    body: JSON.stringify(body || {}),
-  });
+export async function apiPost(path, body, { timeoutMs } = {}) {
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+  let res;
+  try {
+    res = await fetch(API_BASE + path, {
+      method: "POST",
+      headers: getHeaders(),
+      credentials: "include",
+      body: JSON.stringify(body || {}),
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+  } catch (e) {
+    if (e.name === "AbortError") {
+      const err = new Error("İstek zaman aşımına uğradı.");
+      err.timeout = true;
+      throw err;
+    }
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 
   let data = {};
   try {
@@ -79,7 +105,9 @@ export async function apiPost(path, body) {
 
   if (!res.ok) {
     if (res.status === 401) handleAuthError();
-    throw new Error(data.message || `HTTP ${res.status}`);
+    const err = new Error(data.message || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
   }
 
   return data;
@@ -102,7 +130,9 @@ export async function apiPut(path, body) {
 
   if (!res.ok) {
     if (res.status === 401) handleAuthError();
-    throw new Error(data.message || `HTTP ${res.status}`);
+    const err = new Error(data.message || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
   }
 
   return data;
@@ -124,7 +154,9 @@ export async function apiDelete(path) {
 
   if (!res.ok) {
     if (res.status === 401) handleAuthError();
-    throw new Error(data.message || `HTTP ${res.status}`);
+    const err = new Error(data.message || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
   }
 
   return data;
@@ -147,7 +179,9 @@ export async function apiPatch(path, body) {
 
   if (!res.ok) {
     if (res.status === 401) handleAuthError();
-    throw new Error(data.message || `HTTP ${res.status}`);
+    const err = new Error(data.message || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
   }
 
   return data;

@@ -129,6 +129,10 @@ export async function createComment(req, res) {
     if (!body)              return res.status(400).json({ error: "Yorum boş olamaz." });
     if (body.length > 2000) return res.status(400).json({ error: "Yorum 2000 karakteri geçemez." });
 
+    const dbUser = await User.findById(req.user.id).select("commentBanned").lean();
+    if (dbUser?.commentBanned)
+      return res.status(403).json({ message: "Yorum yapma yetkiniz kısıtlanmış." });
+
     let resolvedWorkId    = paramWorkId || bodyWorkId || null;
     let resolvedChapterId = chapterId   || null;
 
@@ -165,44 +169,35 @@ export async function createComment(req, res) {
       if (parentComment.parentId) return res.status(400).json({ error: "İkinci seviye yanıt desteklenmiyor." });
     }
 
-    const author   = await User.findById(req.user.id).lean();
-    const isBanned = author?.commentBanned === true;
-
     const comment = await Comment.create({
       author:   req.user.id,
       chapter:  resolvedChapterId,
       work:     resolvedWorkId,
       content:  body,
       parentId: parentId || null,
-      status:   isBanned ? "pending_review" : "published",
+      status:   "published",
     });
 
     await comment.populate("author", "kullaniciAdi avatarUrl");
 
-    // Bildirimler — yalnızca yayınlanan (banlı olmayan) yorumlarda.
-    // Merkezi katman: notificationService (tip/dedup/metin orada yönetilir).
-    if (!isBanned) {
-      const me           = req.user.id;
-      const parentAuthor = parentComment?.author?.toString() || null;
+    // Bildirimler
+    const me           = req.user.id;
+    const parentAuthor = parentComment?.author?.toString() || null;
 
-      // 1) Yanıt ise: yanıtlanan yorumun sahibine
-      if (parentAuthor && parentAuthor !== me) {
-        notifyReply({ senderId: me, recipientId: parentComment.author, workId: resolvedWorkId })
-          .catch((e) => console.error("notifyReply:", e.message));
-      }
+    if (parentAuthor && parentAuthor !== me) {
+      notifyReply({ senderId: me, recipientId: parentComment.author, workId: resolvedWorkId })
+        .catch((e) => console.error("notifyReply:", e.message));
+    }
 
-      // 2) Eser sahibine — kendi eseri hariç, ayrıca yanıt sahibiyle çakışmasın
-      const workOwner = work?.user?.toString() || null;
-      if (workOwner && workOwner !== me && workOwner !== parentAuthor) {
-        notifyComment({ senderId: me, workId: resolvedWorkId, commentPreview: body })
-          .catch((e) => console.error("notifyComment:", e.message));
-      }
+    const workOwner = work?.user?.toString() || null;
+    if (workOwner && workOwner !== me && workOwner !== parentAuthor) {
+      notifyComment({ senderId: me, workId: resolvedWorkId, commentPreview: body })
+        .catch((e) => console.error("notifyComment:", e.message));
     }
 
     res.status(201).json({
       item:    shapeComment(comment.toObject(), req.user.id),
-      pending: isBanned,
-      message: isBanned ? "Yorumunuz moderatör onayına gönderildi." : "Yorum eklendi.",
+      message: "Yorum eklendi.",
     });
   } catch (err) {
     console.error("createComment:", err);

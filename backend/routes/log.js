@@ -204,6 +204,11 @@ router.post("/:id/comments", ensureAuth, async (req, res) => {
     const { content } = req.body;
     if (!content?.trim()) return res.status(400).json({ message: "Yorum boş olamaz." });
     if (content.trim().length > 500) return res.status(400).json({ message: "Yorum en fazla 500 karakter." });
+
+    const dbUser = await User.findById(req.user.id).select("commentBanned").lean();
+    if (dbUser?.commentBanned)
+      return res.status(403).json({ message: "Yorum yapma yetkiniz kısıtlanmış." });
+
     const log = await Log.findById(req.params.id);
     if (!log) return res.status(404).json({ message: "Girdi bulunamadı." });
     const comment = await LogComment.create({ log: req.params.id, author: req.user.id, content: content.trim() });

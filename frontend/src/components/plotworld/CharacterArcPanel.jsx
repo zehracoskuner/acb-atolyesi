@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback } from "react";
 import { STATUS_META, CHAR_PALETTE }      from "./constants";
-import { apiPost }                         from "../../lib/api";
+import { apiPost, describeAiError }        from "../../lib/api";
 import "./Characterarc.css";
 
 /* ─── Duygusal ısı renkleri ─── */
@@ -158,7 +158,7 @@ export default function CharacterArcPanel({
         allActLabels: Object.fromEntries(
           actOrder.map(id => [id, actMeta[id]?.label || id])
         ),
-      });
+      }, { timeoutMs: 25000 });
 
       setArcAnalysis(prev => ({
         ...prev,
@@ -170,10 +170,10 @@ export default function CharacterArcPanel({
           woundQuestion:   res.woundQuestion   || "",
         },
       }));
-    } catch {
+    } catch (e) {
       setArcError(prev => ({
         ...prev,
-        [arc.charId]: "Analiz yapılamadı. Tekrar dene.",
+        [arc.charId]: describeAiError(e),
       }));
     } finally {
       setLoadingArc(null);
@@ -303,8 +303,10 @@ export default function CharacterArcPanel({
 
             {arcErr && (
               <div className="arc-ai-error" role="alert">
-                <span>{arcErr}</span>
-                <button onClick={() => runArcAnalysis(activeArc)}>Tekrar Dene</button>
+                <span>{arcErr.message}</span>
+                {arcErr.retryable && (
+                  <button onClick={() => runArcAnalysis(activeArc)}>Tekrar Dene</button>
+                )}
               </div>
             )}
 

@@ -543,6 +543,11 @@
   -webkit-hyphens: auto;
   hanging-punctuation: first last;
 }
+/* Global CSS reset padding:0 sıfırlar; liste marker'larının görünmesi için */
+.rd-paragraph ul,
+.rd-paragraph ol { padding-left: 1.6em; }
+.rd-paragraph li { margin-bottom: .25em; }
+
 /* Süslü baş harf sadece bölümün ilk paragrafında */
 .rd-body > .rdic-para-wrap:first-child > .rd-paragraph::first-letter,
 .rd-body > .rd-paragraph:first-child::first-letter {

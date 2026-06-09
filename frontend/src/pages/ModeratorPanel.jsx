@@ -1,9 +1,7 @@
 // src/pages/ModeratorPanel.jsx
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiGet, apiPut } from "../lib/api";
-
-const API_BASE = import.meta.env?.VITE_API_URL ?? "/api";
+import { apiGet, apiPut, apiDelete } from "../lib/api";
 
 /* ══════════════════════════════════════════════
    CSS
@@ -198,7 +196,14 @@ function RejectModal({ title, onConfirm, onClose }) {
 /* ════════════════════════════════════════════════
    Dashboard
 ════════════════════════════════════════════════ */
-function Dashboard({ stats, onNav }) {
+function Dashboard({ stats, loading, error, onRetry, onNav }) {
+  if (loading) return <Spinner />;
+  if (error) return (
+    <div style={{ padding: "2.5rem 1rem", textAlign: "center" }}>
+      <div style={{ color: "var(--mod-red)", fontSize: ".82rem", marginBottom: "1rem" }}>İstatistikler yüklenemedi.</div>
+      <button className="mod-btn" onClick={onRetry}>Tekrar Dene</button>
+    </div>
+  );
   if (!stats) return <Spinner />;
   const { bekleyenBolum = 0, bekleyenYorum = 0, bekleyenSikayet = 0 } = stats;
   const toplamBekleyen = bekleyenBolum + bekleyenYorum + bekleyenSikayet;
@@ -348,7 +353,7 @@ function ChapterQueue({ onRefresh }) {
                     <button className="mod-btn" onClick={() => window.open(`/story/${item.work._id}`, "_blank")}>Esere Git ↗</button>
                   )}
                   <span style={{ marginLeft: "auto", fontSize: ".65rem", color: "var(--mod-ink-ghost)" }}>
-                    {item.content ? `${item.content.trim().split(/\s+/).length} kelime` : ""}
+                    {item.content?.trim() ? `${item.content.trim().split(/\s+/).length} kelime` : ""}
                   </span>
                 </div>
               </div>
@@ -498,20 +503,14 @@ function CommentReports({ onRefresh }) {
   async function deleteComment(id) {
     setBusy(b => ({ ...b, [id]: true }));
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE.replace("/api", "")}/api/admin/reports/${id}/comment`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error();
-      // Yorumu sil → şikayet resolved olur, kartı güncelle
+      await apiDelete(`/admin/reports/${id}/comment`);
       setItems(p => p.map(i => i._id === id
-        ? { ...i, status: "resolved", targetObj: null }
+        ? { ...i, status: "resolved", targetObj: i.targetObj ? { ...i.targetObj, isDeleted: true } : null }
         : i
       ));
       setDeleteConfirm(null);
       onRefresh();
-    } catch (err) { alert("Yorum silinemedi."); }
+    } catch { alert("Yorum silinemedi."); }
     finally { setBusy(b => ({ ...b, [id]: false })); }
   }
 
@@ -572,7 +571,11 @@ function CommentReports({ onRefresh }) {
                 </div>
 
                 {/* ── Yorum içeriği ── */}
-                {comment ? (
+                {comment?.isDeleted ? (
+                  <div className="mod-comment-box mod-comment-deleted">
+                    {comment.originalContent || "[Yorum kaldırıldı]"}
+                  </div>
+                ) : comment ? (
                   <div className="mod-comment-box">{comment.content}</div>
                 ) : (
                   <div className="mod-comment-box mod-comment-deleted">
@@ -601,7 +604,7 @@ function CommentReports({ onRefresh }) {
                 {/* ── Aksiyonlar ── */}
                 {item.status === "pending" && deleteConfirm !== item._id && (
                   <div className="mod-actions">
-                    {comment && (
+                    {comment && !comment.isDeleted && (
                       <button className="mod-btn mod-btn--delete" disabled={busy[item._id]}
                         onClick={() => setDeleteConfirm(item._id)}>
                         Yorumu Sil
@@ -632,17 +635,25 @@ function CommentReports({ onRefresh }) {
 ════════════════════════════════════════════════ */
 export default function ModeratorPanel() {
   const navigate = useNavigate();
-  const [page, setPage]   = useState("dashboard");
-  const [stats, setStats] = useState(null);
+  const [page,         setPage]         = useState("dashboard");
+  const [stats,        setStats]        = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError,   setStatsError]   = useState(false);
 
   const fetchStats = useCallback(async () => {
-    try {
-      const [modRes, repRes] = await Promise.all([
-        apiGet("/moderator/stats"),
-        apiGet("/admin/reports?sayfa=1&limit=1&status=pending&targetType=comment").catch(() => ({ meta: { toplam: 0 } })),
-      ]);
-      setStats({ ...modRes, bekleyenSikayet: repRes.meta?.toplam ?? 0 });
-    } catch {}
+    setStatsLoading(true);
+    setStatsError(false);
+    const [modResult, repResult] = await Promise.allSettled([
+      apiGet("/moderator/stats"),
+      apiGet("/admin/reports?sayfa=1&limit=1&status=pending&targetType=comment"),
+    ]);
+    if (modResult.status === "fulfilled") {
+      const repToplam = repResult.status === "fulfilled" ? (repResult.value.meta?.toplam ?? 0) : 0;
+      setStats({ ...modResult.value, bekleyenSikayet: repToplam });
+    } else {
+      setStatsError(true);
+    }
+    setStatsLoading(false);
   }, []);
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
@@ -707,7 +718,7 @@ export default function ModeratorPanel() {
           </span>
         </div>
         <div className="mod-content">
-          {page === "dashboard" && <Dashboard stats={stats} onNav={setPage} />}
+          {page === "dashboard" && <Dashboard stats={stats} loading={statsLoading} error={statsError} onRetry={fetchStats} onNav={setPage} />}
           {page === "chapters"  && <ChapterQueue onRefresh={fetchStats} />}
           {page === "comments"  && <CommentQueue onRefresh={fetchStats} />}
           {page === "reports"   && <CommentReports onRefresh={fetchStats} />}
