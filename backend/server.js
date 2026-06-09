@@ -55,13 +55,16 @@ import moderatorRouter from "./routes/moderator.js";
 import adminReportsRouter from "./routes/adminReports.js";
 
 // ══════════════════════════════════════════
-connectDB();
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
 const isProd = process.env.NODE_ENV === "production";
 const adminPath = process.env.ADMIN_SECRET_PATH;
-if (!adminPath) throw new Error("ADMIN_SECRET_PATH .env'de tanımlı değil");
+
+if (!adminPath) {
+  console.error("❌ ADMIN_SECRET_PATH tanımlı değil.");
+  process.exit(1);
+}
 
 app.set("trust proxy", 1);
 
@@ -225,6 +228,18 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 ACB Atölyesi ${PORT} portunda çalışıyor`)
-);
+const startServer = async () => {
+  try {
+    await connectDB();
+    console.log("📥 Veritabanı bağlantısı başarılı.");
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`🚀 ACB Atölyesi ${PORT} portunda çalışıyor`);
+    });
+  } catch (error) {
+    console.error("💥 Sunucu başlatılırken kritik hata oluştu:", error);
+    process.exit(1);
+  }
+};
+
+startServer();
