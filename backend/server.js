@@ -233,7 +233,7 @@ const startServer = async () => {
     await connectDB();
     console.log("📥 Veritabanı bağlantısı başarılı.");
 
-    app.listen(PORT, "0.0.0.0", () => {
+    app.listen(PORT, ": :", () => {
       console.log(`🚀 ACB Atölyesi ${PORT} portunda çalışıyor`);
     });
   } catch (error) {

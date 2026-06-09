@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
 /* ─── Genel API limiti ─── */
 export const generalLimiter = rateLimit({
@@ -54,5 +54,5 @@ export const aiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "AI limitine ulaştın. 1 saat sonra tekrar dene." },
-  keyGenerator: (req) => req.user?.id || req.ip, // login'liyse kullanıcı, değilse IP
+  keyGenerator: (req) => req.user?.id || ipKeyGenerator(req.ip),
 });
