@@ -22,7 +22,7 @@ const ExplorePage           = lazy(() => import("./pages/ExplorePage"));
 const StoryHomePage         = lazy(() => import("./pages/StoryDetailsPage"));
 const ProfilePage           = lazy(() => import("./pages/ProfilePage"));
 const StudioHub             = lazy(() => import("./pages/StudioPage"));
-const AuthCallback          = lazy(() => import("./pages/Authcallback"));
+const AuthCallback          = lazy(() => import("./pages/AuthCallBack"));
 const Bildirimler           = lazy(() => import("./pages/Bildirimler"));
 const Ayarlar               = lazy(() => import("./pages/Ayarlar"));
 const SifremiUnuttum        = lazy(() => import("./pages/SifremiUnuttum"));
