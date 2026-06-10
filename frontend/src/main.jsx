@@ -33,7 +33,7 @@ const PlotWorld             = lazy(() => import("./pages/PlotWorld"));
 const EmailDogrula          = lazy(() => import("./pages/EmailDogrula"));
 const SceneDetailPage       = lazy(() => import("./pages/SceneDetailPage"));
 const LibraryPage           = lazy(() => import("./pages/Library"));
-const Adminpanel            = lazy(() => import("./pages/Adminpanel"));
+const AdminPanel            = lazy(() => import("./pages/AdminPanel"));
 const KullaniciSozlesmesi   = lazy(() => import("./pages/KullaniciSozlesmesi"));
 const GizlilikPolitikasi    = lazy(() => import("./pages/GizlilikPolitikasi"));
 const EtikKurallar          = lazy(() => import("./pages/EtikKurallar"));
