@@ -6,7 +6,7 @@ import {
   WORK_TOUR_PAGES,
   EXPLORE_TOUR_PAGES,
   getTotalSteps,
-} from "./tourSteps";
+} from "./TourSteps";
 
 const TOUR_KEY         = "acb_tour_done";
 const TOUR_PENDING_KEY = "acb_tour_pending";
