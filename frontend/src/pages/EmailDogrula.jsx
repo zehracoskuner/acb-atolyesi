@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "/api";
+
 export default function EmailDogrula() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();

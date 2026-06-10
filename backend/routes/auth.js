@@ -12,7 +12,10 @@ import "dotenv/config";
 
 const router   = Router();
 const SECRET   = process.env.JWT_SECRET || "atolye-secret-key";
-const SITE_URL = process.env.SITE_URL   || "http://localhost:5173";
+const SITE_URL =
+  process.env.SITE_URL ||
+  process.env.CLIENT_URL ||
+  (process.env.NODE_ENV === "production" ? "https://xn--acbatlyesi-icb.com" : "http://localhost:5173");
 
 function makeToken(user) {
   return jwt.sign(

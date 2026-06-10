@@ -14,7 +14,10 @@ const transporter = nodemailer.createTransport({
   logger: true,
 });
 
-const SITE_URL = process.env.SITE_URL || "http://localhost:5173";
+const SITE_URL =
+  process.env.SITE_URL ||
+  process.env.CLIENT_URL ||
+  (process.env.NODE_ENV === "production" ? "https://xn--acbatlyesi-icb.com" : "http://localhost:5173");
 const FROM     = `"ACB Atölyesi" <${process.env.SMTP_USER}>`;
 
 /* ── Generic mail ── */
