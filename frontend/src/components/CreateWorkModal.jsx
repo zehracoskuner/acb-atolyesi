@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { apiPost } from "../lib/api";
+
+const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 
 // ─── Genre taxonomy ───────────────────────────────────────────────────────────
 const GENRE_GROUPS = [
@@ -804,7 +807,7 @@ export default function CreateWorkModal({ isOpen, onClose, onSuccess }) {
       if (coverFile) {
         const formData = new FormData();
         formData.append("file", coverFile);
-        const uploadRes = await fetch("/api/upload", {
+        const uploadRes = await fetch(`${API_BASE}/upload`, {
           method: "POST",
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
           body: formData,
@@ -816,22 +819,12 @@ export default function CreateWorkModal({ isOpen, onClose, onSuccess }) {
         coverImage = uploadData.url || uploadData.secure_url || "";
       }
 
-      const res = await fetch("/api/works", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({
-          title:       title.trim(),
-          genres:      genres.length ? genres : [],
-          description: description.trim() || "",
-          coverImage:  coverImage || "",
-        }),
+      const data = await apiPost("/works", {
+        title:       title.trim(),
+        genres:      genres.length ? genres : [],
+        description: description.trim() || "",
+        coverImage:  coverImage || "",
       });
-
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data.message || "Eser oluşturulamadı.");
 
       onSuccess(data.item || data);
       onClose();

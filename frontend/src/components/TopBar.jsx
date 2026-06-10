@@ -203,7 +203,7 @@ function ProjectStoryModal({ onClose }) {
         </div>
 
         <div className="acb-story-footer">
-          <span className="acb-story-footer-note">— Geliştirici, Vito · 2025</span>
+          <span className="acb-story-footer-note">— Geliştirici, Vito · 2026</span>
           <button className="acb-story-close" onClick={onClose}>Kapat</button>
         </div>
       </div>
