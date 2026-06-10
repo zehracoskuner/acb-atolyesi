@@ -19,6 +19,10 @@ function isValidId(id) {
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
 
+function getPageQuery(req) {
+  return Math.max(1, parseInt(req.query.sayfa ?? req.query.page, 10) || 1);
+}
+
 /* ══════════════════════════════════════════════
    1. KULLANICI YÖNETİMİ
 ══════════════════════════════════════════════ */
@@ -26,8 +30,8 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
 // GET /api/admin/users?sayfa=1&limit=20&ara=zehra
 router.get("/users", async (req, res) => {
   try {
-    const sayfa = Math.max(1, parseInt(req.query.sayfa) || 1);
-    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const sayfa = getPageQuery(req);
+    const limit = Math.min(100, parseInt(req.query.limit, 10) || 20);
     const ara   = req.query.ara?.trim();
 
     const filtre = ara
@@ -299,8 +303,8 @@ router.delete("/chapters/:id", async (req, res) => {
 // GET /api/admin/review-queue
 router.get("/review-queue", async (req, res) => {
   try {
-    const sayfa = Math.max(1, parseInt(req.query.sayfa) || 1);
-    const limit = Math.min(50, parseInt(req.query.limit) || 20);
+    const sayfa = getPageQuery(req);
+    const limit = Math.min(50, parseInt(req.query.limit, 10) || 20);
 
     const [bolumler, toplam] = await Promise.all([
       Chapter.find({ status: "pending_review" })
@@ -438,8 +442,8 @@ router.put("/review/:id/reject", async (req, res) => {
 // GET /api/admin/reports?sayfa=1&limit=20&status=pending&targetType=all
 router.get("/reports", async (req, res) => {
   try {
-    const sayfa      = Math.max(1, parseInt(req.query.sayfa) || 1);
-    const limit      = Math.min(50, parseInt(req.query.limit) || 20);
+    const sayfa      = getPageQuery(req);
+    const limit      = Math.min(50, parseInt(req.query.limit, 10) || 20);
     const status     = req.query.status     || "pending";
     const targetType = req.query.targetType || "all";
 
@@ -702,8 +706,8 @@ router.get("/stats/detail", async (req, res) => {
 // GET /api/admin/stories
 router.get("/stories", async (req, res) => {
   try {
-    const sayfa = Math.max(1, parseInt(req.query.sayfa) || 1);
-    const limit = Math.min(50, parseInt(req.query.limit) || 20);
+    const sayfa = getPageQuery(req);
+    const limit = Math.min(50, parseInt(req.query.limit, 10) || 20);
     const ara   = req.query.ara?.trim();
 
     const statusParam    = req.query.status;

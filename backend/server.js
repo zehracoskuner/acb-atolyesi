@@ -213,6 +213,9 @@ app.use("/api/search", searchRouter);
 // ---Reports----
 app.use("/api/reports", ensureAuth, reportsRouter);
 app.use("/api/admin/reports", ensureAuth, requireRole("admin", "moderator"), adminReportsRouter);
+if (adminPath !== "admin") {
+  app.use("/api/admin", ensureAuth, requireRole("admin"), adminRoutes);
+}
 
 // ── 404 ──
 app.use((req, res) =>

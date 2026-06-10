@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep -l \"Comment\")",
+      "Bash(node _debug_comment_delete.mjs)"
+    ]
+  }
+}

@@ -7,6 +7,9 @@ import { notifyWarning, notifyCommentRemoved } from "../services/notificationSer
 
 const router = Router();
 function isValidId(id) { return mongoose.Types.ObjectId.isValid(id); }
+function getPageQuery(req) {
+  return Math.max(1, parseInt(req.query.sayfa ?? req.query.page, 10) || 1);
+}
 
 /* ─────────────────────────────────────────────────────────────
    targetObj populate — targetType'a göre ilgili dökümanı doldur
@@ -55,8 +58,8 @@ async function populateTarget(report) {
 ───────────────────────────────────────────────────────────── */
 router.get("/", async (req, res) => {
   try {
-    const sayfa      = Math.max(1, parseInt(req.query.sayfa)  || 1);
-    const limit      = Math.min(50, parseInt(req.query.limit) || 15);
+    const sayfa      = getPageQuery(req);
+    const limit      = Math.min(50, parseInt(req.query.limit, 10) || 15);
     const status     = req.query.status     || "pending";
     const targetType = req.query.targetType || "all";
     const isModerator = req.user.role === "moderator";
