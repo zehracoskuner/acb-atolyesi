@@ -12,4 +12,4 @@ body {
 }
 
 /* ── Tur vurgulama ── */
-@import './tour.css';
+@import 'components/tour/tour.css'

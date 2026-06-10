@@ -10,7 +10,7 @@ import { getProgressForStory, clearProgressForStory } from "../services/readingP
 const safeClearProgress = typeof clearProgressForStory === "function"
   ? clearProgressForStory
   : () => Promise.resolve();
-import "../styles/storydetailpagecomments.css";
+import "../styles/StoryDetailPageComments.css";
 import ReportModal from "../components/ReportModal";
 
 const API_BASE = import.meta.env?.VITE_API_URL ?? "/api";

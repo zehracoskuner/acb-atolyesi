@@ -35,7 +35,7 @@ import AiAnalysisPanel    from "../components/plotworld/AiAnalysisPanel";
 
 import "../styles/PlotWorldPage.css";
 import "../components/plotworld/StructureSetupModal.css";
-import "../styles/PlotworldAiStyles.css";
+import "../styles/PlotWorldAiStyles.css";
 
 /* ─── Sabitler ──────────────────────────────────────────── */
 const NODE_TYPES = { sceneNode: SceneNode };

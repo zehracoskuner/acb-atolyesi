@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
-import WorksSidebar from "../components/WorkSidebar";
 import "../styles/ui.css";
 import "../styles/AppEditor.css";
 import { TABS, TONES, STYLES } from "../constants/constants";

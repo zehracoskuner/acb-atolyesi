@@ -3,7 +3,7 @@
 import { useMemo, useState, useCallback } from "react";
 import { STATUS_META, CHAR_PALETTE }      from "./constants";
 import { apiPost, describeAiError }        from "../../lib/api";
-import "./Characterarc.css";
+import "./CharacterArc.css";
 
 /* ─── Duygusal ısı renkleri ─── */
 const HEAT_COLORS = {
