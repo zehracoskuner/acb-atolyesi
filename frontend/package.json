@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@xyflow/react": "^12.10.2",
+    "axios": "^1.17.0",
     "dompurify": "^3.4.8",
     "lucide-react": "^0.562.0",
     "nodemailer": "^8.0.5",
