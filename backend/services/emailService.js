@@ -1,18 +1,8 @@
 // backend/services/emailService.js
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import User       from "../models/User.js";
 
-const transporter = nodemailer.createTransport({
-  host:       process.env.SMTP_HOST || "smtp.gmail.com",
-  port:       Number(process.env.SMTP_PORT) || 587,
-  secure:     false,
-  requireTLS: true,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  logger: true,
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const SITE_URL =
   process.env.SITE_URL ||
@@ -25,14 +15,29 @@ const API_BASE_URL =
   (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/api` : null) ||
   "http://localhost:5000/api";
 
-const FROM     = `"ACB Atölyesi" <${process.env.SMTP_USER}>`;
+const FROM     = process.env.EMAIL_FROM;
+const REPLY_TO = process.env.EMAIL_REPLY_TO;
+
+/* ── Resend üzerinden gönderim (ortak) ── */
+async function send({ to, subject, html, text }) {
+  const { error } = await resend.emails.send({
+    from:    FROM,
+    to,
+    replyTo: REPLY_TO,
+    subject,
+    html,
+    ...(text ? { text } : {}),
+  });
+
+  if (error) {
+    console.error("Resend gönderim hatası:", error);
+    throw new Error(error.message || "E-posta gönderilemedi.");
+  }
+}
 
 /* ── Generic mail ── */
 export async function sendMail({ to, subject, html, text }) {
-  await transporter.sendMail({
-    from: FROM, to, subject, html,
-    ...(text ? { text } : {}),
-  });
+  await send({ to, subject, html, text });
 }
 
 /* ════════════════════════════════════════════
@@ -52,9 +57,8 @@ export async function sendStaffMail({ subject, html, urgency = "normal" }) {
     // Aciliyete göre başlık öneki
     const prefix = urgency === "high" ? "🔴 " : urgency === "medium" ? "⚠️ " : "📋 ";
 
-    await transporter.sendMail({
-      from:    FROM,
-      to:      emails.join(", "),
+    await send({
+      to:      emails,
       subject: `${prefix}${subject}`,
       html,
     });
@@ -76,9 +80,8 @@ export async function sendAdminMail({ subject, html }) {
     const emails = admins.map(u => u.email).filter(Boolean);
     if (!emails.length) return;
 
-    await transporter.sendMail({
-      from:    FROM,
-      to:      emails.join(", "),
+    await send({
+      to:      emails,
       subject: `🛡️ ${subject}`,
       html,
     });
@@ -90,10 +93,8 @@ export async function sendAdminMail({ subject, html }) {
 /* ── E-posta doğrulama ── */
 export async function sendVerificationEmail(email, token) {
   const link = `${API_BASE_URL}/auth/verify-email?token=${token}`;
-  await transporter.sendMail({
-    from:    FROM,
+  await send({
     to:      email,
-    headers: { "X-Priority": "1", "X-Mailer": "ACB Atölyesi Mailer" },
     subject: "E-posta adresini doğrula — ACB Atölyesi",
     html: `
       <!DOCTYPE html><html lang="tr">
@@ -134,8 +135,7 @@ export async function sendVerificationEmail(email, token) {
 /* ── Şifre sıfırlama ── */
 export async function sendPasswordResetEmail(email, token) {
   const link = `${SITE_URL}/sifre-sifirla?token=${token}`;
-  await transporter.sendMail({
-    from:    FROM,
+  await send({
     to:      email,
     subject: "Şifre sıfırlama — ACB Atölyesi",
     html: `
