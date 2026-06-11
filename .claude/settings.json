@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(xargs grep -l \"Comment\")",
-      "Bash(node _debug_comment_delete.mjs)"
+      "Bash(node _debug_comment_delete.mjs)",
+      "Bash(curl -s -i -X DELETE http://localhost:5000/api/comments/6a29fd1cee8e96543d316eaf -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5Y2UxNGExYjUwZDA0M2IwMmE0NTlhZSIsImVtYWlsIjoiemVocmFAZ21haWwuY29tIiwicm9sZSI6InVzZXIiLCJpYXQiOjE3ODExMzY2NjgsImV4cCI6MTc4MTE0MDI2OH0.1pSRz6P2rhy3Uu3-KGrCKoBKNZO_GKsNdRf8MP4EyhU')",
+      "Bash(tail -30 /tmp/server.log)",
+      "Read(//tmp/**)",
+      "PowerShell(Stop-Process -Id 2572,7992 -Force)",
+      "PowerShell(Get-Process node -ErrorAction SilentlyContinue)"
     ]
   }
 }

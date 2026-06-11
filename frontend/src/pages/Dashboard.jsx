@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import styles from '../App.module.css';
 import Footer from "../components/Footer";
 
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -24,7 +26,7 @@ const Dashboard = () => {
 
   const handleChoice = async (choice) => {
     try {
-      const response = await fetch("http://localhost:5000/api/set-experience", {
+      const response = await fetch(`${API_BASE}/set-experience`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: user._id, experienceLevel: choice }),

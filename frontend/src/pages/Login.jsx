@@ -59,7 +59,7 @@ export default function Login() {
       setToken(data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
       setMesaj({ type: "ok", text: "Giriş başarılı, yönlendiriliyorsunuz…" });
-      setTimeout(() => navigate("/keşfet"), 800);
+      setTimeout(() => navigate("/keşfet", { replace: true }), 800);
     } catch (err) {
       const data   = err.response?.data;
       const status = err.response?.status;

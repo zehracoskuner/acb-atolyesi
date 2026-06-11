@@ -2,7 +2,7 @@
 import { Router } from "express";
 import mongoose   from "mongoose";
 import Report     from "../models/Report.js";
-import { sendStaffMail } from "../services/emailService.js";
+import { sendStaffMail, SITE_URL } from "../services/emailService.js";
 
 const router = Router();
 
@@ -65,7 +65,7 @@ router.post("/", async (req, res) => {
             <tr><td style="padding:6px;font-weight:bold">Açıklama</td><td>${description || "—"}</td></tr>
           </table>
           <br>
-          <a href="${process.env.CLIENT_URL}/admin/reports"
+          <a href="${SITE_URL}/admin/reports"
              style="background:#e67e22;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px">
             Admin Panelde İncele
           </a>

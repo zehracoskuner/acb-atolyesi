@@ -246,7 +246,7 @@ export async function deleteComment(req, res) {
     const { commentId } = req.params;
     if (!isValidId(commentId)) return res.status(400).json({ error: "Geçersiz kimlik." });
 
-    const { reason } = req.body; // moderatör/admin sebep belirtebilir
+    const { reason } = req.body || {}; // moderatör/admin sebep belirtebilir
 
     const comment = await Comment.findById(commentId);
     if (!comment) return res.status(404).json({ error: "Yorum bulunamadı." });

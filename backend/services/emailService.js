@@ -14,7 +14,7 @@ const transporter = nodemailer.createTransport({
   logger: true,
 });
 
-const SITE_URL =
+export const SITE_URL =
   process.env.SITE_URL ||
   process.env.CLIENT_URL ||
   (process.env.NODE_ENV === "production" ? "https://xn--acbatlyesi-icb.com" : "http://localhost:5173");

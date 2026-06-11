@@ -18,16 +18,16 @@ export default function EmailDogrula() {
 
     if (status === "success") {
       setDurum("basarili");
-      setTimeout(() => navigate("/login?verified=true"), 2500);
+      setTimeout(() => navigate("/login?verified=true", { replace: true }), 2500);
     } else if (status === "invalid" || status === "error") {
       setDurum("hata");
     } else if (token) {
       // Eski /email-dogrula/:token formatından gelen direkt token
       axios
-        .get(`/api/auth/verify-email?token=${token}`)
+        .get(`${API_BASE}/auth/verify-email?token=${token}`)
         .then(() => {
           setDurum("basarili");
-          setTimeout(() => navigate("/login?verified=true"), 2500);
+          setTimeout(() => navigate("/login?verified=true", { replace: true }), 2500);
         })
         .catch(() => setDurum("hata"));
     } else {
@@ -40,7 +40,7 @@ export default function EmailDogrula() {
     if (!email) return;
     setGonderiyor(true);
     try {
-      await axios.post("/api/auth/resend-verification", { email });
+      await axios.post(`${API_BASE}/auth/resend-verification`, { email });
       setYenidenMesaj("Doğrulama e-postası tekrar gönderildi. Gelen kutunuzu kontrol edin.");
     } catch {
       setYenidenMesaj("Bir hata oluştu. Lütfen tekrar deneyin.");

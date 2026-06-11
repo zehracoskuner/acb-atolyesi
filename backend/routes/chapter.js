@@ -5,7 +5,7 @@ import Chapter      from "../models/Chapter.js";
 import Work         from "../models/Work.js";
 import Notification from "../models/Notification.js";
 import User         from "../models/User.js";
-import { sendMail, sendStaffMail } from "../services/emailService.js";
+import { sendMail, sendStaffMail, SITE_URL } from "../services/emailService.js";
 import { moderateChapter }         from "../utils/aiModerator.js";
 import { sanitizeChapterHtml } from "../utils/sanitizeHtml.js";
 
@@ -198,7 +198,7 @@ router.patch("/:id/status", ensureAuth, async (req, res) => {
             <p><strong>Hikaye:</strong> ${work.title}</p>
             <p><strong>Sebep:</strong> Kullanıcının içerik kısıtlaması var.</p>
             <br>
-            <a href="${process.env.CLIENT_URL}/moderator"
+            <a href="${SITE_URL}/moderator"
                style="background:#3a8080;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px">
               Moderatör Panelinde İncele
             </a>
@@ -251,7 +251,7 @@ router.patch("/:id/status", ensureAuth, async (req, res) => {
             <p><strong>Şüphe:</strong> ${modResult.reason || "Belirsiz içerik"}</p>
             <p><strong>Kategoriler:</strong> ${modResult.violations?.join(", ") || "—"}</p>
             <br>
-            <a href="${process.env.CLIENT_URL}/moderator"
+            <a href="${SITE_URL}/moderator"
                style="background:#3a8080;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px">
               Moderatör Panelinde İncele
             </a>

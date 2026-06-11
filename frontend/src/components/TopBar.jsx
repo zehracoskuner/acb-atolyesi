@@ -2,7 +2,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect, useCallback} from "react";
 import { createPortal } from "react-dom";
-import { apiGet, apiPatch } from "../lib/api";
+import { apiGet, apiPatch, adminGet } from "../lib/api";
 import "../styles/TopBar.css";
 import ManifestoModal from "./ManifestoModal";
 import { TourHelpButton } from "./tour/TourManager";
@@ -273,7 +273,7 @@ export default function TopBar() {
 
     const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
     if (storedUser.role === "admin" || storedUser.role === "moderator") {
-      apiGet(`/${import.meta.env.VITE_ADMIN_PATH}/stats`)
+      adminGet("/stats")
         .then(res => setPendingCount(res.bekleyen?.reviewQueue || 0))
         .catch(() => {});
     }

@@ -378,10 +378,9 @@ router.get("/google/callback",
       maxAge:   30 * 24 * 60 * 60 * 1000,
     });
 
-    if (!user.profileComplete)
-      return res.redirect(`${SITE_URL}/auth/callback?token=${token}&setup=1`);
-
-    return res.redirect(`${SITE_URL}/auth/callback?token=${token}`);
+    // Token URL fragment'ine konur — sunucu loglarına/referrer'a/tarayıcı geçmişine sızmaz.
+    const setupQS = !user.profileComplete ? "?setup=1" : "";
+    return res.redirect(`${SITE_URL}/auth/callback${setupQS}#token=${encodeURIComponent(token)}`);
   }
 );
 

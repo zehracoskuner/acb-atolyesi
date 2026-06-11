@@ -11,13 +11,19 @@ export default function AuthCallback() {
 
   useEffect(() => {
     async function handle() {
-      const token = searchParams.get("token");
+      // Token URL fragment'inde gelir (#token=...) — query'de değil.
+      const hash  = window.location.hash.replace(/^#/, "");
+      const token = new URLSearchParams(hash).get("token");
       const setup = searchParams.get("setup"); // "1" → kullanıcı adı seçilmeli
 
       if (!token) { navigate("/login?error=no_token"); return; }
 
       // Token'ı kaydet (+ reading progress sync tetikler)
       setToken(token);
+
+      // Fragment'i adres çubuğundan ve geçmişten temizle
+      window.history.replaceState({}, document.title,
+        window.location.pathname + window.location.search);
 
       // Kullanıcı bilgisini çek ve localStorage'a yaz
       try {

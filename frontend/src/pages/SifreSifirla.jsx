@@ -42,7 +42,7 @@ export default function SifreSifirla() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "İşlem başarısız.");
       setDone(true);
-      setTimeout(() => navigate("/login"), 3000);
+      setTimeout(() => navigate("/login", { replace: true }), 3000);
     } catch (e) {
       setError(e.message);
     } finally {

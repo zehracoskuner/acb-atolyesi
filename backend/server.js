@@ -73,8 +73,16 @@ app.use(helmet());
 app.use(helmet.hsts({ maxAge: 31536000, includeSubDomains: true }));
 
 // ── CORS ──
+// Üretimde localhost'a asla fallback yapılmaz; CLIENT_URL/SITE_URL prod domain'i tutmalı.
+const allowedOrigins = [process.env.CLIENT_URL, process.env.SITE_URL].filter(Boolean);
+if (!isProd) allowedOrigins.push("http://localhost:5173");
+
 app.use(cors({
-  origin:         process.env.CLIENT_URL || "http://localhost:5173",
+  origin(origin, callback) {
+    // origin yoksa (sunucu-içi istek, curl, mobil vs.) izin ver
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error("CORS: izin verilmeyen origin"));
+  },
   credentials:    true,
   methods:        ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],

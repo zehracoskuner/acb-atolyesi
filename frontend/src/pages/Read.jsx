@@ -311,10 +311,12 @@ function InlineParagraphs({ text, chapterId, workId, commentMap, onOpenDrawer })
 
       if (RDIC_BLOCK_TAGS.has(node.tagName)) {
         flush();
-        // boş blokları (örn. <div><br></div>) at, ama gerçek <br>/<hr>/<img> kalsın
+        // boş blokları (örn. <div><br></div>) at — bunlar yazarken oluşan
+        // istemsiz boş satırlardır ve ayrı bir paragraf olarak gösterilmemeli.
+        // <hr>/<img> içeren bloklar metinsiz de olsa anlamlıdır, korunur.
         const hasText = node.textContent.trim();
-        const hasVoid = /<(br|hr|img)\b/i.test(node.outerHTML);
-        if (hasText || hasVoid) result.push(node.outerHTML);
+        const hasMeaningfulVoid = /<(hr|img)\b/i.test(node.outerHTML);
+        if (hasText || hasMeaningfulVoid) result.push(node.outerHTML);
       } else {
         // satır-içi öğe (b, i, span, a, code, ...) → tampona ekle, ayrı blok açma
         buffer += node.outerHTML;
