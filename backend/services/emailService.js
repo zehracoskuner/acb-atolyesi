@@ -18,6 +18,13 @@ export const SITE_URL =
   process.env.SITE_URL ||
   process.env.CLIENT_URL ||
   (process.env.NODE_ENV === "production" ? "https://xn--acbatlyesi-icb.com" : "http://localhost:5173");
+
+// Doğrulama linki backend'e gider (redirect-temelli endpoint), frontend'e değil.
+const API_BASE_URL =
+  process.env.API_URL ||
+  (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/api` : null) ||
+  "http://localhost:5000/api";
+
 const FROM     = `"ACB Atölyesi" <${process.env.SMTP_USER}>`;
 
 /* ── Generic mail ── */
@@ -82,7 +89,7 @@ export async function sendAdminMail({ subject, html }) {
 
 /* ── E-posta doğrulama ── */
 export async function sendVerificationEmail(email, token) {
-  const link = `${SITE_URL}/verify-email?token=${token}`;
+  const link = `${API_BASE_URL}/auth/verify-email?token=${token}`;
   await transporter.sendMail({
     from:    FROM,
     to:      email,
