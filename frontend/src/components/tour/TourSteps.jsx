@@ -41,7 +41,7 @@ export const TOUR_STEPS = {
       id: "atolyem-duzenle",
       target: "atolyem-duzenle-btn",
       title: "Düzenle & Yayınla",
-      text: "Eserini topluluğa açmak için buradan yayınlayabilir, başlık ve açıklamasını güncelleyebilirsin.",
+      text: "Eserinin bilgilerini, önsözünü ve ayarlarını buradan güncelleyebilirsin. Bölümleri yayınlamayı ise Bölümler ekranından yapıyorsun.",
       position: "top",
       alwaysVisible: true,
     },
@@ -85,18 +85,6 @@ export const TOUR_STEPS = {
       conditional: true,          // element koşullu — editör açık olmadan görünmez
       triggerKey: "openCharEditor", // window.__acbTourTrigger["openCharEditor"]?.() çağrılır
       skipIfMissing: true,         // 3 saniye bekle, yoksa atla
-    },
-    {
-      // İlişki picker'ı shift+sürükle ile açılır.
-      // Bunu tur sırasında göstermek yerine sabit bir açıklama adımı kullan.
-      // data-tour="karakter-bag-info" → topbar'a veya canvas'a eklenecek sabit bir element.
-      id: "karakter-bag",
-      target: "karakter-bag-info",
-      title: "Karakterleri Birbirine Bağla",
-      text: "Shift tuşuna basılı tutarak bir karakterden diğerine sürükle — aralarında bağ kur. Aşk, Çatışma, Sır... Hikayenin dinamiği burada şekillenir.",
-      position: "bottom",
-      conditional: true,
-      skipIfMissing: true,
     },
     {
       id: "karakter-sahne-kivilcimi",

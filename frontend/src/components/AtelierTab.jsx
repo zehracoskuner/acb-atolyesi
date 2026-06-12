@@ -25,8 +25,6 @@ const REVIEW_FOCUS_OPTIONS = [
   { id: "tekrar",    label: "Tekrar" },
 ];
 
-const BUBBLE_TONE = { low: "#fef3c7", medium: "#e9d5ff", high: "#fecaca" };
-
 /* ── ANA BİLEŞEN ── */
 export default function AtelierTab({ workId }) {
   const {
@@ -183,6 +181,32 @@ export default function AtelierTab({ workId }) {
     }
   };
 
+  /* AI notlarını genel Notlarım'a kaydet */
+  const [aiNoteSaveState, setAiNoteSaveState] = useState({});
+
+  const saveAiNoteToNotes = async (key, noteTitle, content) => {
+    try {
+      await apiPost("/notes", { title: noteTitle, content });
+      setAiNoteSaveState((p) => ({ ...p, [key]: "ok" }));
+    } catch {
+      setAiNoteSaveState((p) => ({ ...p, [key]: "err" }));
+    }
+    setTimeout(() => {
+      setAiNoteSaveState((p) => {
+        const next = { ...p };
+        delete next[key];
+        return next;
+      });
+    }, 2000);
+  };
+
+  const aiNoteSaveLabel = (key) =>
+    aiNoteSaveState[key] === "ok"
+      ? "Notlarına kaydedildi ✓"
+      : aiNoteSaveState[key] === "err"
+      ? "Kaydedilemedi."
+      : "📌 Notlarıma kaydet";
+
   return (
     <div className="atelier-layout">
       {/* Sol: Editör */}
@@ -250,11 +274,7 @@ export default function AtelierTab({ workId }) {
         </div>
 
         {coachEnabled && liveAlert && (
-          <div
-            className="live-bubble"
-            style={{ background: BUBBLE_TONE[liveAlert.severity] || BUBBLE_TONE.medium }}
-            role="status"
-          >
+          <div className={`live-bubble live-bubble--${liveAlert.severity || "medium"}`} role="status">
             {liveAlert.message}
           </div>
         )}
@@ -472,6 +492,25 @@ export default function AtelierTab({ workId }) {
                     — {review.closingNote}
                   </p>
                 )}
+                <p className="atelier-review-disclaimer">
+                  Not: Buradaki AI bir editör gibi çalışır; işi seni övmek değil, geliştirebileceğin
+                  noktaları göstermektir. Bu yüzden her zaman söyleyecek bir şey bulabilir. Bu, metnin
+                  kötü olduğu anlamına gelmez. Eserin sana yeterince tamam geliyorsa son onayı AI'dan
+                  bekleme; karar senin, yayınla gitsin.
+                </p>
+                <button
+                  className="btn-ai-save-note"
+                  onClick={() =>
+                    saveAiNoteToNotes(
+                      "review",
+                      review.focusLabel || "AI Yorum",
+                      review.analysis + (review.closingNote ? `\n\n— ${review.closingNote}` : "")
+                    )
+                  }
+                  disabled={aiNoteSaveState.review === "ok"}
+                >
+                  {aiNoteSaveLabel("review")}
+                </button>
               </>
             )}
           </div>
@@ -620,6 +659,13 @@ export default function AtelierTab({ workId }) {
                       </span>
                     </div>
                     <p className="koc-note-msg">{n.message}</p>
+                    <button
+                      className="btn-ai-save-note"
+                      onClick={() => saveAiNoteToNotes(n.key, n.title || "Koç Notu", n.message)}
+                      disabled={aiNoteSaveState[n.key] === "ok"}
+                    >
+                      {aiNoteSaveLabel(n.key)}
+                    </button>
                   </div>
                 ))}
               </div>

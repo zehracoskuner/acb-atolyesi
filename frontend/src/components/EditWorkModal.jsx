@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { apiGet, apiPatch, apiPut } from "../lib/api";
+import { apiGet, apiPatch } from "../lib/api";
 import EtikHatirlatma from "./EtikHatirlatma";
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
@@ -167,18 +167,6 @@ const CSS = `
   .ewm-toggle-sw--on { background: var(--ewm-accent); border-color: var(--ewm-accent); }
   .ewm-toggle-sw--on::after { transform: translateX(16px); background: #faf8f4; }
 
-  /* ✅ PUBLISH WARNING - DAHA VURGULU */
-  .ewm-publish-warning {
-    display: flex; align-items: flex-start; gap: 0.6rem;
-    padding: 1rem 1.1rem;
-    background: rgba(200, 131, 42, 0.15);
-    border: 1.5px solid var(--ewm-orange);
-    border-radius: var(--ewm-radius);
-    box-shadow: 0 2px 8px rgba(200,131,42,0.1);
-  }
-  .ewm-publish-warning-icon { font-size: 0.9rem; flex-shrink: 0; margin-top: 1px; }
-  .ewm-publish-warning-text { font-family: 'DM Sans', sans-serif; font-size: 0.76rem; font-weight: 400; color: var(--ewm-orange); line-height: 1.55; }
-
   .ewm-ch-status {
     font-family: 'DM Sans', sans-serif; font-size: 0.58rem; font-weight: 500;
     letter-spacing: 0.08em; text-transform: uppercase;
@@ -258,7 +246,6 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
   const [isAnonymous,    setIsAnonymous]    = useState(false);
   const [contentWarning, setContentWarning] = useState(false);
   const [preface,        setPreface]        = useState("");
-  const [status,         setStatus]         = useState("draft");
 
   // Bölümler
   const [selectedIds,  setSelectedIds]  = useState(new Set());
@@ -308,7 +295,6 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
     setIsAnonymous(work.isAnonymous ?? false);
     setContentWarning(work.contentWarning ?? false);
     setPreface(work.preface ?? "");
-    setStatus(work.status ?? "draft");
     setCustomTitles(work.customChapterTitles ?? {});
     setOpenGroups({});
 
@@ -408,18 +394,10 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
     setSelectedIds(hepsiSecili ? new Set() : new Set(publishable));
   }
 
-  const showPublishWarning = status === "published" && chapters.length > 0 && selectedIds.size === 0;
-
   async function handleSave() {
     if (!title.trim()) {
       setSaveMsg({ ok: false, text: "Başlık boş olamaz." });
       setTab("meta");
-      return;
-    }
-
-    if (status === "published" && chapters.length > 0 && selectedIds.size === 0) {
-      setSaveMsg({ ok: false, text: "En az 1 bölüm seçili olmalı." });
-      setTab("chapters");
       return;
     }
 
@@ -436,18 +414,12 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
       isAnonymous,
       contentWarning,
       preface:             preface.trim(),
-      status,
       customChapterTitles: customTitles,
       ...(chapters.length > 0 ? { publishedChapterIds: [...selectedIds] } : {}),
     };
 
     try {
       const workId = getWorkId(work);
-
-      const wasPublished = work.status === "published" || work.status === "pending_review";
-      if (status === "draft" && wasPublished) {
-        await apiPut(`/works/${workId}/unpublish-all`);
-      }
 
       const res     = await apiPatch(`/works/${workId}`, payload);
       const updated = res?.item ?? { ...work, ...payload };
@@ -614,30 +586,6 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
                 </div>
                 <button type="button" className={`ewm-toggle-sw ${contentWarning ? "ewm-toggle-sw--on" : ""}`} onClick={() => setContentWarning(v => !v)} aria-pressed={contentWarning} />
               </div>
-
-              <div className="ewm-field">
-                <label className="ewm-label">Yayın durumu</label>
-                <select className="ewm-select" value={status} onChange={e => setStatus(e.target.value)}>
-                  <option value="draft">Taslak — yalnızca sen görebilirsin</option>
-                  <option value="published">Yayında — herkese açık</option>
-                </select>
-              </div>
-
-              {showPublishWarning && (
-                <div className="ewm-publish-warning">
-                  <span className="ewm-publish-warning-icon">⚠️</span>
-                  <span className="ewm-publish-warning-text">
-                    Hikayeyi yayına almak için en az bir bölüm seçili olmalı.{" "}
-                    <button
-                      type="button"
-                      onClick={() => handleTabChange("chapters")}
-                      style={{ background: "none", border: "none", color: "var(--ewm-orange)", cursor: "pointer", padding: 0, fontFamily: "'DM Sans', sans-serif", fontSize: "inherit", textDecoration: "underline" }}
-                    >
-                      Bölümleri düzenle →
-                    </button>
-                  </span>
-                </div>
-              )}
 
               <div className="ewm-field">
                 <label className="ewm-label">Önsöz / Yazarın notu</label>

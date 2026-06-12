@@ -132,6 +132,7 @@ export default function CharactersUniversePage() {
           type:     r.type,
           strength: r.strength ?? 3,
           label:    r.label || "",
+          directed: r.directed ?? true,
         })));
       } catch (e) {
         showToast(e?.message || "Yükleme hatası");
@@ -391,8 +392,16 @@ export default function CharactersUniversePage() {
     const relText = rel ? typeLabel(rel.type, customTypes) : "Belirsiz";
     const localIdea = `Karakterler: ${a.name} (${a.role || "?"}) ↔ ${b.name} (${b.role || "?"})\nİlişki: ${relText}\n\nBu sahnede kim geri adım atarsa "kaybeder"? Ve bu kayıp hikâyeyi nereye iter?`;
     setSceneIdea(localIdea);
+    const relationship = rel ? {
+      type:     rel.type,
+      label:    rel.label || "",
+      strength: rel.strength,
+      directed: rel.directed,
+      fromName: nodeById.get(rel.from)?.name || "",
+      toName:   nodeById.get(rel.to)?.name || "",
+    } : null;
     try {
-      const d = await apiPost("/ai/scene-spark", { workId, characters: [
+      const d = await apiPost("/ai/scene-spark", { workId, relationship, characters: [
         { name: a.name, role: a.role, notes: a.notes || "" },
         { name: b.name, role: b.role, notes: b.notes || "" },
       ]});

@@ -476,8 +476,27 @@ function FocusOverlay({ chapter, onClose, onContentChange, onTitleChange }) {
 }
 
 /* ── AIDrawer ── */
-function AIDrawer({ open, onClose, chapterId, chapter, onReview, loading, review, onClear }) {
+function AIDrawer({ open, onClose, chapterId, chapter, workId, onReview, loading, review, onClear }) {
   const hasContent = chapter?.pages?.some((p)=>p.content.trim());
+  const [noteSaveState, setNoteSaveState] = useState("idle"); // idle | saving | ok | err
+
+  const saveToWorkNotes = async () => {
+    if (!review) return;
+    setNoteSaveState("saving");
+    try {
+      await apiPost(`/works/${workId}/notes`, {
+        title: chapter?.title ? `AI Yorum — ${chapter.title}` : "AI Yorum",
+        body: review,
+        source: "ai-coach",
+        meta: { chapterId, chapterTitle: chapter?.title || "", focus: "chapter" },
+      });
+      setNoteSaveState("ok");
+    } catch {
+      setNoteSaveState("err");
+    }
+    setTimeout(() => setNoteSaveState("idle"), 2000);
+  };
+
   return (
     <>
       {open && <div className="ai-veil" onClick={onClose}/>}
@@ -488,6 +507,21 @@ function AIDrawer({ open, onClose, chapterId, chapter, onReview, loading, review
           {chapterId&&!hasContent&&<p className="ai-muted">Yorum için önce bir şeyler yaz.</p>}
           {loading&&<div className="ai-thinking"><span/><span/><span/></div>}
           {!loading&&review&&<p className="ai-review">{review}</p>}
+          {!loading&&review&&(
+            <p className="atelier-review-disclaimer">
+              Not: Buradaki AI bir editör gibi çalışır; işi seni övmek değil, geliştirebileceğin
+              noktaları göstermektir. Bu yüzden her zaman söyleyecek bir şey bulabilir. Bu, metnin
+              kötü olduğu anlamına gelmez. Eserin sana yeterince tamam geliyorsa son onayı AI'dan
+              bekleme; karar senin, yayınla gitsin.
+            </p>
+          )}
+          {!loading&&review&&(
+            <button className="btn-ai-save-note" onClick={saveToWorkNotes} disabled={noteSaveState==="ok"}>
+              {noteSaveState==="ok" ? "Eserin notlarına kaydedildi ✓"
+                : noteSaveState==="err" ? "Kaydedilemedi."
+                : "📌 Bu eserin notlarına kaydet"}
+            </button>
+          )}
           {!loading&&!review&&chapterId&&hasContent&&<p className="ai-muted" style={{fontStyle:"normal"}}>Hazır. Analiz Et butonuna bas.</p>}
         </div>
         <div className="ai-foot">
@@ -955,7 +989,7 @@ useEffect(() => {
         </div>
       </div>
 
-      <AIDrawer open={aiOpen} onClose={()=>setAiOpen(false)} chapterId={activeChapterId} chapter={activeChapter} onReview={handleAIReview} loading={aiLoading} review={aiReview} onClear={()=>setAiReview("")}/>
+      <AIDrawer open={aiOpen} onClose={()=>setAiOpen(false)} chapterId={activeChapterId} chapter={activeChapter} workId={workId} onReview={handleAIReview} loading={aiLoading} review={aiReview} onClear={()=>setAiReview("")}/>
     </div>
     {/* Portals — cp-root dışında, viewport'a göre fixed */}
     {focusMode&&activeChapter&&<FocusOverlay chapter={activeChapter} onClose={()=>setFocusMode(false)} onContentChange={handleContentChange} onTitleChange={handleTitleChange}/>}

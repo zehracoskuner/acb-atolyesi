@@ -319,13 +319,21 @@
   overflow: hidden;
 }
 
+.sd-editor-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
 .sd-editor-title {
   font-family: "Cormorant Garamond", serif;
   font-size: 28px;
   font-weight: 700;
   color: #1c1917;
-  margin-bottom: 20px;
   line-height: 1.2;
+  margin-bottom: 0;
 }
 
 .sd-textarea {

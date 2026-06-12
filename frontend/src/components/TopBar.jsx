@@ -421,6 +421,7 @@ export default function TopBar() {
                 <div className="dropdown-section">
                   <button className="dd-item" onClick={() => goTo("/profile/me")}><IconUser /> Profilim</button>
                   <button className="dd-item" onClick={() => goTo("/studio")}><IconDoc /> Atölyem</button>
+                  <button className="dd-item" onClick={() => goTo("/notes")}><IconDoc /> Notlarım</button>
                   <button className="dd-item" onClick={() => goTo("/kutuphane")}><IconLibrary /> Kütüphane</button>
                   <button className="dd-item" onClick={() => goTo("/ayarlar")}><IconSettings /> Ayarlar</button>
                 </div>

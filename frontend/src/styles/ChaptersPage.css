@@ -557,7 +557,8 @@
   border: none;
   border-radius: 0;
   padding: 0;
-  min-height: 380px;
+  height: 1000px;
+  overflow-y: auto;
 }
 .leaf .rich-toolbar {
   border-radius: 4px 4px 0 0;
@@ -1037,8 +1038,8 @@
   pointer-events: none;
 }
 
-/* Leaf içindeki rich content */
-.leaf .rich-content { min-height: 380px; }
+/* Leaf içindeki rich content — sabit yükseklik, tüm sayfalar aynı boyda */
+.leaf .rich-content { height: 1000px; overflow-y: auto; }
 
 /* Focus overlay içindeki rich content */
 .focus-rich .rich-content {
@@ -1702,6 +1703,42 @@
   font-family: var(--serif);
   line-height: 1.6;
   color: var(--ink-1);
+}
+
+.atelier-review-disclaimer {
+  margin-top: 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--cream-3);
+  border-radius: 10px;
+  background: var(--cream-1);
+  color: var(--ink-4);
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.btn-ai-save-note {
+  margin-top: 8px;
+  border: 1px solid var(--cream-4);
+  background: var(--cream-0);
+  color: var(--ink-3);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-ai-save-note:hover:not(:disabled) {
+  border-color: var(--amber-dim);
+  background: var(--amber-bg);
+  color: var(--ink-1);
+}
+.btn-ai-save-note:disabled {
+  color: var(--amber);
+  border-color: var(--amber-dim);
+  cursor: default;
 }
 
 /* Pusula */

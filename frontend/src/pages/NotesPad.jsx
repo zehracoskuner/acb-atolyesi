@@ -1,6 +1,7 @@
 // src/pages/NotesPad.jsx
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../lib/api";
+import VoiceInputButton from "../components/VoiceInputButton";
 import "../styles/NotesPad.css";
 
 const FILTERS = { ALL: "all", FREE: "free", LINKED: "linked" };
@@ -235,6 +236,13 @@ export default function NotesPad() {
                 {saving  && <span className="status-saving">kaydediliyor…</span>}
                 {!saving && saveMsg && <span className="status-saved">{saveMsg}</span>}
               </div>
+
+              <VoiceInputButton
+                onResult={(t) => {
+                  setContent(c => c ? `${c} ${t}` : t);
+                  markDirty();
+                }}
+              />
 
               {/* Esere bağla */}
               <div className="np-link-wrap">

@@ -246,16 +246,28 @@ SADECE şu JSON: ${jsonShape}
 });
 
 router.post("/scene-spark", ensureAuth, async (req, res) => {
-  const { characters } = req.body || {};
+  const { characters, relationship } = req.body || {};
   if (!Array.isArray(characters) || characters.length !== 2)
     return res.status(400).json({ message: "Tam 2 karakter gerekli" });
 
   const [a, b] = characters;
+
+  let relText = "İlişki: Belirsiz";
+  if (relationship?.type) {
+    const { type, label, strength, directed, fromName, toName } = relationship;
+    const desc = `${type}${label ? ` — ${label}` : ""} (güç ${strength}/5)`;
+    relText = directed && fromName && toName
+      ? `İlişki: ${fromName} → ${toName}: ${desc}`
+      : `İlişki (karşılıklı): ${desc}`;
+  }
+
   const prompt = `
 Karakter A: ${a.name} (${a.role || "?"}) — ${a.notes || "(notlar yok)"}
 Karakter B: ${b.name} (${b.role || "?"}) — ${b.notes || "(notlar yok)"}
+${relText}
 
 Bu iki karakter arasında bir sahne BAŞLANGICI yaz:
+- Sahneyi yukarıdaki ilişkiye göre kur — ton ve dinamik bu ilişkiyle uyumlu olsun
 - Max 2 kısa paragraf
 - Açık ya da örtük gerilim zorunlu
 - En az bir karakter bir şeyi gizlemeli

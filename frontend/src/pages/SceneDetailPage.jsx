@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiGet, apiPatch, apiPost, describeAiError } from "../lib/api";
+import VoiceInputButton from "../components/VoiceInputButton";
 import {
   BADGE_STYLES, STATUS_META, CHAR_PALETTE,
   buildActMeta, buildActOrder,
@@ -348,15 +349,17 @@ export default function SceneDetailPage() {
     }
   }, [workId, sceneId]);
 
-  function handleDraftChange(e) {
-    const text = e.target.value;
+  function applyDraftText(text) {
     setDraftText(text);
     setSaveState("unsaved");
     draftRef.current = text;
     dirtyRef.current = true;
     clearTimeout(timerRef.current);
-    clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => saveDraft(text), SAVE_DEBOUNCE_MS);
+  }
+
+  function handleDraftChange(e) {
+    applyDraftText(e.target.value);
   }
   /* Bekleyen taslağı kaybetme — sahne değişimi / sekme kapanışı */
   useEffect(() => {
@@ -537,7 +540,12 @@ export default function SceneDetailPage() {
 
         {/* ─── ORTA: YAZI ALANI ─── */}
         <main className="sd-editor">
-          <div className="sd-editor-title">{sceneTitle}</div>
+          <div className="sd-editor-title-row">
+            <div className="sd-editor-title">{sceneTitle}</div>
+            <VoiceInputButton
+              onResult={(t) => applyDraftText(draftText ? `${draftText} ${t}` : t)}
+            />
+          </div>
           <textarea
             className="sd-textarea"
             placeholder={

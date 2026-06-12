@@ -715,7 +715,7 @@ router.get("/stories", async (req, res) => {
 
     const filtre = {
       ...(statusParam === "all"
-        ? {}
+        ? { status: { $ne: "draft" } }
         : statusParam && izinliStatusler.includes(statusParam)
           ? { status: statusParam }
           : { status: { $in: ["published", "archived"] } }),

@@ -766,7 +766,7 @@ export default function ExplorePage() {
         <div style={hero.inner}>
           {/* Başlık: arama yapılıyorsa sorguyu göster */}
           <div style={hero.left}>
-            <h1 style={hero.title}>
+            <h1 style={hero.title} data-tour="kesfet-baslik">
               {isSearching ? `"${activeQuery}"` : (isLoggedIn ? "Keşfet" : "Eserler")}
             </h1>
             {!isSearching && isLoggedIn && (
@@ -800,7 +800,7 @@ export default function ExplorePage() {
           </div>
 
           {/* Tür filtreleri */}
-          <div style={hero.genres} role="group" aria-label="Tür filtresi">
+          <div style={hero.genres} role="group" aria-label="Tür filtresi" data-tour="kesfet-filtre">
             <button
               style={{ ...hero.genreBtn, ...(genreFilter === "all" ? hero.genreBtnActive : {}) }}
               onClick={() => setGenreFilter("all")}

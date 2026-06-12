@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiGet, apiPost, apiPut, apiDelete } from "../lib/api";
+import VoiceInputButton from "../components/VoiceInputButton";
 import "../styles/WorkNotes.css";
 
 // Basit ikonlar (SVG)
@@ -346,6 +347,7 @@ export default function WorkNotesPage() {
                         <IconTrash />
                       </button>
                       {note.source === "sceneSpark" && <span className="tag tag-spark">Kıvılcım</span>}
+                      {note.source === "ai-coach" && <span className="tag tag-ai-coach">AI Notu</span>}
 
                     </div>
                   </div>
@@ -367,9 +369,14 @@ export default function WorkNotesPage() {
                   {saveLabel}
                 </div>
 
-                <button className="btn-close" onClick={closeNote} type="button" aria-label="Kapat">
-                  <IconClose />
-                </button>
+                <div className="drawer-header-actions">
+                  <VoiceInputButton
+                    onResult={(t) => onDraftChange(draft ? `${draft} ${t}` : t)}
+                  />
+                  <button className="btn-close" onClick={closeNote} type="button" aria-label="Kapat">
+                    <IconClose />
+                  </button>
+                </div>
               </header>
 
               <div className="drawer-content">

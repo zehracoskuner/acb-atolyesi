@@ -11,9 +11,8 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   const { workId } = req.params;
-  const { title = "", body = "" } = req.body || {};
-  const finalBody = body || content; 
-  const item = await WorkNote.create({ workId, title, body });
+  const { title = "", body = "", content = "", source = "manual", meta = {} } = req.body || {};
+  const item = await WorkNote.create({ workId, title, body: body || content, source, meta });
   res.status(201).json({ item });
 });
 

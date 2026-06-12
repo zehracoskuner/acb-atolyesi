@@ -1162,11 +1162,7 @@ function Reports({ onRefresh }) {
           onResolve={() => act(detail._id, "resolve")}
           onDismiss={() => act(detail._id, "dismiss")}
           onCommentDeleted={(reportId) => {
-            setItems(prev => prev.map(i =>
-              i._id === reportId
-                ? { ...i, status: "resolved", targetObj: i.targetObj ? { ...i.targetObj, isDeleted: true } : null }
-                : i
-            ));
+            setItems(prev => prev.filter(i => i._id !== reportId));
             setDetail(null);
             onRefresh();
           }}

@@ -15,6 +15,10 @@
   
   --accent-color: #818cf8;
   --danger-color: #ef4444;
+  --amber-color: #d4903e;
+  --amber-bg-soft: rgba(212, 144, 62, .14);
+  --amber-border-soft: rgba(212, 144, 62, .35);
+  --amber-text-soft: rgba(255, 224, 178, .92);
   
   --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
   --shadow-drawer: -5px 0 25px rgba(0,0,0,0.7);
@@ -305,6 +309,12 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.drawer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .drawer-content {
   flex: 1;
   padding: 0;
@@ -411,4 +421,10 @@
   border-color: rgba(129,140,248,.35);
   background: rgba(129,140,248,.14);
   color: rgba(200,205,255,.92);
+}
+
+.tag-ai-coach{
+  border-color: var(--amber-border-soft);
+  background: var(--amber-bg-soft);
+  color: var(--amber-text-soft);
 }

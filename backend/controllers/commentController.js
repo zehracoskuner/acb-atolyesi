@@ -238,8 +238,8 @@ export async function updateComment(req, res) {
 
 /* ─────────────────────────────────────────────────────────────
    DELETE — silme
-   - Yorum sahibi: hard delete (+ yanıtları da sil)
-   - Admin/moderatör: soft delete (içerik originalContent'te korunur)
+   - Yorum sahibi: yanıtı varsa tombstone (thread korunur), yoksa hard delete
+   - Admin/moderatör: her zaman tombstone (içerik originalContent'te korunur)
 ───────────────────────────────────────────────────────────── */
 export async function deleteComment(req, res) {
   try {
@@ -250,28 +250,39 @@ export async function deleteComment(req, res) {
 
     const comment = await Comment.findById(commentId);
     if (!comment) return res.status(404).json({ error: "Yorum bulunamadı." });
+    if (comment.isDeleted) return res.status(410).json({ error: "Bu yorum zaten silinmiş." });
 
     const isOwner = comment.author.toString() === req.user.id;
     const isPriv  = ["admin", "moderator"].includes(req.user.role);
 
     if (!isOwner && !isPriv) return res.status(403).json({ error: "Yetkisiz." });
 
-    if (isPriv && !isOwner) {
-      // Moderatör/admin: soft delete — içerik korunur
+    const tombstone = async (deletedReason) => {
       comment.isDeleted       = true;
       comment.deletedAt       = new Date();
       comment.deletedBy       = req.user.id;
-      comment.deletedReason   = reason?.trim() || "Moderatör kararı";
+      comment.deletedReason   = deletedReason;
       comment.originalContent = comment.content;
       comment.content         = ""; // API response'da gizlenir
       await comment.save();
+    };
+
+    if (isPriv && !isOwner) {
+      // Moderatör/admin: soft delete — içerik korunur
+      await tombstone(reason?.trim() || "Moderatör kararı");
 
       notifyCommentRemoved({ recipientId: comment.author, workId: comment.work })
         .catch((e) => console.error("notifyCommentRemoved:", e.message));
     } else {
-      // Kullanıcı kendi yorumunu siliyor: yanıtları da sil + hard delete
-      await Comment.deleteMany({ parentId: commentId });
-      await comment.deleteOne();
+      // Kullanıcı kendi yorumunu siliyor
+      const hasReplies = await Comment.exists({ parentId: commentId });
+      if (hasReplies) {
+        // Yanıtlar var: thread'i korumak için tombstone bırak
+        await tombstone(reason?.trim() || "");
+      } else {
+        // Yanıtı yok: temizce hard delete
+        await comment.deleteOne();
+      }
     }
 
     res.json({ message: "Yorum silindi." });

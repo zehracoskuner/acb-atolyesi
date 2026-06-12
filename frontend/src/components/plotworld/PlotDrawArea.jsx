@@ -146,6 +146,7 @@ export default function PlotDrawArea({ workId, characters = [] }) {
       // onDropCapture / onDragOverCapture kaldırıldı
     >
       <Tldraw
+        licenseKey={import.meta.env.VITE_TLDRAW_LICENSE_KEY}
         shapeUtils={CUSTOM_SHAPE_UTILS}
         // inferDarkMode kaldırıldı — light theme zorunlu
         forceDarkMode={false}
