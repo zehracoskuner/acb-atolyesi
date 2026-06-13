@@ -67,6 +67,9 @@ export default function VoiceInputButton({ onResult, lang = "tr-TR", className =
         SpeechRecognition.stopListening();
       } else if (e.error === "no-speech") {
         console.warn("Ses algılanmadı.");
+      } else if (e.error === "not-allowed" || e.error === "audio-capture") {
+        alert("Sesle yazma için mikrofon izni gerekiyor. Lütfen tarayıcı ayarlarından bu sitenin mikrofona erişimine izin ver.");
+        SpeechRecognition.stopListening();
       }
     };
 
@@ -76,21 +79,9 @@ export default function VoiceInputButton({ onResult, lang = "tr-TR", className =
 
   if (!browserSupportsSpeechRecognition) return null;
 
-  const toggle = async () => {
+  const toggle = () => {
     if (listening) {
       SpeechRecognition.stopListening();
-      return;
-    }
-
-    // react-speech-recognition, mikrofon izni reddedilirse hatayı
-    // sessizce yutuyor (DOMException). Burada izni kendimiz isteyip
-    // sorunu kullanıcıya gösterilebilir hale getiriyoruz.
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((t) => t.stop());
-    } catch (err) {
-      console.error("Mikrofon izni alınamadı:", err);
-      alert("Sesle yazma için mikrofon izni gerekiyor. Lütfen tarayıcı ayarlarından bu sitenin mikrofona erişimine izin ver.");
       return;
     }
 

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import "./index.css";
 import SayfaYukleniyor from "./components/SayfaYukleniyor";
 import { AdminGuard, ModeratorGuard } from "./components/AdminGuard";
 import Layout from "./components/Layout";
