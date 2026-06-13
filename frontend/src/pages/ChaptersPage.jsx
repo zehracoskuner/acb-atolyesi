@@ -546,7 +546,7 @@ function ChapterItem({ chapter, index, isActive, onJump, onDelete, onDragStart, 
       <button className="cp-ch-btn" onClick={()=>onJump(chapter._id)}>
         <div className="cp-ch-eyebrow">bölüm {index+1}</div>
         <div className="cp-ch-name">{chapter.title||"Başlıksız"}</div>
-        <div className="cp-ch-meta">{chWc.toLocaleString("tr-TR")} kelime · {chapter.pages.length} sayfa · {readTime(chWc)}</div>
+        <div className="cp-ch-meta">{chWc.toLocaleString("tr-TR")} kelime · {readTime(chWc)}</div>
       </button>
       <div className="cp-ch-right">
         <span className={`cp-ch-dot ${dotClass}`}/>
@@ -603,6 +603,7 @@ export default function ChaptersPage() {
   const [wordGoal,    setWordGoal]    = useState(() => Number(localStorage.getItem("acb_word_goal")) || 0);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput,   setGoalInput]   = useState("");
+  const [streak,      setStreak]      = useState({ currentStreak: 0, longestStreak: 0 });
   const [dragFromIdx, setDragFromIdx] = useState(null);
   const [dragOverIdx, setDragOverIdx] = useState(null);
 
@@ -636,6 +637,10 @@ export default function ChaptersPage() {
   }, [workId]);
 
   useEffect(() => { fetchChapters(); }, [fetchChapters]);
+
+  useEffect(() => {
+    apiGet("/user/streak").then(setStreak).catch(() => {});
+  }, []);
 
 useEffect(() => {
   window.__acbTourTrigger = window.__acbTourTrigger || {};
@@ -796,6 +801,16 @@ useEffect(() => {
   const goalDone=wordGoal>0&&totalWc>=wordGoal;
   function saveGoal(){const v=parseInt(goalInput)||0;setWordGoal(v);localStorage.setItem("acb_word_goal",String(v));setEditingGoal(false);}
 
+  useEffect(() => {
+    if (!goalDone) return;
+    const todayKey = new Date().toISOString().slice(0,10);
+    if (localStorage.getItem("acb_streak_checkin_date") === todayKey) return;
+    apiPost("/user/streak/checkin").then(res => {
+      setStreak(res);
+      localStorage.setItem("acb_streak_checkin_date", todayKey);
+    }).catch(() => {});
+  }, [goalDone]);
+
   const publishBtnLabel=()=>{
     if(publishing)return"inceleniyor…";
     if(!activeChapter)return"yayınla";
@@ -868,6 +883,13 @@ useEffect(() => {
                     );
                   })}
                 </div></>
+              )}
+
+              {streak.currentStreak>0&&(
+                <div className="cp-streak" title={`En uzun seri: ${streak.longestStreak} gün`}>
+                  <span className="cp-streak-icon">🔥</span>
+                  <span className="cp-streak-text">{streak.currentStreak} günlük seri</span>
+                </div>
               )}
 
               <div className="cp-goal">

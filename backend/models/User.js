@@ -104,6 +104,11 @@ const userSchema = new mongoose.Schema(
 
     followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     following: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+
+    // ── Yazma serisi (streak) ────────────────────────────────
+    currentStreak: { type: Number, default: 0 },
+    longestStreak: { type: Number, default: 0 },
+    lastWriteDate: { type: Date, default: null },
   },
   { timestamps: true }
 );
@@ -122,6 +127,9 @@ userSchema.methods.toSafeJSON = function () {
     role:            this.role,
     commentBanned:   this.commentBanned,
     contentBanned:   this.contentBanned,
+    currentStreak:   this.currentStreak,
+    longestStreak:   this.longestStreak,
+    lastWriteDate:   this.lastWriteDate,
     createdAt:       this.createdAt,
   };
 };

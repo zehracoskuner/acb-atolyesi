@@ -284,6 +284,15 @@
 .cp-thumb-fill  { height: 100%; background: var(--amber); border-radius: 2px; transition: width .3s ease; }
 .cp-thumb-wc   { font-family: var(--mono); font-size: 10px; color: var(--ink-4); width: 28px; text-align: right; flex-shrink: 0; }
 
+/* Writing streak */
+.cp-streak {
+  margin-top: 16px; display: flex; align-items: center; gap: 6px;
+  padding: 7px 10px; background: var(--amber-bg);
+  border: 1px solid var(--cream-4); border-radius: 8px;
+}
+.cp-streak-icon { font-size: 13px; line-height: 1; }
+.cp-streak-text { font-family: var(--mono); font-size: 10.5px; color: var(--ink-2); letter-spacing: .02em; }
+
 /* Word goal */
 .cp-goal { margin-top: 16px; }
 .cp-goal-set-btn {

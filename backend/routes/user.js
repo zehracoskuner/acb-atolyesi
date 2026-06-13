@@ -6,6 +6,7 @@ import Work from "../models/Work.js";
 import ReadingList from "../models/ReadingList.js";
 import ensureAuth from "../middlewares/ensureAuth.js";
 import upload from "../config/cloudinary.js";
+import { updateWritingStreak } from "../utils/streak.js";
 
 const router = express.Router();
 
@@ -352,7 +353,46 @@ router.delete("/banner", async (req, res) => {
   }
 });
 
-/* ─── 12. Hesap Sil ─── */
+/* ─── 12. Yazma Serisi Bilgisi ─── */
+// GET /api/user/streak
+router.get("/streak", async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("currentStreak longestStreak lastWriteDate");
+    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+
+    res.json({
+      currentStreak: user.currentStreak || 0,
+      longestStreak: user.longestStreak || 0,
+      lastWriteDate: user.lastWriteDate,
+    });
+  } catch (err) {
+    console.error("Streak Getirme Hatası:", err);
+    res.status(500).json({ message: "Sunucu hatası." });
+  }
+});
+
+/* ─── 13. Yazma Serisi Check-in (günlük hedef tutturulduğunda) ─── */
+// POST /api/user/streak/checkin
+router.post("/streak/checkin", async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+
+    updateWritingStreak(user);
+    await user.save();
+
+    res.json({
+      currentStreak: user.currentStreak,
+      longestStreak: user.longestStreak,
+      lastWriteDate: user.lastWriteDate,
+    });
+  } catch (err) {
+    console.error("Streak Check-in Hatası:", err);
+    res.status(500).json({ message: "Sunucu hatası." });
+  }
+});
+
+/* ─── 14. Hesap Sil ─── */
 // DELETE /api/user/account
 router.delete("/account", async (req, res) => {
   try {
