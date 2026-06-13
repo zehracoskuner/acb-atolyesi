@@ -392,6 +392,18 @@ router.post("/streak/checkin", async (req, res) => {
   }
 });
 
+/* ─── 13b. Tanıtım Turu Tamamlandı ─── */
+// PATCH /api/user/tour-complete
+router.patch("/tour-complete", async (req, res) => {
+  try {
+    await User.updateOne({ _id: req.user.id }, { $set: { tourCompleted: true } });
+    res.json({ tourCompleted: true });
+  } catch (err) {
+    console.error("Tour Complete Hatası:", err);
+    res.status(500).json({ message: "Sunucu hatası." });
+  }
+});
+
 /* ─── 14. Hesap Sil ─── */
 // DELETE /api/user/account
 router.delete("/account", async (req, res) => {

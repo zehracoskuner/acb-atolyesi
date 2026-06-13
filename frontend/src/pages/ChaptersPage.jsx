@@ -604,12 +604,7 @@ export default function ChaptersPage() {
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput,   setGoalInput]   = useState("");
   const [streak,      setStreak]      = useState({ currentStreak: 0, longestStreak: 0 });
-  const [goalBaseline, setGoalBaseline] = useState(() => {
-    try {
-      const raw = localStorage.getItem("acb_word_goal_baseline");
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
-  });
+  const [goalBaseline, setGoalBaseline] = useState(null);
   const [dragFromIdx, setDragFromIdx] = useState(null);
   const [dragOverIdx, setDragOverIdx] = useState(null);
 
@@ -805,21 +800,30 @@ useEffect(() => {
   const totalWc=useMemo(()=>chapters.reduce((s,ch)=>s+ch.pages.reduce((ss,p)=>ss+wcFromHtml(p.content),0),0),[chapters]);
 
   // Günlük hedef "bugün yazılan kelime" üzerinden hesaplanır — gün başındaki
-  // toplam kelime sayısı referans alınır, geçmiş günlerin yazısı hedefi
-  // otomatik "tamam" göstermesin diye.
+  // toplam kelime sayısı bu esere özel referans alınır, geçmiş günlerin
+  // veya başka eserlerin yazısı hedefi otomatik "tamam" göstermesin diye.
   useEffect(() => {
     if (loading) return;
     const todayKey = new Date().toISOString().slice(0,10);
-    if (!goalBaseline || goalBaseline.date !== todayKey) {
-      const next = { date: todayKey, wc: totalWc };
-      localStorage.setItem("acb_word_goal_baseline", JSON.stringify(next));
-      setGoalBaseline(next);
+    const key = `acb_word_goal_baseline_${workId}`;
+    let baseline;
+    try {
+      const raw = localStorage.getItem(key);
+      baseline = raw ? JSON.parse(raw) : null;
+    } catch { baseline = null; }
+
+    if (!baseline || baseline.date !== todayKey) {
+      baseline = { date: todayKey, wc: totalWc };
+      localStorage.setItem(key, JSON.stringify(baseline));
     }
-  }, [loading, totalWc, goalBaseline]);
+
+    setGoalBaseline(prev =>
+      prev && prev.date === baseline.date && prev.wc === baseline.wc ? prev : baseline
+    );
+  }, [loading, totalWc, workId]);
 
   const todayWc = useMemo(() => {
-    const todayKey = new Date().toISOString().slice(0,10);
-    if (!goalBaseline || goalBaseline.date !== todayKey) return 0;
+    if (!goalBaseline) return 0;
     return Math.max(0, totalWc - goalBaseline.wc);
   }, [totalWc, goalBaseline]);
 

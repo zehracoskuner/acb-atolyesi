@@ -29,6 +29,9 @@ const userSchema = new mongoose.Schema(
 
     profileComplete: { type: Boolean, default: true },
 
+    // İlk giriş karşılama/tanıtım turu kullanıcıya gösterildi mi?
+    tourCompleted: { type: Boolean, default: false },
+
     googleId: { type: String, default: null, sparse: true },
 
     emailVerified:      { type: Boolean, default: false },
@@ -122,6 +125,7 @@ userSchema.methods.toSafeJSON = function () {
     avatarUrl:       this.avatarUrl,
     authProvider:    this.authProvider,
     profileComplete: this.profileComplete,
+    tourCompleted:   this.tourCompleted,
     experienceLevel: this.experienceLevel,
     settings:        this.settings,
     role:            this.role,

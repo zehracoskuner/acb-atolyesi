@@ -4,6 +4,7 @@ import { useNavigate, Link } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import { apiPatch, apiDelete } from "../lib/api";
+import { clearAuth } from "../lib/auth";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 
 function Msg({ msg }) {
@@ -179,7 +180,7 @@ function DangerSection({ s }) {
     setDeleting(true);
     try {
       await apiDelete("/user/account");
-      localStorage.removeItem("token"); localStorage.removeItem("user");
+      clearAuth();
       navigate("/login");
     } catch (e) { alert("Hesap silinemedi: " + e.message); }
     finally { setDeleting(false); }

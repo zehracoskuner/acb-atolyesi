@@ -17,6 +17,10 @@ export function getToken() {
 export function clearAuth() {
   localStorage.removeItem("token");
   localStorage.removeItem("user");
+  // Tur durumu hesaba özel değil — başka bir hesap aynı tarayıcıda
+  // tekrar giriş yaptığında tur tekrar gösterilebilsin.
+  localStorage.removeItem("acb_tour_done");
+  localStorage.removeItem("acb_tour_pending");
 }
 
 export function isLoggedIn() {

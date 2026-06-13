@@ -173,6 +173,7 @@ router.post("/login", async (req, res) => {
         emailVerified:   user.emailVerified,
         authProvider:    user.authProvider,
         profileComplete: user.profileComplete,
+        tourCompleted:   user.tourCompleted,
         role:            user.role,
       },
     });
@@ -219,6 +220,7 @@ router.post("/complete-profile", ensureAuth, async (req, res) => {
         emailVerified:   user.emailVerified,
         authProvider:    user.authProvider,
         profileComplete: user.profileComplete,
+        tourCompleted:   user.tourCompleted,
         role:            user.role,
       },
     });
@@ -401,6 +403,7 @@ router.get("/me", ensureAuth, async (req, res) => {
         emailVerified:   user.emailVerified,
         authProvider:    user.authProvider,
         profileComplete: user.profileComplete,
+        tourCompleted:   user.tourCompleted,
         role:            user.role,
       },
     });

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect, useCallback} from "react";
 import { createPortal } from "react-dom";
 import { apiGet, apiPatch, adminGet } from "../lib/api";
+import { clearAuth } from "../lib/auth";
 import "../styles/TopBar.css";
 import ManifestoModal from "./ManifestoModal";
 import { TourHelpButton } from "./tour/TourManager";
@@ -310,8 +311,7 @@ export default function TopBar() {
 
   const handleLogout = () => {
     if (window.confirm("Atölyeden ayrılmak istediğine emin misin?")) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
+      clearAuth();
       setOpen(false);
       navigate("/login");
     }

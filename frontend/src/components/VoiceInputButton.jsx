@@ -16,6 +16,7 @@ import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognitio
 export default function VoiceInputButton({ onResult, lang = "tr-TR", className = "" }) {
   const {
     transcript,
+    interimTranscript,
     listening,
     resetTranscript,
     browserSupportsSpeechRecognition,
@@ -35,6 +36,12 @@ export default function VoiceInputButton({ onResult, lang = "tr-TR", className =
       }
     }
   }, [transcript, listening, onResult]);
+
+  // Teşhis: tanıma motoru bir şey üretiyor mu, üretmiyor mu konsoldan görülebilsin.
+  useEffect(() => {
+    if (!listening) return;
+    console.log("[voice] interim:", interimTranscript, "| transcript:", transcript);
+  }, [interimTranscript, transcript, listening]);
 
   // Component unmount olursa (sayfa/drawer kapanması) dinlemeyi durdur.
   useEffect(() => {
@@ -96,26 +103,39 @@ export default function VoiceInputButton({ onResult, lang = "tr-TR", className =
   };
 
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      className={`voice-input-btn ${listening ? "is-listening" : ""} ${className}`}
-      title={listening ? "Dinlemeyi durdur" : "Sesle yaz"}
-      aria-label={listening ? "Dinlemeyi durdur" : "Sesle yaz"}
-      aria-pressed={listening}
-    >
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-        <path
-          fill="currentColor"
-          d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3z"
-        />
-        <path
-          fill="currentColor"
-          d="M19 11a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21H8a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-3.08A7 7 0 0 0 19 11z"
-        />
-      </svg>
+    <span className="voice-input-wrap">
+      <button
+        type="button"
+        onClick={toggle}
+        className={`voice-input-btn ${listening ? "is-listening" : ""} ${className}`}
+        title={listening ? "Dinlemeyi durdur" : "Sesle yaz"}
+        aria-label={listening ? "Dinlemeyi durdur" : "Sesle yaz"}
+        aria-pressed={listening}
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3z"
+          />
+          <path
+            fill="currentColor"
+            d="M19 11a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21H8a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-3.08A7 7 0 0 0 19 11z"
+          />
+        </svg>
+      </button>
+
+      {listening && (
+        <span className="voice-input-live">
+          {interimTranscript ? interimTranscript : "dinleniyor…"}
+        </span>
+      )}
 
       <style>{`
+        .voice-input-wrap {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+        }
         .voice-input-btn {
           display: inline-flex;
           align-items: center;
@@ -147,7 +167,24 @@ export default function VoiceInputButton({ onResult, lang = "tr-TR", className =
         @media (prefers-reduced-motion: reduce) {
           .voice-input-btn.is-listening { animation: none; }
         }
+        .voice-input-live {
+          position: absolute;
+          top: 100%;
+          right: 0;
+          margin-top: 6px;
+          max-width: 240px;
+          background: #1c1917;
+          color: #fff;
+          font-size: 0.75rem;
+          line-height: 1.4;
+          padding: 6px 10px;
+          border-radius: 6px;
+          white-space: normal;
+          z-index: 50;
+          opacity: 0.92;
+          pointer-events: none;
+        }
       `}</style>
-    </button>
+    </span>
   );
 }

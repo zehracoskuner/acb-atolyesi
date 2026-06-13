@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../lib/api";
+import { clearAuth } from "../lib/auth";
 import "../styles/ProfilePage.css";
 import LogTab from "../components/LogTab";
 import "../styles/LogTab.css";
@@ -960,8 +961,7 @@ export default function ProfilePage() {
   }, [profile]);
 
   function handleLogout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    clearAuth();
     window.location.href = "/login";
   }
 

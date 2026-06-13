@@ -28,6 +28,8 @@ async function handleAuthError() {
   // /me de 401 döndü → token gerçekten geçersiz, temizle
   localStorage.removeItem("token");
   localStorage.removeItem("user");
+  localStorage.removeItem("acb_tour_done");
+  localStorage.removeItem("acb_tour_pending");
   window.location.href = "/login";
 }
 

@@ -352,7 +352,8 @@ export default function Login() {
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@400;500;600&display=swap');
-        * { box-sizing: border-box; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body, #root { height: 100%; }
         input:focus {
           border-color: #8b2500 !important;
           box-shadow: 0 0 0 3px rgba(139,37,0,.08) !important;

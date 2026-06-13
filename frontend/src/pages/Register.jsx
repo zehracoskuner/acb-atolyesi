@@ -126,7 +126,6 @@ export default function Register() {
         <div style={s.leftInner}>
           <div style={s.brand}><span style={s.brandDot}/><span style={s.brandName}>ACB Atölyesi</span></div>
           <div style={s.leftContent}><div style={s.leftRule}/><p style={s.leftQuote}>"Her büyük hikâye,<br/>tek bir cümleyle başlar."</p><p style={s.leftAttr}>— Atölye ruhu</p></div>
-          <div style={s.leftFooter}><div style={s.avatarRow}>{["AY","MK","SE"].map((i,idx)=>(<div key={idx} style={{...s.avatar,marginLeft:idx===0?0:-8,background:["#c9b89a","#b4a48a","#a09070"][idx]}}>{i}</div>))}</div><span style={s.joinText}><strong>2.400+</strong> yazar atölyede</span></div>
         </div>
       </div>
       <div style={responsive.right}>
@@ -154,7 +153,6 @@ export default function Register() {
         <div style={s.leftInner}>
           <div style={s.brand}><span style={s.brandDot}/><span style={s.brandName}>ACB Atölyesi</span></div>
           <div style={s.leftContent}><div style={s.leftRule}/><p style={s.leftQuote}>"Her büyük hikâye,<br/>tek bir cümleyle başlar."</p><p style={s.leftAttr}>— Atölye ruhu</p></div>
-          <div style={s.leftFooter}><div style={s.avatarRow}>{["AY","MK","SE"].map((i,idx)=>(<div key={idx} style={{...s.avatar,marginLeft:idx===0?0:-8,background:["#c9b89a","#b4a48a","#a09070"][idx]}}>{i}</div>))}</div><span style={s.joinText}><strong>2.400+</strong> yazar atölyede</span></div>
         </div>
       </div>
 
@@ -223,7 +221,8 @@ export default function Register() {
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@400;500;600&display=swap');
-  * { box-sizing: border-box; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root { height: 100%; }
   input:focus { border-color: #8b2500 !important; box-shadow: 0 0 0 3px rgba(139,37,0,.08) !important; outline: none; }
 `;
 
@@ -236,10 +235,6 @@ const s = {
   leftRule:    { width:36, height:2, background:"#8b2500", marginBottom:"1.5rem" },
   leftQuote:   { fontFamily:"'Playfair Display',serif", fontStyle:"italic", fontSize:"1.55rem", color:"rgba(245,240,232,.9)", lineHeight:1.5, fontWeight:400, marginBottom:".75rem" },
   leftAttr:    { fontSize:".75rem", color:"rgba(245,240,232,.35)", letterSpacing:".06em" },
-  leftFooter:  { display:"flex", alignItems:"center", gap:".6rem" },
-  avatarRow:   { display:"flex" },
-  avatar:      { width:28, height:28, borderRadius:"50%", border:"2px solid #1a1209", display:"flex", alignItems:"center", justifyContent:"center", fontSize:".58rem", fontWeight:600, color:"#1a1209" },
-  joinText:    { fontSize:".75rem", color:"rgba(245,240,232,.4)" },
   mobileLogo:  { display:"none" },
   envCircle:   { width:56, height:56, borderRadius:"50%", border:"1.5px solid #e2ddd6", background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 1.25rem" },
   formTop:     { marginBottom:"2rem" },

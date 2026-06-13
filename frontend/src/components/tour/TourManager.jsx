@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import TourTooltip from "./TourTooltip";
+import { apiPatch } from "../../lib/api";
 import {
   TOUR_STEPS,
   WORK_TOUR_PAGES,
@@ -8,7 +9,6 @@ import {
   getTotalSteps,
 } from "./TourSteps";
 
-const TOUR_KEY         = "acb_tour_done";
 const TOUR_PENDING_KEY = "acb_tour_pending";
 
 const matchPage = (pathname) => {
@@ -134,7 +134,7 @@ function WelcomeModal({ onCreateWork, onExplore, loading }) {
   );
 }
 
-export const TourManager = ({ currentPath, firstWorkPath, hasWorks, onWorkCreated }) => {
+export const TourManager = ({ currentPath, firstWorkPath, hasWorks, tourCompleted, onTourSeen, onWorkCreated }) => {
   const navigate = useNavigate();
 
   const [tourType,    setTourType]    = useState(null);
@@ -164,16 +164,19 @@ export const TourManager = ({ currentPath, firstWorkPath, hasWorks, onWorkCreate
     return count;
   }, [currentPage, stepIndex, tourType]);
 
-  // ── İlk açılış: SADECE yeni üyeler ──────────────────────────────────────
+  // ── İlk açılış: SADECE ilk kez kayıt olan kullanıcılar ───────────────────
+  // Tek referans: kullanıcının hesabında tourCompleted=false olması
+  // (sunucu taraflı, hesaba bağlı — tarayıcı/cihazdan bağımsız).
   useEffect(() => {
-    if (startedRef.current)    return;
-    if (hasWorks === undefined) return;
-    if (localStorage.getItem(TOUR_KEY)) return;
+    if (startedRef.current)       return;
+    if (hasWorks === undefined)   return;
+    if (tourCompleted === undefined) return;
+    if (tourCompleted)            return;
     if (!localStorage.getItem("token")) return;
-    if (hasWorks !== false) return;
+    if (hasWorks !== false)       return;
     startedRef.current = true;
     setTimeout(() => setShowWelcome(true), 600);
-  }, [hasWorks]);
+  }, [hasWorks, tourCompleted]);
 
   // ── TOUR_PENDING ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -237,9 +240,10 @@ useEffect(() => {
     setIsActive(false);
     setReady(false);
     setTourType(null);
-    localStorage.setItem(TOUR_KEY, "true");
+    apiPatch("/user/tour-complete").catch(() => {});
+    onTourSeen?.();
     if (goToStudio) navigate("/studio");
-  }, [navigate]);
+  }, [navigate, onTourSeen]);
 
   // ── Sonraki sayfaya geç ──────────────────────────────────────────────────
   const goNextPage = useCallback(() => {
@@ -333,7 +337,6 @@ useEffect(() => {
   // ── Soru işareti ─────────────────────────────────────────────────────────
   useEffect(() => {
     window.__acbRestartTour = () => {
-      localStorage.removeItem(TOUR_KEY);
       startedRef.current = true;
       setReady(false);
       const wp = workPathRef.current;

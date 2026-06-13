@@ -7,6 +7,7 @@ const Layout = () => {
   const { pathname } = useLocation();
   const [firstWorkPath, setFirstWorkPath] = useState(null);
   const [hasWorks,      setHasWorks]      = useState(undefined);
+  const [tourCompleted, setTourCompleted] = useState(undefined);
   const loadedRef = useRef(false); // works en az bir kez başarıyla yüklendi mi
 
   const loadWorks = useCallback(async () => {
@@ -18,8 +19,11 @@ const Layout = () => {
       return;
     }
     try {
-      const data  = await apiGet("/works");
-      const items = data.items || [];
+      const [worksData, meData] = await Promise.all([
+        apiGet("/works"),
+        apiGet("/auth/me").catch(() => null),
+      ]);
+      const items = worksData.items || [];
       loadedRef.current = true;
       setHasWorks(items.length > 0);
       if (items.length > 0) {
@@ -27,6 +31,7 @@ const Layout = () => {
       } else {
         setFirstWorkPath(null);
       }
+      if (meData?.user) setTourCompleted(!!meData.user.tourCompleted);
     } catch {
       // API hatası — undefined bırak ki tur yanlış tetiklenmesin
       if (loadedRef.current) setHasWorks(false);
@@ -90,6 +95,8 @@ const Layout = () => {
         currentPath={pathname}
         firstWorkPath={firstWorkPath}
         hasWorks={hasWorks}
+        tourCompleted={tourCompleted}
+        onTourSeen={() => setTourCompleted(true)}
         onWorkCreated={(newPath) => {
           setFirstWorkPath(newPath);
           setHasWorks(true);
