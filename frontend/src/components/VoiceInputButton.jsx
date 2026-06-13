@@ -29,6 +29,16 @@ export default function VoiceInputButton({ onResult, lang = "tr-TR", className =
   // bu da kelimelerin ortasından bölünmesine yol açıyordu.
   const lastSentRef = useRef("");
 
+  // Mikrofon izni alındıktan sonra stream'i SpeechRecognition dinlerken
+  // canlı tutuyoruz; hemen stop() etmek prod'da SpeechRecognition'ın kendi
+  // ses yakalama oturumuyla yarışa girip anında "end"/error ile sonuçlanıyordu.
+  const streamRef = useRef(null);
+
+  function releaseStream() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }
+
   useEffect(() => {
     if (!listening) return;
     if (finalTranscript && finalTranscript !== lastSentRef.current) {
@@ -44,6 +54,7 @@ export default function VoiceInputButton({ onResult, lang = "tr-TR", className =
   useEffect(() => {
     return () => {
       SpeechRecognition.stopListening();
+      releaseStream();
     };
   }, []);
 
@@ -62,14 +73,17 @@ export default function VoiceInputButton({ onResult, lang = "tr-TR", className =
       if (e.error === "network") {
         alert("Sesle yazma için konuşma tanıma servisine erişilemiyor (ağ/internet hatası). Bağlantını kontrol edip tekrar dene.");
         SpeechRecognition.stopListening();
+        releaseStream();
       } else if (e.error === "language-not-supported") {
         alert("Türkçe (tr-TR) konuşma tanıma bu tarayıcıda desteklenmiyor.");
         SpeechRecognition.stopListening();
+        releaseStream();
       } else if (e.error === "no-speech") {
         console.warn("Ses algılanmadı.");
       } else if (e.error === "not-allowed" || e.error === "audio-capture") {
         alert("Sesle yazma için mikrofon izni gerekiyor. Lütfen tarayıcı ayarlarından bu sitenin mikrofona erişimine izin ver.");
         SpeechRecognition.stopListening();
+        releaseStream();
       }
     };
 
@@ -79,9 +93,22 @@ export default function VoiceInputButton({ onResult, lang = "tr-TR", className =
 
   if (!browserSupportsSpeechRecognition) return null;
 
-  const toggle = () => {
+  const toggle = async () => {
     if (listening) {
       SpeechRecognition.stopListening();
+      releaseStream();
+      return;
+    }
+
+    // İzni kendimiz isteyip stream'i dinleme bitene kadar açık tutuyoruz —
+    // SpeechRecognition.start() bazı tarayıcılarda izin istemini güvenilir
+    // tetiklemiyor; reddedilirse hatayı recognition'ın "error" event'inden
+    // (not-allowed) yakalıyoruz.
+    try {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      console.error("Mikrofon izni alınamadı:", err);
+      alert("Sesle yazma için mikrofon izni gerekiyor. Lütfen tarayıcı ayarlarından bu sitenin mikrofona erişimine izin ver.");
       return;
     }
 
