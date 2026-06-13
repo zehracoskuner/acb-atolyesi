@@ -89,18 +89,26 @@ const TourTooltip = ({ step, stepIndex, totalSteps, onNext, onPrev, onSkip, isLa
       {/* Tooltip */}
       <div
         ref={tooltipRef}
+        className="acb-tour-tooltip"
         style={{
           position: "fixed", top: pos.top, left: pos.left,
           width: 300, zIndex: 1000,
           background: "linear-gradient(160deg,#faf8f3 0%,#f5f0e8 100%)",
-          border: "1px solid #d4c9b0", borderRadius: "4px",
+          border: "2px solid #b8a47e", borderRadius: "6px",
           padding: "1.2rem 1.4rem 1rem",
-          boxShadow: "0 8px 32px rgba(80,60,30,0.2)",
+          boxShadow: "0 10px 36px rgba(80,60,30,0.32), 0 0 0 1px rgba(80,60,30,0.05)",
           opacity: visible ? 1 : 0,
           transform: visible ? "translateY(0)" : "translateY(8px)",
           transition: "opacity 0.3s ease, transform 0.3s ease",
         }}
       >
+        {/* Üst aksan çizgisi */}
+        <div style={{
+          position:"absolute", top:"-2px", left:"-2px", right:"-2px", height:"4px",
+          background:"linear-gradient(90deg,#8b2500,#c44a00,#8b2500)",
+          borderRadius:"6px 6px 0 0",
+        }} />
+
         {/* Ok */}
         <div style={{ position:"absolute", width:0, height:0, ...arrowStyles[pos.arrowSide] }} />
 

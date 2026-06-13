@@ -10,6 +10,7 @@ import {
 } from "./TourSteps";
 
 const TOUR_PENDING_KEY = "acb_tour_pending";
+const TOUR_PROMPT_SEEN_KEY = "acb_tour_prompt_seen";
 
 const matchPage = (pathname) => {
   const p = decodeURIComponent(pathname);
@@ -134,6 +135,49 @@ function WelcomeModal({ onCreateWork, onExplore, loading }) {
   );
 }
 
+function ProjectToolsPromptModal({ onStart, onSkip }) {
+  return (
+    <div style={{
+      position:"fixed", inset:0, zIndex:1100,
+      background:"rgba(45,35,25,0.5)", backdropFilter:"blur(4px)",
+      display:"flex", alignItems:"center", justifyContent:"center", padding:"1.5rem",
+    }}>
+      <div style={{
+        background:"linear-gradient(160deg,#faf8f3,#f5f0e8)",
+        border:"1px solid #d4c9b0", borderRadius:"4px",
+        maxWidth:"480px", width:"100%", padding:"2.5rem 3rem",
+        boxShadow:"0 8px 40px rgba(80,60,30,0.2)",
+        animation:"acbWelcomeUp 0.35s ease",
+      }}>
+        <style>{`@keyframes acbWelcomeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}`}</style>
+        <div style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:"0.65rem", letterSpacing:"0.25em", color:"#9a8c78", textTransform:"uppercase", marginBottom:"1.2rem" }}>
+          ACB Atölyesi · Sıradaki Adım
+        </div>
+        <h2 style={{ fontFamily:"'Cormorant Garamond','DM Serif Display',Georgia,serif", fontSize:"1.6rem", fontWeight:600, color:"#3d3122", marginBottom:"1rem", lineHeight:1.3 }}>
+          İlk hikâyeni oluşturmaya hazır mısın?
+        </h2>
+        <p style={{ fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:"1rem", lineHeight:1.8, color:"#5c4e3a", marginBottom:"2rem" }}>
+          Şimdi ilk eserini nereden oluşturacağını ve Eser Merkezi, Karakter Evreni, bölüm yazma alanı gibi proje araçlarını tanıyabilirsin.
+        </p>
+        <div style={{ display:"flex", gap:"0.75rem", flexWrap:"wrap" }}>
+          <button onClick={onStart} style={{
+            fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:"0.82rem",
+            letterSpacing:"0.12em", textTransform:"uppercase", color:"#f5f0e8",
+            background:"linear-gradient(135deg,#7a6545,#5c4a2a)",
+            border:"none", borderRadius:"2px", padding:"0.75rem 1.8rem",
+            cursor:"pointer",
+          }}>Proje araçlarını tanıt</button>
+          <button onClick={onSkip} style={{
+            fontFamily:"'Cormorant Garamond',Georgia,serif", fontSize:"0.82rem", color:"#7a6545",
+            background:"transparent", border:"1px solid #c8b99a", borderRadius:"2px",
+            padding:"0.75rem 1.5rem", cursor:"pointer",
+          }}>Şimdilik geç</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const TourManager = ({ currentPath, firstWorkPath, hasWorks, tourCompleted, onTourSeen, onWorkCreated }) => {
   const navigate = useNavigate();
 
@@ -143,6 +187,7 @@ export const TourManager = ({ currentPath, firstWorkPath, hasWorks, tourComplete
   const [stepIndex,   setStepIndex]   = useState(0);
   const [ready,       setReady]       = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showTransition, setShowTransition] = useState(false);
   const [loading,     setLoading]     = useState(false);
 
   const startedRef  = useRef(false);
@@ -193,15 +238,19 @@ export const TourManager = ({ currentPath, firstWorkPath, hasWorks, tourComplete
   }, [firstWorkPath, navigate]);
 
   // ── Sayfa URL değişince currentPage güncelle ─────────────────────────────
+  // Not: navigate() çağrısı henüz tamamlanmadan bu efekt eski currentPath ile
+  // tetiklenebilir. Eşleşen sayfa aktif turun sayfa listesinde değilse (örn.
+  // work turu /work/x'e geçerken hâlâ /keşfet'teyse) currentPage'i ezme.
   useEffect(() => {
     if (!isActive) return;
-    const page = matchPage(currentPath);
-    if (page && page !== currentPage) {
+    const page  = matchPage(currentPath);
+    const pages = tourType === "explore" ? EXPLORE_TOUR_PAGES : WORK_TOUR_PAGES;
+    if (page && pages.includes(page) && page !== currentPage) {
       setCurrentPage(page);
       setStepIndex(0);
       setReady(false);
     }
-  }, [currentPath, isActive, currentPage]);
+  }, [currentPath, isActive, currentPage, tourType]);
 
   // ── Element bekle ─────────────────────────────────────────────────────────
 useEffect(() => {
@@ -242,7 +291,14 @@ useEffect(() => {
     setTourType(null);
     apiPatch("/user/tour-complete").catch(() => {});
     onTourSeen?.();
-    if (goToStudio) navigate("/studio");
+    if (goToStudio) {
+      // Keşfet turu bitti — proje araçları turuna geçiş teklif edilmediyse göster
+      if (!localStorage.getItem(TOUR_PROMPT_SEEN_KEY)) {
+        setShowTransition(true);
+      } else {
+        navigate("/studio");
+      }
+    }
   }, [navigate, onTourSeen]);
 
   // ── Sonraki sayfaya geç ──────────────────────────────────────────────────
@@ -334,6 +390,23 @@ useEffect(() => {
     startExploreTour();
   }, [startExploreTour]);
 
+  // ── Geçiş modalı aksiyonları ─────────────────────────────────────────────
+  const handleTransitionSkip = useCallback(() => {
+    localStorage.setItem(TOUR_PROMPT_SEEN_KEY, "1");
+    setShowTransition(false);
+    navigate("/studio");
+  }, [navigate]);
+
+  const handleTransitionStart = useCallback(() => {
+    localStorage.setItem(TOUR_PROMPT_SEEN_KEY, "1");
+    setShowTransition(false);
+    if (workPathRef.current) {
+      startWorkTour(workPathRef.current);
+    } else {
+      handleCreateWork();
+    }
+  }, [startWorkTour, handleCreateWork]);
+
   // ── Soru işareti ─────────────────────────────────────────────────────────
   useEffect(() => {
     window.__acbRestartTour = () => {
@@ -357,6 +430,9 @@ useEffect(() => {
       {showWelcome && (
         <WelcomeModal onCreateWork={handleCreateWork} onExplore={handleExplore} loading={loading} />
       )}
+      {showTransition && (
+        <ProjectToolsPromptModal onStart={handleTransitionStart} onSkip={handleTransitionSkip} />
+      )}
       {isActive && step && ready && (
         <TourTooltip
           step={step}
@@ -376,19 +452,22 @@ export const TourHelpButton = () => {
   const [hovered, setHovered] = useState(false);
   return (
     <button
+      className="acb-tour-help-btn"
       onClick={() => window.__acbRestartTour?.()}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       title="Tanıtım turunu başlat"
+      aria-label="Tanıtım turunu başlat"
       style={{
-        background: hovered ? "#ede8dc" : "transparent",
-        border: `1px solid ${hovered ? "#c8b99a" : "transparent"}`,
-        borderRadius:"50%", width:"30px", height:"30px",
+        background: hovered ? "#e7dfca" : "#f3ece0",
+        border: `1px solid ${hovered ? "#8a7455" : "#c8b99a"}`,
+        borderRadius:"50%", width:"32px", height:"32px",
         cursor:"pointer", display:"flex", alignItems:"center",
         justifyContent:"center", transition:"all 0.2s ease", flexShrink:0,
+        boxShadow: hovered ? "0 2px 8px rgba(122,101,69,0.35)" : "0 1px 5px rgba(122,101,69,0.22)",
       }}
     >
-      <span style={{ fontFamily:"Georgia,serif", fontSize:"0.8rem", color: hovered ? "#5c4a2a" : "#9a8c78", lineHeight:1, transition:"color 0.2s ease" }}>?</span>
+      <span style={{ fontFamily:"Georgia,serif", fontWeight:700, fontSize:"0.85rem", color: hovered ? "#5c4a2a" : "#7a6545", lineHeight:1, transition:"color 0.2s ease" }}>?</span>
     </button>
   );
 };

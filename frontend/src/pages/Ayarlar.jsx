@@ -127,8 +127,17 @@ function PasswordSection({ s }) {
 /* ── E-posta Güncelle ── */
 function EmailSection({ s }) {
   const [email, setEmail]   = useState("");
+  const [cur,    setCur]    = useState("");
   const [saving, setSave]   = useState(false);
   const [msg, setMsg]       = useState(null);
+
+  // Şifresi olan hesaplarda mevcut şifre zorunlu (Google-only kullanıcılarda değil)
+  const needsPassword = (() => {
+    try {
+      const u = JSON.parse(localStorage.getItem("user") || "{}");
+      return u.authProvider !== "google";
+    } catch { return true; }
+  })();
 
   useEffect(() => {
     try { const u = JSON.parse(localStorage.getItem("user")); if (u?.email) setEmail(u.email); } catch {}
@@ -136,10 +145,12 @@ function EmailSection({ s }) {
 
   async function handle() {
     if (!email.includes("@")) { setMsg({ ok: false, text: "Geçerli bir e-posta girin." }); return; }
+    if (needsPassword && !cur) { setMsg({ ok: false, text: "Mevcut şifrenizi girin." }); return; }
     setSave(true); setMsg(null);
     try {
-      await apiPatch("/user/change-email", { email });
-      setMsg({ ok: true, text: "E-posta güncellendi. Doğrulama bağlantısı gönderildi." });
+      await apiPatch("/user/change-email", { newEmail: email, currentPassword: cur });
+      setMsg({ ok: true, text: "E-posta adresi güncellendi." });
+      setCur("");
       const stored = localStorage.getItem("user");
       if (stored) localStorage.setItem("user", JSON.stringify({ ...JSON.parse(stored), email }));
     } catch (e) { setMsg({ ok: false, text: e.message }); }
@@ -153,11 +164,16 @@ function EmailSection({ s }) {
         <span style={s.secTitle}>E-posta Adresi</span>
       </div>
       <div style={s.secBody}>
-        <div style={{ ...s.group, marginBottom: 0 }}>
+        <div style={s.group}>
           <label style={s.label}>E-posta</label>
           <input style={s.input} type="email" placeholder="yazar@ornek.com" value={email} onChange={e => setEmail(e.target.value)} />
-          <p style={s.hint}>Değiştirilirse yeni adrese doğrulama bağlantısı gönderilir.</p>
         </div>
+        {needsPassword && (
+          <div style={{ ...s.group, marginBottom: 0 }}>
+            <label style={s.label}>Mevcut Şifre</label>
+            <input type="password" style={s.input} placeholder="••••••••" value={cur} onChange={e => setCur(e.target.value)} />
+          </div>
+        )}
         <div style={{ ...s.row, marginTop: 12 }}>
           <button style={{ ...s.btnPri, opacity: saving ? .6 : 1 }} onClick={handle} disabled={saving}>
             {saving ? "Güncelleniyor…" : "E-postayı Güncelle"}

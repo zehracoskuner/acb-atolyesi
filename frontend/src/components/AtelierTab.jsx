@@ -4,6 +4,7 @@ import { useAICoach } from "../hooks/useAICoach";
 import { CONSTRAINT_CATEGORIES, ALL_CONSTRAINTS, constraintForSkill } from "../data/writingConstraints";
 import { getSkillScores, getTrajectory, skillLabel } from "../lib/pusula";
 import { analyzeWords, analyzePhrases, setPref, getPref } from "../lib/kelimeCantasi";
+import "../styles/AtelierTab.css";
 
 /* ── SABİTLER ── */
 const ATELIER_TABS = { ILHAM: "ilham", SOHBET: "sohbet", YORUM: "yorum", KOC: "koc" };

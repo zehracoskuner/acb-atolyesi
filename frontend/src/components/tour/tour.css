@@ -1,0 +1,28 @@
+/* ── Tur sırasında öne çıkan elemanın vurgulanması ───────────────────────── */
+/* Vurgu rengi: topbar logosundaki "ACB-Atölyesi" yazısının (--ink: #1a1209)
+   tonuyla uyumlu, koyu yeşil bir aksan. */
+[data-tour-active="true"] {
+  position: relative;
+  z-index: 999;
+  outline: 3px solid rgba(88, 224, 43, 0.5);
+  outline-offset: 3px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 6px rgba(34, 64, 24, 0.14), 0 4px 18px rgba(20, 40, 14, 0.3);
+  transition: outline-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* ── Mobil: tooltip ekrana sığsın ─────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .acb-tour-tooltip {
+    width: calc(100vw - 24px) !important;
+    left: 12px !important;
+  }
+}
+
+/* ── Soru işareti butonu: dokunmatik alanı büyüt ──────────────────────────── */
+@media (max-width: 480px) {
+  .acb-tour-help-btn {
+    width: 36px !important;
+    height: 36px !important;
+  }
+}
