@@ -43,6 +43,33 @@ export default function VoiceInputButton({ onResult, lang = "tr-TR", className =
     };
   }, []);
 
+  // react-speech-recognition "error" event'ini (network, no-speech,
+  // language-not-supported vb.) tamamen yutuyor — continuous modda
+  // "network" hatası alınca sessizce sürekli yeniden başlıyor ("dinliyor"
+  // görünür ama hiç transcript gelmez). Native event'i kendimiz dinleyip
+  // kullanıcıya görünür hale getiriyoruz.
+  useEffect(() => {
+    if (!browserSupportsSpeechRecognition) return;
+    const recognition = SpeechRecognition.getRecognition();
+    if (!recognition) return;
+
+    const handleError = (e) => {
+      console.error("Konuşma tanıma hatası:", e.error, e.message);
+      if (e.error === "network") {
+        alert("Sesle yazma için konuşma tanıma servisine erişilemiyor (ağ/internet hatası). Bağlantını kontrol edip tekrar dene.");
+        SpeechRecognition.stopListening();
+      } else if (e.error === "language-not-supported") {
+        alert("Türkçe (tr-TR) konuşma tanıma bu tarayıcıda desteklenmiyor.");
+        SpeechRecognition.stopListening();
+      } else if (e.error === "no-speech") {
+        console.warn("Ses algılanmadı.");
+      }
+    };
+
+    recognition.addEventListener("error", handleError);
+    return () => recognition.removeEventListener("error", handleError);
+  }, [browserSupportsSpeechRecognition]);
+
   if (!browserSupportsSpeechRecognition) return null;
 
   const toggle = async () => {

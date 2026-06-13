@@ -308,7 +308,7 @@ export default function WorkStudioPage() {
                 onClick={() => setShowEditModal(true)}
                 data-tour="atolyem-duzenle-btn"
               >
-                ✎ Düzenle & Yayınla
+                ✎ Düzenle & Yayın Ayarları
               </button>
             </div>
           </div>

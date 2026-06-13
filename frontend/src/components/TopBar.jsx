@@ -359,6 +359,14 @@ export default function TopBar() {
           <div className="nav-right">
             <TourHelpButton />
 
+            <button
+              className={`icon-btn ${isActive("/notes") ? "active" : ""}`}
+              onClick={() => navigate("/notes")}
+              title="Notlarım"
+            >
+              <IconDoc />
+            </button>
+
             <div ref={notifRef} style={{ position: "relative" }}>
               <button className={`icon-btn ${notifOpen ? "active" : ""}`} onClick={handleNotifOpen} title="Bildirimler">
                 <IconBell />

@@ -604,6 +604,12 @@ export default function ChaptersPage() {
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput,   setGoalInput]   = useState("");
   const [streak,      setStreak]      = useState({ currentStreak: 0, longestStreak: 0 });
+  const [goalBaseline, setGoalBaseline] = useState(() => {
+    try {
+      const raw = localStorage.getItem("acb_word_goal_baseline");
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
   const [dragFromIdx, setDragFromIdx] = useState(null);
   const [dragOverIdx, setDragOverIdx] = useState(null);
 
@@ -797,8 +803,28 @@ useEffect(() => {
   chapters.forEach(ch=>ch.pages.forEach(pg=>{gCounter++;gMap[pg.id]=gCounter;}));
   const totalPages=gCounter, currentPage=gMap[activePageId]||1;
   const totalWc=useMemo(()=>chapters.reduce((s,ch)=>s+ch.pages.reduce((ss,p)=>ss+wcFromHtml(p.content),0),0),[chapters]);
-  const goalPct=wordGoal>0?Math.min(100,Math.round((totalWc/wordGoal)*100)):0;
-  const goalDone=wordGoal>0&&totalWc>=wordGoal;
+
+  // Günlük hedef "bugün yazılan kelime" üzerinden hesaplanır — gün başındaki
+  // toplam kelime sayısı referans alınır, geçmiş günlerin yazısı hedefi
+  // otomatik "tamam" göstermesin diye.
+  useEffect(() => {
+    if (loading) return;
+    const todayKey = new Date().toISOString().slice(0,10);
+    if (!goalBaseline || goalBaseline.date !== todayKey) {
+      const next = { date: todayKey, wc: totalWc };
+      localStorage.setItem("acb_word_goal_baseline", JSON.stringify(next));
+      setGoalBaseline(next);
+    }
+  }, [loading, totalWc, goalBaseline]);
+
+  const todayWc = useMemo(() => {
+    const todayKey = new Date().toISOString().slice(0,10);
+    if (!goalBaseline || goalBaseline.date !== todayKey) return 0;
+    return Math.max(0, totalWc - goalBaseline.wc);
+  }, [totalWc, goalBaseline]);
+
+  const goalPct=wordGoal>0?Math.min(100,Math.round((todayWc/wordGoal)*100)):0;
+  const goalDone=wordGoal>0&&todayWc>=wordGoal;
   function saveGoal(){const v=parseInt(goalInput)||0;setWordGoal(v);localStorage.setItem("acb_word_goal",String(v));setEditingGoal(false);}
 
   useEffect(() => {
