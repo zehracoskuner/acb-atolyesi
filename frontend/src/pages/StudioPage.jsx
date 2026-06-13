@@ -1,20 +1,17 @@
 // src/pages/StudioHub.jsx
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
-import { apiGet, apiDelete, apiPost } from "../lib/api";
+import { apiGet, apiDelete } from "../lib/api";
 import CreateWorkModal from "../components/CreateWorkModal";
 import EditWorkModal from "../components/EditWorkModal";
 import "../styles/StudioHub.css";
-
-const STUDIO_TABS = { WORKS: "works", ATELIER: "atelier" };
 
 // Eser ID'sini güvenle al — backend bazen _id, bazen id döner
 const getId = (w) => w?._id || w?.id;
 
 export default function StudioHub() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState(STUDIO_TABS.WORKS);
   const [works,   setWorks]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState("");
@@ -25,13 +22,6 @@ export default function StudioHub() {
   /* EditWorkModal */
   const [isEditOpen,  setIsEditOpen]  = useState(false);
   const [editingWork, setEditingWork] = useState(null);
-
-  /* Atölye */
-  const [atelierTitle,   setAtelierTitle]   = useState("");
-  const [atelierContent, setAtelierContent] = useState("");
-  const [atelierSaving,  setAtelierSaving]  = useState(false);
-  const [atelierSaveMsg, setAtelierSaveMsg] = useState("");
-  const [atelierWorkId,  setAtelierWorkId]  = useState("");
 
   /* ── Eserleri yükle ── */
   useEffect(() => {
@@ -90,33 +80,6 @@ export default function StudioHub() {
     setEditingWork(null);
   };
 
-  /* ── Atölye: not kaydet ── */
-  const saveAtelierNote = useCallback(async () => {
-    if (!atelierTitle.trim() && !atelierContent.trim()) {
-      setAtelierSaveMsg("Boş not kaydetmiyor.");
-      setTimeout(() => setAtelierSaveMsg(""), 2000);
-      return;
-    }
-    setAtelierSaving(true);
-    try {
-      await apiPost("/notes", {
-        title:   atelierTitle || "Atölye Notu",
-        content: atelierContent,
-        ...(atelierWorkId ? { workId: atelierWorkId } : {}),
-      });
-      setAtelierSaveMsg("Kaydedildi ✓");
-      setAtelierTitle("");
-      setAtelierContent("");
-      setAtelierWorkId("");
-      setTimeout(() => setAtelierSaveMsg(""), 2000);
-    } catch {
-      setAtelierSaveMsg("Kaydedilemedi.");
-      setTimeout(() => setAtelierSaveMsg(""), 2000);
-    } finally {
-      setAtelierSaving(false);
-    }
-  }, [atelierTitle, atelierContent, atelierWorkId]);
-
   /* ── Loading ── */
   if (loading) return (
     <div className="studio-splash">
@@ -131,29 +94,7 @@ export default function StudioHub() {
 
       <main className="studio-main">
 
-        {/* ── Sekmeler ── */}
-        <div className="studio-tabs-wrap">
-          <div className="studio-tabs">
-            <button
-              className={`studio-tab ${activeTab === STUDIO_TABS.WORKS ? "active" : ""}`}
-              onClick={() => setActiveTab(STUDIO_TABS.WORKS)}
-            >
-              📖 Çalışmalarım
-            </button>
-            <button
-              className={`studio-tab ${activeTab === STUDIO_TABS.ATELIER ? "active" : ""}`}
-              onClick={() => setActiveTab(STUDIO_TABS.ATELIER)}
-            >
-              ✍️ Atölye
-            </button>
-          </div>
-        </div>
-
-        {/* ════════════════════════
-            TAB 1: ÇALIŞMALARIM
-        ════════════════════════ */}
-        {activeTab === STUDIO_TABS.WORKS && (
-          <div className="studio-tab-content">
+        <div className="studio-tab-content">
             <div className="studio-header">
               <h2>Çalışmalarım</h2>
               <button
@@ -228,107 +169,7 @@ export default function StudioHub() {
                 })}
               </div>
             )}
-          </div>
-        )}
-
-        {/* ════════════════════════
-            TAB 2: ATÖLYE
-        ════════════════════════ */}
-        {activeTab === STUDIO_TABS.ATELIER && (
-          <div className="studio-tab-content">
-            <div className="studio-atelier-wrap">
-
-              {/* Sol: Editör */}
-              <div className="atelier-editor-side">
-                <div className="atelier-editor-top">
-                  <input
-                    className="atelier-title"
-                    placeholder="Not başlığı (isteğe bağlı)…"
-                    value={atelierTitle}
-                    onChange={(e) => setAtelierTitle(e.target.value)}
-                  />
-                </div>
-
-                <textarea
-                  className="atelier-textarea"
-                  placeholder="Fikirlerini buraya dök. Hiçbir çalışmaya bağlanma zorunluluğu yok."
-                  value={atelierContent}
-                  onChange={(e) => setAtelierContent(e.target.value)}
-                />
-
-                <div className="atelier-footer">
-                  <div className="atelier-save-status">
-                    {atelierSaveMsg && (
-                      <span className={atelierSaveMsg.includes("✓") ? "saved" : "error"}>
-                        {atelierSaveMsg}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    className="atelier-btn-save"
-                    onClick={saveAtelierNote}
-                    disabled={atelierSaving}
-                  >
-                    {atelierSaving ? "Kaydediliyor…" : "💾 Nota Kaydet"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Sağ: Sidebar */}
-              <aside className="atelier-sidebar">
-                <div className="atelier-sidebar-head">
-                  <h3>🎯 İpuçları</h3>
-                </div>
-
-                <div className="atelier-tips">
-                  <div className="tip-item">
-                    <strong>Başla</strong>
-                    <p>Hiçbir şeyi tam yapmaya çalışma. Boş bir sayfaya yapışkan notlar gibi yazıyorsun.</p>
-                  </div>
-                  <div className="tip-item">
-                    <strong>Bağla</strong>
-                    <p>Sonra isterseniz bu notu bir esere bağlayabilirsiniz — Notlarım sayfasından.</p>
-                  </div>
-                  <div className="tip-item">
-                    <strong>Özgürce</strong>
-                    <p>Bölüm, başlık, bölüm sayısı — hiçbir şey önemli değil. Sadece yaz.</p>
-                  </div>
-                </div>
-
-                <div className="atelier-link-work">
-                  <label className="atelier-link-label">
-                    Bir esere bağlamak ister misin?
-                  </label>
-                  <select
-                    className="atelier-link-select"
-                    value={atelierWorkId}
-                    onChange={(e) => setAtelierWorkId(e.target.value)}
-                  >
-                    <option value="">— Serbest not —</option>
-                    {works.map((w) => (
-                      <option key={getId(w)} value={getId(w)}>{w.title}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="atelier-sidebar-divider" />
-
-                <div className="atelier-sidebar-extra">
-                  <p className="atelier-muted">
-                    Atölye, yazarın karalama defteridir. Hiçbir kuralı yok. Sadece yaz.
-                  </p>
-                  <button
-                    className="atelier-btn-notlar"
-                    onClick={() => navigate("/notes")}
-                  >
-                    → Tüm Notları Gör
-                  </button>
-                </div>
-              </aside>
-
-            </div>
-          </div>
-        )}
+        </div>
 
       </main>
 

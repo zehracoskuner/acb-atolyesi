@@ -15,33 +15,30 @@ import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognitio
  */
 export default function VoiceInputButton({ onResult, lang = "tr-TR", className = "" }) {
   const {
-    transcript,
     interimTranscript,
+    finalTranscript,
     listening,
     resetTranscript,
     browserSupportsSpeechRecognition,
   } = useSpeechRecognition();
 
-  // Parent'a en son gönderdiğimiz transcript uzunluğunu takip et ki
+  // Parent'a en son gönderdiğimiz finalTranscript uzunluğunu takip et ki
   // continuous modda büyüyen transcript'i tekrar tekrar göndermeyelim.
+  // Sadece finalTranscript kullanılıyor: interimTranscript tanıma motoru
+  // tarafından geriye dönük revize edilebiliyor (örn. "sahn" -> "sahnede"),
+  // bu da kelimelerin ortasından bölünmesine yol açıyordu.
   const lastSentRef = useRef("");
 
   useEffect(() => {
     if (!listening) return;
-    if (transcript && transcript !== lastSentRef.current) {
-      const delta = transcript.slice(lastSentRef.current.length);
+    if (finalTranscript && finalTranscript !== lastSentRef.current) {
+      const delta = finalTranscript.slice(lastSentRef.current.length);
       if (delta.trim()) {
         onResult?.(delta.trim());
-        lastSentRef.current = transcript;
+        lastSentRef.current = finalTranscript;
       }
     }
-  }, [transcript, listening, onResult]);
-
-  // Teşhis: tanıma motoru bir şey üretiyor mu, üretmiyor mu konsoldan görülebilsin.
-  useEffect(() => {
-    if (!listening) return;
-    console.log("[voice] interim:", interimTranscript, "| transcript:", transcript);
-  }, [interimTranscript, transcript, listening]);
+  }, [finalTranscript, listening, onResult]);
 
   // Component unmount olursa (sayfa/drawer kapanması) dinlemeyi durdur.
   useEffect(() => {
