@@ -7,6 +7,7 @@ import { VOLUME_META, CHAR_PALETTE } from "./constants";
 
 export default function SceneModal({
   initial,
+  isEdit = false,
   defaultAct,
   onSave,
   onClose,
@@ -15,7 +16,6 @@ export default function SceneModal({
   actOrder   = [],
   actMeta    = {},
 }) {
-  const isEdit = !!initial;
 
   const resolvedAct = initial?.raw?.act || defaultAct || actOrder[0] || "";
 
@@ -94,15 +94,10 @@ export default function SceneModal({
             />
           </div>
 
-          {/* Perde seçimi — sadece yeni sahnede */}
+          {/* Perde seçimi */}
 {actOrder.length > 0 && (
   <div className="wm-field">
-    <label className="wm-label">
-      Perde
-      {isEdit && (
-        <span className="wm-label-hint"> — sahneyi sürükleyerek değiştir</span>
-      )}
-    </label>
+    <label className="wm-label">Perde</label>
     <div className="wm-act-btns" role="group" aria-label="Perde seç">
       {actOrder.map(k => {
         const v      = getActMeta(k);
@@ -117,10 +112,8 @@ export default function SceneModal({
               color:       v.color,
               background:  v.color + "0f",
             } : {}}
-            onClick={() => !isEdit && set("act", k)}
-            disabled={isEdit}
+            onClick={() => set("act", k)}
             aria-pressed={active}
-            aria-disabled={isEdit}
           >
             {v.roman ? `${v.roman}. ` : ""}{v.label}
           </button>

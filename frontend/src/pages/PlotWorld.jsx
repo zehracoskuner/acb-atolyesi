@@ -16,7 +16,7 @@ import {
 } from "../components/plotworld/constants";
 import {
   layoutScenes, buildEdges,
-  detectDroppedAct, resolveCharIds, resolveCharNames,
+  resolveCharIds, resolveCharNames,
 } from "../components/plotworld/utils";
 import SceneNode           from "../components/plotworld/SceneNode";
 import DetailPanel         from "../components/plotworld/DetailPanel";
@@ -553,33 +553,15 @@ const onNodeClick = useCallback((_, node) => {
   const onNodeDragStop = useCallback(async (_, node) => {
     if (node.type !== "sceneNode") return;
 
-    const droppedAct = detectDroppedAct(node.position, actOrder);
-    const actChanged = droppedAct && droppedAct !== node.data.act;
-
-    // Optimistic update
-    if (actChanged) {
-      setNodes(prev => prev.map(n =>
-        n.id === node.id ? { ...n, data: { ...n.data, act: droppedAct } } : n
-      ));
-    }
-
+    // Perde ARTIK konumdan türetilmiyor — sürükleme yalnızca pozisyonu kaydeder.
     try {
       await apiPatch(`/plots/${workId}/scenes/${node.id}`, {
         position: { x: Math.round(node.position.x), y: Math.round(node.position.y) },
-        ...(actChanged ? { act: droppedAct } : {}),
       });
     } catch {
-      // Pozisyon kaydedilemedi — sessizce devam et (kritik değil)
       console.warn("Pozisyon kaydedilemedi:", node.id);
-      if (actChanged) {
-        // Perde değişimini geri al
-        setNodes(prev => prev.map(n =>
-          n.id === node.id ? { ...n, data: { ...n.data, act: node.data.act } } : n
-        ));
-        toast("Perde değişikliği kaydedilemedi.", "error");
-      }
     }
-  }, [workId, actOrder, toast]);
+  }, [workId]);
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
@@ -691,6 +673,7 @@ const onNodeClick = useCallback((_, node) => {
         description:   formData.description   || "",
         status:        formData.status,
         characters:    formData.charIds,
+        act:           formData.act,
       });
 
       const rawChars    = res.scene.characters || [];
@@ -709,6 +692,8 @@ const onNodeClick = useCallback((_, node) => {
           : (formData.charIds || []).map(id => characterMap[id]?.name).filter(Boolean),
         status:  res.scene.status,
         desc:    res.scene.description || "",
+        act:     res.scene.act,
+        actColor: actMeta[res.scene.act]?.color || "#888",
         raw:     res.scene,
       };
 
@@ -1359,6 +1344,7 @@ const onNodeClick = useCallback((_, node) => {
       {modal && (modal.mode === "add" || modal.mode === "edit") && (
         <SceneModal
           initial={modal.mode === "edit" ? modal.node?.data : modal.prefill || null}
+          isEdit={modal.mode === "edit"}
           defaultAct={modal.act || actOrder[0]}
           actOrder={actOrder}
           actMeta={actMeta}

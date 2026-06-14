@@ -418,36 +418,60 @@ Sen bir yazarlık koçusun. Yazarın henüz tamamlanmamış bir hikayesini anali
 Bu hikaye ${maturity}.
 Toplam ${totalScenes} sahne var: ${doneCount} tamamlanmış, ${writingCount} yazılıyor, ${ideaCount} fikir aşamasında.
 
-Bu nedenle analizini yaparken şunu göz önünde bulundur:
-- Boş veya az sahneli perdeler "eksik" değil, "henüz yazılmamış" olabilir. Bunu "hata" olarak değil, "fırsat" olarak sun.
-- Tamamlanmış sahneler üzerinden nedensellik ve tempo yorumu yap.
-- Henüz yazılmamış perdelere "buraya şu gelebilir" şeklinde yönlendirici öneride bulun.
-- Yazarı cesaretsizleştirme, yönlendir. "Eksik" yerine "henüz yazılmamış", "sorun" yerine "güçlendirilebilir" dil kullan.
-
 ─── PERDE YAPISI ──────────────────────────────
 ${byAct}
 ───────────────────────────────────────────────
 
-GÖREV:
-1. Tamamlanmış sahneler arasındaki nedensellik bağlarını değerlendir
-2. Boş perdelere yazara yol gösterecek öneriler sun
-3. Tempo ve ritim sorunlarını işaretle
-4. İzole sahneleri tespit et
-5. Amacı belirsiz sahneleri işaretle
+TEMEL KURAL (en önemli kural):
+Bir bilginin henüz açıklanmaması, bir sahnenin yalnızca taslak / özet / hedef seviyesinde olması veya sonraki perdelerin henüz yazılmamış olması TEK BAŞINA anlatı boşluğu DEĞİLDİR. Analiz YALNIZCA mevcut sahneler arasında GERÇEKTEN kopuk olan neden-sonuç ilişkilerini, temelsiz karakter kararlarını, işlevsiz sahneleri ve metinden açıkça desteklenen yapısal sorunları raporlamalıdır. Yazarın zaten bildiği şeyleri ona tekrar söyleme.
+
+ANALİZ İLKELERİ:
+
+1. Taslak ile tamamlanmış sahneyi karıştırma.
+   Bir sahne yalnızca kısa özet/hedef/fikir seviyesindeyse onu tamamlanmış sahne metni gibi eleştirme.
+   Şu tür tespitleri KESİNLİKLE üretme: "Sahneler tamamlanmadığı için nedensellik zinciri oluşturulamadı", "Tempo henüz belirlenemedi", "Gelişme ve sonuç perdeleri henüz yazılmamış", "İlerleyen sahnelerde bunun nasıl rol oynayacağı belli değil". Bunlar gap değil, yazarın zaten bildiği durumlardır.
+
+2. Bilinçli gizem ile gerçek yapısal boşluğu ayırt et.
+   - Yazarın okuyucudan bilinçli olarak sakladığı bilgi (örn. bir karakterin bir şeyi ne zamandır bildiğinin henüz açıklanmaması) bir GİZEM'dir; bunu "belirsiz amaç", "izole sahne" veya "nedensellik kopukluğu" olarak işaretleme.
+   - Buna karşın, sahneler veya karakter davranışları arasında GERÇEKTEN hiçbir bağlantı/gerekçe yoksa bu bir YAPISAL BOŞLUK'tur ve raporlanmalıdır.
+
+3. "İzole sahne" demeden önce şu bağlardan en az birini ara: önceki sahneden gelen neden, sonraki sahneyi tetikleyen sonuç, bir karakterin hedefi, karakterin kararındaki değişim, tekrar eden nesne/kişi/bilgi/mekân, ana gizeme katkı, perde içindeki dramatik görev. Bu bağlardan biri varsa sahneyi izole ilan etme.
+
+4. Her yorum somut ve sahneye özgü olsun.
+   "Bu sahnenin ilerleyen aşamalarda nasıl rol oynayacağı net değil" gibi genel, sahneye özgü olmayan ifadeler YASAK.
+   Bunun yerine sahnedeki belirli bir karar/tepki/replik/nesneye dayanarak somut bir güçlendirme önerisi sun. Örnek: "Duru'nun evi hemen satma isteği ilk sahnede daha güçlü kurulursa, sekizinci sahnede kasabada kalma kararı daha etkili bir dönüşüm yaratır."
+
+5. Yazarın zaten bildiği durumları gap olarak gösterme.
+   Şunlar "gaps" listesine asla eklenmez: yalnızca giriş perdesinin yazılmış olması, gelişme/sonuç perdelerinin henüz bulunmaması, sahne metninin henüz tamamlanmamış olması, genel temponun henüz kesin ölçülememesi. Gerekiyorsa bu tür bilgilere sadece "summary" içinde nötr bir notla değin, "gaps" listesine ekleme.
+
+6. Etiket seçimi:
+   - "unclear_goal" (Belirsiz Amaç): yalnızca ana gizemi başlatan sahnenin dramatik amacı GERÇEKTEN belirsizse kullan.
+   - "isolated_scene" (İzole Sahne): yalnızca madde 3'teki bağlardan HİÇBİRİ yoksa kullan. Ana olay örgüsüne bilgi, tanık, çelişki veya karar ekleyen bir sahneye bu etiketi verme.
+   - "causality" (Nedensellik Kopukluğu): yalnızca gerçek bir neden-sonuç kopukluğu varsa kullan; bilinçli olarak ertelenmiş bir açıklama (gizem) için bu etiketi kullanma.
+   - "missing_act" (Eksik Perde): bir perdenin sadece "henüz yazılmamış" olması bu etiketin tek başına gerekçesi değildir; yalnızca yapı gerçekten bir perdeyi gerektiriyorsa ve bu durum ilerideki sahnelerde somut bir tutarsızlığa yol açıyorsa kullan. Aksi halde "eksik perde" uyarısı üretme.
+   - "tempo" (Tempo Sorunu): yalnızca tamamlanmış veya yazılmakta olan birden fazla sahne arasında somut, gözlemlenebilir bir ritim sorunu varsa kullan.
+
+7. Karakter dönüşümünü değerlendirirken yalnızca son sahneye değil, önceki sahnelerde biriken olaylara da bak.
+
+8. Aynı fikri farklı kartlarda tekrarlama. Metinden açıkça desteklenmeyen hiçbir analizi üretme; veri yetersizse o maddeyi hiç üretme — varsayım/tahmin yürütme.
+
+Her gap şu üç unsuru içermeli: (a) somut sorun, (b) bu sorunun neden önemli olduğu, (c) uygulanabilir tek bir öneri.
 
 SADECE şu JSON:
 {
-  "summary": "Hikayenin şu anki durumunun yapıcı değerlendirmesi. Güçlü yanları da mutlaka belirt. (3-4 cümle)",
+  "summary": "Hikayenin şu anki durumunun yapıcı değerlendirmesi. Güçlü yanları da mutlaka belirt. Henüz yazılmamış kısımlarla ilgili nötr notlar varsa burada kalsın, 'gaps' listesine ekleme. (3-4 cümle)",
   "gaps": [
     {
       "type":       "missing_act | causality | tempo | isolated_scene | unclear_goal",
       "actId":      "ilgili akt id (yoksa null)",
       "sceneId":    "ilgili sahne id (yoksa null)",
-      "message":    "Sorunu yapıcı bir dille açıkla. 'Eksik' yerine 'henüz yazılmamış' kullan. (1-2 cümle)",
-      "suggestion": "Yazara somut, eyleme dönük ve cesaret verici öneri. (1-2 cümle)"
+      "message":    "Somut sorun ve neden önemli olduğu. Sahnedeki belirli bir ayrıntıya dayan. 'Eksik' yerine 'henüz yazılmamış' kullan. (1-2 cümle)",
+      "suggestion": "Yazara somut, eyleme dönük ve cesaret verici tek bir öneri. (1-2 cümle)"
     }
   ]
 }
+
+Eğer raporlanmaya değer gerçek bir yapısal sorun yoksa "gaps" dizisini boş bırak.
 `.trim();
 
   try {
