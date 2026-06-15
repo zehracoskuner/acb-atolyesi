@@ -20,14 +20,14 @@ router.get("/", ensureAuth, async (req, res) => {
     const me = await User.findById(req.user.id).select("following").lean();
     const followingIds = me?.following || [];
 
-    if (followingIds.length === 0) {
-      return res.json({ items: [], hasMore: false, isEmpty: true });
-    }
+    const logQuery = followingIds.length > 0
+      ? { $or: [
+          { visibility: "public" },
+          { author: { $in: followingIds }, visibility: { $in: ["public", "followers"] } },
+        ] }
+      : { visibility: "public" };
 
-    const logsPromise = Log.find({
-      author:     { $in: followingIds },
-      visibility: { $in: ["public", "followers"] },
-    })
+    const logsPromise = Log.find(logQuery)
       .populate("author",      "_id kullaniciAdi avatarUrl")
       .populate("relatedWork", "_id title coverImage")
       .sort({ createdAt: -1 })
@@ -100,7 +100,7 @@ router.get("/", ensureAuth, async (req, res) => {
       items:   paginated,
       hasMore: skip + paginated.length < merged.length,
       total:   merged.length,
-      isEmpty: false,
+      isEmpty: merged.length === 0,
     });
   } catch (err) {
     console.error("GET /feed hatası:", err);
