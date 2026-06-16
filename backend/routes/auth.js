@@ -1,17 +1,20 @@
 // backend/routes/auth.js
-import { Router } from "express";
-import bcrypt      from "bcryptjs";
-import jwt         from "jsonwebtoken";
-import crypto      from "crypto";
-import dns         from "dns/promises";
-import passport    from "passport";
-import User        from "../models/User.js";
-import ensureAuth  from "../middlewares/ensureAuth.js";
+import { Router }      from "express";
+import bcrypt          from "bcryptjs";
+import jwt             from "jsonwebtoken";
+import crypto          from "crypto";
+import dns             from "dns/promises";
+import passport        from "passport";
+import { OAuth2Client } from "google-auth-library";
+import User            from "../models/User.js";
+import ensureAuth      from "../middlewares/ensureAuth.js";
+import { googleUpsert } from "../utils/googleUpsert.js";
 import { sendVerificationEmail, sendPasswordResetEmail } from "../services/emailService.js";
 import "dotenv/config";
 
 const router   = Router();
 const SECRET   = process.env.JWT_SECRET || "atolye-secret-key";
+const gClient  = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const SITE_URL =
   process.env.SITE_URL ||
   process.env.CLIENT_URL ||
@@ -409,6 +412,57 @@ router.get("/me", ensureAuth, async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ message: err.message });
+  }
+});
+
+/* ═══════════════════════════════════════════
+   POST /api/auth/google/mobile
+   Flutter Google Sign-In → idToken doğrulama
+═══════════════════════════════════════════ */
+router.post("/google/mobile", async (req, res) => {
+  try {
+    const { idToken } = req.body;
+    if (!idToken)
+      return res.status(400).json({ message: "idToken gerekli." });
+
+    let payload;
+    try {
+      const ticket = await gClient.verifyIdToken({
+        idToken,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      return res.status(401).json({ message: "Geçersiz Google token." });
+    }
+
+    const email     = payload.email;
+    const googleId  = payload.sub;
+    const avatarUrl = payload.picture || "";
+
+    if (!email)
+      return res.status(400).json({ message: "Google hesabından e-posta alınamadı." });
+
+    const user  = await googleUpsert({ email, googleId, avatarUrl });
+    const token = makeToken(user);
+
+    return res.json({
+      token,
+      user: {
+        _id:             user._id,
+        kullaniciAdi:    user.kullaniciAdi,
+        email:           user.email,
+        avatarUrl:       user.avatarUrl,
+        emailVerified:   user.emailVerified,
+        authProvider:    user.authProvider,
+        profileComplete: user.profileComplete,
+        tourCompleted:   user.tourCompleted,
+        role:            user.role,
+      },
+    });
+  } catch (err) {
+    console.error("google/mobile hatası:", err);
+    return res.status(500).json({ message: "Sunucu hatası." });
   }
 });
 
