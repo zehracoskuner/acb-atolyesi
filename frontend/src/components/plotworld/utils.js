@@ -1,11 +1,14 @@
 // components/plotworld/utils.js
-import { MarkerType } from "@xyflow/react";
+import { Position } from "@xyflow/react";
 import {
   ACT_ZONE_WIDTH,
   ACT_ZONE_HEIGHT,
   ACT_ZONE_COL_W,
   EDGE_TYPES
 } from "./constants";
+
+const FALLBACK_NODE_WIDTH = 220;
+const FALLBACK_NODE_HEIGHT = 110;
 
 
 /* ── charIds → isim dizisi ── */
@@ -90,6 +93,94 @@ export function detectDroppedAct(nodePosition, actOrder = []) {
     const zoneX = i * ACT_ZONE_COL_W + 20;
     return nodePosition.x >= zoneX && nodePosition.x <= zoneX + ACT_ZONE_WIDTH;
   }) || null;
+}
+
+function readSize(value, fallback) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function getNodeBounds(node) {
+  const width = readSize(
+    node?.width ?? node?.measured?.width ?? node?.style?.width,
+    FALLBACK_NODE_WIDTH
+  );
+  const height = readSize(
+    node?.height ?? node?.measured?.height ?? node?.style?.height ?? node?.style?.minHeight,
+    FALLBACK_NODE_HEIGHT
+  );
+
+  return {
+    x: node?.position?.x ?? node?.positionAbsolute?.x ?? 0,
+    y: node?.position?.y ?? node?.positionAbsolute?.y ?? 0,
+    width,
+    height,
+  };
+}
+
+export function getNodeCenter(node) {
+  const bounds = getNodeBounds(node);
+  return {
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2,
+  };
+}
+
+function getOppositePosition(position) {
+  switch (position) {
+    case Position.Bottom:
+      return Position.Top;
+    case Position.Left:
+      return Position.Right;
+    case Position.Top:
+      return Position.Bottom;
+    case Position.Right:
+    default:
+      return Position.Left;
+  }
+}
+
+export function getSmartHandlePositions(sourceNode, targetNode) {
+  const sourceCenter = getNodeCenter(sourceNode);
+  const targetCenter = getNodeCenter(targetNode);
+  const angle = (Math.atan2(
+    targetCenter.y - sourceCenter.y,
+    targetCenter.x - sourceCenter.x
+  ) * 180 / Math.PI + 360) % 360;
+
+  let sourcePosition;
+  if (angle >= 45 && angle < 135) {
+    sourcePosition = Position.Bottom;
+  } else if (angle >= 135 && angle < 225) {
+    sourcePosition = Position.Left;
+  } else if (angle >= 225 && angle < 315) {
+    sourcePosition = Position.Top;
+  } else {
+    sourcePosition = Position.Right;
+  }
+
+  return {
+    sourcePosition,
+    targetPosition: getOppositePosition(sourcePosition),
+  };
+}
+
+export function getHandlePoint(node, position) {
+  const bounds = getNodeBounds(node);
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+
+  switch (position) {
+    case Position.Bottom:
+      return { x: centerX, y: bounds.y + bounds.height };
+    case Position.Left:
+      return { x: bounds.x, y: centerY };
+    case Position.Top:
+      return { x: centerX, y: bounds.y };
+    case Position.Right:
+    default:
+      return { x: bounds.x + bounds.width, y: centerY };
+  }
 }
 
 export function buildEdges(scenes) {

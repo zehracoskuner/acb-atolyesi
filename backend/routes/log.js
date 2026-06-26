@@ -76,6 +76,45 @@ router.get("/:userId", async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════
+   GET /api/logs/my
+   — Giriş yapmış kullanıcının kendi günlükleri (tümü görünürlük)
+═══════════════════════════════════════════ */
+router.get("/my", ensureAuth, async (req, res) => {
+  try {
+    const limit = Math.min(30, parseInt(req.query.limit) || 20);
+    const page  = Math.max(1, parseInt(req.query.page) || 1);
+    const skip  = (page - 1) * limit;
+
+    const [logs, total] = await Promise.all([
+      Log.find({ author: req.user.id })
+        .populate("relatedWork", "_id title coverImage")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Log.countDocuments({ author: req.user.id }),
+    ]);
+
+    const items = logs.map((l) => ({
+      _id:       l._id,
+      content:   l.content,
+      visibility: l.visibility,
+      likeCount: l.likes?.length ?? 0,
+      likedByMe: false,
+      relatedWork: l.relatedWork
+        ? { _id: l.relatedWork._id, title: l.relatedWork.title }
+        : null,
+      createdAt: l.createdAt,
+    }));
+
+    return res.json({ items, total, hasMore: skip + items.length < total });
+  } catch (err) {
+    console.error("GET /logs/my hatası:", err);
+    return res.status(500).json({ message: "Günlükler yüklenemedi." });
+  }
+});
+
+/* ═══════════════════════════════════════════
    POST /api/logs
    — Yeni günlük girdisi oluştur
 ═══════════════════════════════════════════ */

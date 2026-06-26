@@ -41,6 +41,12 @@ const userSchema = new mongoose.Schema(
     passwordResetToken:   { type: String, default: null },
     passwordResetExpires: { type: Date,   default: null },
 
+    passwordResetOtp:        { type: String, default: null },
+    passwordResetOtpExpires: { type: Date,   default: null },
+
+    emailVerifyOtp:          { type: String, default: null },
+    emailVerifyOtpExpires:   { type: Date,   default: null },
+
     experienceLevel: {
       type:    String,
       enum:    ["no-experience", "beginner", "experienced"],

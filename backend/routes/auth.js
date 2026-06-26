@@ -9,7 +9,7 @@ import { OAuth2Client } from "google-auth-library";
 import User            from "../models/User.js";
 import ensureAuth      from "../middlewares/ensureAuth.js";
 import { googleUpsert } from "../utils/googleUpsert.js";
-import { sendVerificationEmail, sendPasswordResetEmail } from "../services/emailService.js";
+import { sendVerificationEmail, sendPasswordResetEmail, sendEmailVerifyOtp } from "../services/emailService.js";
 import "dotenv/config";
 
 const router   = Router();
@@ -295,6 +295,88 @@ router.post("/resend-verification", async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════
+   POST /api/auth/send-verify-otp
+   Doğrulanmamış kullanıcıya 6 haneli OTP gönderir.
+═══════════════════════════════════════════ */
+router.post("/send-verify-otp", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "E-posta gerekli." });
+
+    const user = await User.findOne({ email });
+    if (!user || user.emailVerified) {
+      // Güvenlik: hesap bulunamasa veya zaten doğrulanmış olsa bile aynı yanıt
+      return res.json({ message: "Kod gönderildi." });
+    }
+
+    const otp        = String(Math.floor(100000 + Math.random() * 900000));
+    const otpExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 dakika
+
+    await User.findByIdAndUpdate(
+      user._id,
+      { $set: { emailVerifyOtp: otp, emailVerifyOtpExpires: otpExpires } },
+      { runValidators: false }
+    );
+
+    sendEmailVerifyOtp(email, otp).catch(err =>
+      console.error("E-posta OTP gönderilemedi:", err.message)
+    );
+
+    return res.json({ message: "Doğrulama kodu gönderildi." });
+  } catch (err) {
+    console.error("send-verify-otp hatası:", err);
+    return res.status(500).json({ message: "Sunucu hatası." });
+  }
+});
+
+/* ═══════════════════════════════════════════
+   POST /api/auth/verify-email-otp
+   {email, otp} → e-postayı doğrular, token döner.
+═══════════════════════════════════════════ */
+router.post("/verify-email-otp", async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp)
+      return res.status(400).json({ message: "E-posta ve kod gerekli." });
+
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(400).json({ message: "Geçersiz veya süresi dolmuş kod." });
+
+    if (user.emailVerified) {
+      const token = makeToken(user);
+      return res.json({ message: "E-posta zaten doğrulanmış.", token, user: user.toSafeJSON() });
+    }
+
+    if (
+      !user.emailVerifyOtp ||
+      user.emailVerifyOtp !== otp ||
+      !user.emailVerifyOtpExpires ||
+      user.emailVerifyOtpExpires < new Date()
+    ) {
+      return res.status(400).json({ message: "Geçersiz veya süresi dolmuş kod." });
+    }
+
+    await User.findByIdAndUpdate(
+      user._id,
+      {
+        $set:   { emailVerified: true },
+        $unset: { emailVerifyOtp: "", emailVerifyOtpExpires: "", emailVerifyToken: "", emailVerifyExpires: "" },
+      },
+      { runValidators: false }
+    );
+
+    user.emailVerified = true;
+    const token = makeToken(user);
+
+    return res.json({ token, user: user.toSafeJSON() });
+  } catch (err) {
+    console.error("verify-email-otp hatası:", err);
+    return res.status(500).json({ message: "Sunucu hatası." });
+  }
+});
+
+/* ═══════════════════════════════════════════
    POST /api/auth/forgot-password
 ═══════════════════════════════════════════ */
 router.post("/forgot-password", async (req, res) => {
@@ -303,19 +385,19 @@ router.post("/forgot-password", async (req, res) => {
     const user = await User.findOne({ email });
 
     if (user) {
-      const resetToken   = crypto.randomBytes(32).toString("hex");
-      const resetExpires = new Date(Date.now() + 60 * 60 * 1000);
+      const otp        = String(Math.floor(100000 + Math.random() * 900000));
+      const otpExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 dakika
 
       await User.findByIdAndUpdate(
         user._id,
-        { $set: { passwordResetToken: resetToken, passwordResetExpires: resetExpires } },
+        { $set: { passwordResetOtp: otp, passwordResetOtpExpires: otpExpires } },
         { runValidators: false }
       );
 
-      sendPasswordResetEmail(email, resetToken).catch(console.error);
+      sendPasswordResetEmail(email, otp).catch(console.error);
     }
 
-    return res.json({ message: "Eğer bu e-posta kayıtlıysa sıfırlama bağlantısı gönderildi." });
+    return res.json({ message: "Eğer bu e-posta kayıtlıysa sıfırlama kodu gönderildi." });
   } catch (err) {
     console.error("forgot-password hatası:", err);
     return res.status(500).json({ message: "Sunucu hatası." });
@@ -327,25 +409,45 @@ router.post("/forgot-password", async (req, res) => {
 ═══════════════════════════════════════════ */
 router.post("/reset-password", async (req, res) => {
   try {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword)
-      return res.status(400).json({ message: "Token ve yeni şifre gerekli." });
+    const { token, email, otp, newPassword } = req.body;
 
+    if (!newPassword)
+      return res.status(400).json({ message: "Yeni şifre gerekli." });
     if (newPassword.length < 6)
       return res.status(400).json({ message: "Şifre en az 6 karakter olmalı." });
 
-    const user = await User.findOne({
-      passwordResetToken:   token,
-      passwordResetExpires: { $gt: new Date() },
-    });
+    let user;
 
-    if (!user)
-      return res.status(400).json({ message: "Geçersiz veya süresi dolmuş bağlantı." });
+    if (email && otp) {
+      // OTP flow (mobil / deep-link olmadan)
+      user = await User.findOne({
+        email,
+        passwordResetOtp:        otp,
+        passwordResetOtpExpires: { $gt: new Date() },
+      });
+      if (!user)
+        return res.status(400).json({ message: "Geçersiz veya süresi dolmuş kod." });
+    } else if (token) {
+      // Eski bağlantı flow'u (geriye dönük uyumluluk)
+      user = await User.findOne({
+        passwordResetToken:   token,
+        passwordResetExpires: { $gt: new Date() },
+      });
+      if (!user)
+        return res.status(400).json({ message: "Geçersiz veya süresi dolmuş bağlantı." });
+    } else {
+      return res.status(400).json({ message: "Doğrulama kodu veya bağlantı gerekli." });
+    }
 
     const hashedNewPassword = await bcrypt.hash(newPassword, 12);
     const updateData = {
       $set:   { sifreHash: hashedNewPassword },
-      $unset: { passwordResetToken: "", passwordResetExpires: "" },
+      $unset: {
+        passwordResetToken:      "",
+        passwordResetExpires:    "",
+        passwordResetOtp:        "",
+        passwordResetOtpExpires: "",
+      },
     };
 
     if (user.authProvider === "google")

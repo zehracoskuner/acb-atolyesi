@@ -11,6 +11,13 @@ const STATUS_CARD = {
   done:     { bg: "#f5fbf7", accent: "#bde0c5" },
 };
 
+const HANDLE_POSITIONS = [
+  Position.Top,
+  Position.Right,
+  Position.Bottom,
+  Position.Left,
+];
+
 function resolveActStyle(data) {
   const color = data.isAlternative ? "#ca8a04" : (data.actColor || "#888");
   const label = data.isAlternative ? "Alternatif Dal" : (data.actLabel || data.act || "—");
@@ -107,8 +114,24 @@ export default function SceneNode({ data, selected }) {
       role="article"
       aria-label={`Sahne: ${data.label}`}
     >
-      <Handle type="target" position={Position.Left}  className="wn-handle wn-handle--t" />
-      <Handle type="source" position={Position.Right} className="wn-handle wn-handle--s" />
+      {HANDLE_POSITIONS.map(position => (
+        <Handle
+          key={`target-${position}`}
+          id={`target-${position}`}
+          type="target"
+          position={position}
+          className={`wn-handle wn-handle--target wn-handle--${position}`}
+        />
+      ))}
+      {HANDLE_POSITIONS.map(position => (
+        <Handle
+          key={`source-${position}`}
+          id={`source-${position}`}
+          type="source"
+          position={position}
+          className={`wn-handle wn-handle--source wn-handle--${position}`}
+        />
+      ))}
 
       <div className="wn-rail" aria-hidden="true" />
 

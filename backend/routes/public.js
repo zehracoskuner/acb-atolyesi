@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Work from "../models/Work.js";
 import Chapter from "../models/Chapter.js";
 import User from "../models/User.js";
+import Log from "../models/Log.js";
 import { notifyFollow } from "../services/notificationService.js";
 
 const router = express.Router();
@@ -265,6 +266,46 @@ router.post("/profile/:id/follow", async (req, res) => {
   } catch (err) {
     console.error("POST /profile/:id/follow hatası:", err);
     return res.status(500).json({ message: "İşlem başarısız." });
+  }
+});
+
+/* ═══════════════════════════════════════════
+   GET /api/public/profile/:userId/logs
+   Bir kullanıcının public günlük girdileri
+   (followers/private görünürlüklü girdiler hariç)
+═══════════════════════════════════════════ */
+router.get("/profile/:userId/logs", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!isValidId(userId))
+      return res.status(400).json({ message: "Geçersiz kullanıcı ID." });
+
+    const limit = Math.min(30, parseInt(req.query.limit) || 20);
+    const page  = Math.max(1,  parseInt(req.query.page)  || 1);
+    const skip  = (page - 1) * limit;
+
+    const logs = await Log.find({ author: userId, visibility: "public" })
+      .populate("relatedWork", "_id title coverImage")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const items = logs.map((l) => ({
+      _id:       l._id,
+      content:   l.content,
+      likeCount: l.likes?.length ?? 0,
+      likedByMe: false,
+      relatedWork: l.relatedWork
+        ? { _id: l.relatedWork._id, title: l.relatedWork.title }
+        : null,
+      createdAt: l.createdAt,
+    }));
+
+    return res.json({ items });
+  } catch (err) {
+    console.error("GET /public/profile/:userId/logs hatası:", err);
+    return res.status(500).json({ message: "Günlükler yüklenemedi." });
   }
 });
 

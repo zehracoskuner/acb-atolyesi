@@ -107,8 +107,11 @@
   border-radius: 50%;
   transition: border-color 150ms, background 150ms;
 }
-.wn-handle--t { left:  -5px; }
-.wn-handle--s { right: -5px; }
+.wn-handle--source { z-index: 2; }
+.wn-handle--left { left: -5px; }
+.wn-handle--right { right: -5px; }
+.wn-handle--top { top: -5px; }
+.wn-handle--bottom { bottom: -5px; }
 .wn-node:hover .wn-handle {
   border-color: var(--act-color, #888);
   background:   color-mix(in srgb, var(--act-color,#888) 12%, white);

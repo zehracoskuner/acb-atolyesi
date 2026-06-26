@@ -1,16 +1,38 @@
 // components/plotworld/CausalEdge.jsx
-import { getBezierPath, EdgeLabelRenderer, BaseEdge } from "@xyflow/react";
+import { getBezierPath, EdgeLabelRenderer, BaseEdge, useNodes } from "@xyflow/react";
 import { EDGE_TYPES, DEFAULT_EDGE_TYPE } from "./constants";
+import { getHandlePoint, getSmartHandlePositions } from "./utils";
 
 export default function CausalEdge({
   id, sourceX, sourceY, targetX, targetY,
-  sourcePosition, targetPosition,
+  sourcePosition: fallbackSourcePosition,
+  targetPosition: fallbackTargetPosition,
+  source, target,
   data = {}, selected, markerEnd,
 }) {
+  const nodes = useNodes();
+  const sourceNode = nodes.find(node => node.id === source);
+  const targetNode = nodes.find(node => node.id === target);
+  const smartPositions = sourceNode && targetNode
+    ? getSmartHandlePositions(sourceNode, targetNode)
+    : {
+        sourcePosition: fallbackSourcePosition,
+        targetPosition: fallbackTargetPosition,
+      };
+  const sourcePoint = sourceNode
+    ? getHandlePoint(sourceNode, smartPositions.sourcePosition)
+    : { x: sourceX, y: sourceY };
+  const targetPoint = targetNode
+    ? getHandlePoint(targetNode, smartPositions.targetPosition)
+    : { x: targetX, y: targetY };
   const et = EDGE_TYPES[data.edgeType] || EDGE_TYPES[DEFAULT_EDGE_TYPE];
   const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX, sourceY, sourcePosition,
-    targetX, targetY, targetPosition,
+    sourceX: sourcePoint.x,
+    sourceY: sourcePoint.y,
+    sourcePosition: smartPositions.sourcePosition,
+    targetX: targetPoint.x,
+    targetY: targetPoint.y,
+    targetPosition: smartPositions.targetPosition,
   });
 
   return (

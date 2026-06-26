@@ -8,7 +8,12 @@
       "Read(//tmp/**)",
       "PowerShell(Stop-Process -Id 2572,7992 -Force)",
       "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
-      "Bash(node --input-type=module)"
+      "Bash(node --input-type=module)",
+      "Bash(ls \"z:/PLUS1/flutter android acb 1/acb\")",
+      "Read(//z/PLUS1/flutter android acb 1/acb/**)"
+    ],
+    "additionalDirectories": [
+      "z:\\PLUS1\\flutter android acb 1\\acb\\acb_atolyesi"
     ]
   }
 }

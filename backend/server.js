@@ -140,6 +140,25 @@ app.get("/api/health", (_, res) =>
   res.json({ ok: true, msg: "ACB Atölyesi ayakta ✅" })
 );
 
+// ── Android App Links doğrulama (Deep Link için) ──
+// SHA-1 fingerprint'i: keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android
+// Üretim build için release keystore'un SHA-1'i eklenmeli.
+// applicationId: android/app/build.gradle'daki applicationId ile eşleşmeli.
+app.get("/.well-known/assetlinks.json", (_, res) => {
+  const links = [
+    {
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: {
+        namespace: "android_app",
+        package_name: process.env.ANDROID_APP_ID || "com.example.acb_atolyesi",
+        sha256_cert_fingerprints: (process.env.ANDROID_SHA256 || "").split(",").filter(Boolean),
+      },
+    },
+  ];
+  res.setHeader("Content-Type", "application/json");
+  res.json(links);
+});
+
 // ── Rate limit — auth (genel limiter'dan önce, daha kısıtlayıcı) ──
 app.use("/api/auth/login",    authLimiter);
 app.use("/api/auth/register", registerLimiter);
