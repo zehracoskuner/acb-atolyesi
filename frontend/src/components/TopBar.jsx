@@ -348,14 +348,6 @@ export default function TopBar() {
             <span className="topbar-tag">acemi yazarlar birliği</span>
           </button>
 
-          <button
-          className="mobile-menu-btn"
-          onClick={() => setMobileNavOpen(v => !v)}
-          aria-label="Menü"
-        >
-          <IconMenu />
-        </button>
-
           {/* ── Nav ── */}
           <nav className={`nav ${mobileNavOpen ? "nav--open" : ""}`}>
             <Link to="/keşfet" className={`nav-link ${isActive("/keşfet") ? "active" : ""}`} data-tour="topbar-kesfet">
@@ -374,6 +366,13 @@ export default function TopBar() {
 
           {/* ── Sağ ── */}
           <div className="nav-right">
+            <button
+          className="mobile-menu-btn"
+          onClick={() => setMobileNavOpen(v => !v)}
+          aria-label="Menü"
+        >
+          <IconMenu />
+        </button>
             <TourHelpButton />
 
             <button

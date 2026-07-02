@@ -15,7 +15,7 @@
 
   position:      sticky;
   top:           0;
-  z-index:       100;
+  z-index:       1000;
   background:    var(--paper);
   border-bottom: 1px solid var(--rule);
   box-shadow:    0 1px 0 rgba(0,0,0,.04), 0 4px 16px rgba(26,18,9,.06);
@@ -40,16 +40,22 @@
   align-items:     center;
   justify-content: space-between;
   gap:             2rem;
+  box-sizing:      border-box;
 }
 
 /* ── Marka ── */
 .brand {
-  display:     flex;
-  align-items: baseline;
-  gap:         .6rem;
+  display:         inline-flex;
+  align-items:     center;
+  gap:             .6rem;
   text-decoration: none;
-  color:       inherit;
-  flex-shrink: 0;
+  color:           inherit;
+  flex-shrink:     0;
+  font-family:     inherit;
+  background:      none;
+  border:          none;
+  cursor:          pointer;
+  padding:         0;
 }
 
 .logo {
@@ -59,14 +65,14 @@
   color:          var(--ink);
   letter-spacing: -.01em;
   line-height:    1;
-  transition:     color .2s;
+  transition:     color .2s, opacity .2s;
 }
-.logo:hover { color: var(--accent); }
+.brand:hover .logo { color: var(--accent); }
 
 .brand-divider {
-  width:      1px;
-  height:     13px;
-  background: var(--rule);
+  width:       1px;
+  height:      13px;
+  background:  var(--rule);
   flex-shrink: 0;
 }
 
@@ -89,17 +95,30 @@
 }
 
 .nav-link {
-  font-family:    'Crimson Pro', Georgia, serif;
-  font-size:      .98rem;
-  font-weight:    400;
-  color:          var(--muted);
+  display:         inline-flex;
+  align-items:     center;
+  gap:             .35rem;
+  font-family:     'Crimson Pro', Georgia, serif;
+  font-size:       .98rem;
+  font-weight:     400;
+  color:           var(--muted);
   text-decoration: none;
-  padding:        .32rem .8rem;
-  border-radius:  2px;
-  letter-spacing: .02em;
-  transition:     color .2s;
-  position:       relative;
+  padding:         .32rem .8rem;
+  border-radius:   2px;
+  letter-spacing:  .02em;
+  transition:      color .2s;
+  position:        relative;
 }
+
+.nav-link svg {
+  width:       14px;
+  height:      14px;
+  flex-shrink: 0;
+  opacity:     .65;
+  transition:  opacity .15s ease;
+}
+.nav-link:hover svg,
+.nav-link.active svg { opacity: 1; }
 
 /* Alt çizgi animasyonu */
 .nav-link::after {
@@ -113,9 +132,9 @@
   background: var(--accent);
   transition: transform .22s ease;
 }
-.nav-link:hover        { color: var(--ink); }
-.nav-link:hover::after { transform: translateX(-50%) scaleX(1); }
-.nav-link.active       { color: var(--accent); font-style: italic; }
+.nav-link:hover         { color: var(--ink); }
+.nav-link:hover::after  { transform: translateX(-50%) scaleX(1); }
+.nav-link.active        { color: var(--accent); font-style: italic; }
 .nav-link.active::after { transform: translateX(-50%) scaleX(1); }
 
 /* Atölyem CTA butonu */
@@ -142,6 +161,7 @@
   position:    relative;
   flex-shrink: 0;
 }
+.mobile-menu-btn { display: none; }
 
 /* ── İkon butonlar ── */
 .icon-btn {
@@ -158,30 +178,30 @@
   flex-shrink:     0;
   position:        relative;
 }
-.icon-btn:hover        { background: rgba(139,37,0,.07); border-color: var(--accent); }
-.icon-btn svg          { width: 15px; height: 15px; color: var(--muted); transition: color .2s; }
-.icon-btn:hover svg    { color: var(--accent); }
-.icon-btn.active       { background: rgba(139,37,0,.07); border-color: var(--accent); }
-.icon-btn.active svg   { color: var(--accent); }
+.icon-btn:hover      { background: rgba(139,37,0,.07); border-color: var(--accent); }
+.icon-btn svg        { width: 15px; height: 15px; color: var(--muted); transition: color .2s; }
+.icon-btn:hover svg  { color: var(--accent); }
+.icon-btn.active     { background: rgba(139,37,0,.07); border-color: var(--accent); }
+.icon-btn.active svg { color: var(--accent); }
 
 /* Bildirim rozeti */
 .notif-badge {
-  position:      absolute;
-  top:           -3px;
-  right:         -3px;
-  background:    var(--accent);
-  color:         var(--paper);
-  border-radius: 99px;
-  font-size:     .56rem;
-  font-family:   'Crimson Pro', serif;
-  min-width:     15px;
-  height:        15px;
-  display:       flex;
-  align-items:   center;
+  position:       absolute;
+  top:            -3px;
+  right:          -3px;
+  background:     var(--accent);
+  color:          var(--paper);
+  border-radius:  99px;
+  font-size:      .56rem;
+  font-family:    'Crimson Pro', serif;
+  min-width:      15px;
+  height:         15px;
+  display:        flex;
+  align-items:    center;
   justify-content: center;
-  border:        2px solid var(--paper);
+  border:         2px solid var(--paper);
   pointer-events: none;
-  font-weight:   600;
+  font-weight:    600;
 }
 
 /* ── Hesap Dropdown ── */
@@ -218,41 +238,50 @@
   display:     block;
 }
 .d-email {
-  font-family:   'Crimson Pro', Georgia, serif;
-  font-size:     .75rem;
-  font-weight:   300;
-  color:         var(--muted);
-  font-style:    italic;
-  display:       block;
-  margin-top:    2px;
-  overflow:      hidden;
-  text-overflow: ellipsis;
-  white-space:   nowrap;
+  font-family:    'Crimson Pro', Georgia, serif;
+  font-size:      .75rem;
+  font-weight:    300;
+  color:          var(--muted);
+  font-style:     italic;
+  display:        block;
+  margin-top:     2px;
+  overflow:       hidden;
+  text-overflow:  ellipsis;
+  white-space:    nowrap;
 }
 
-.dropdown-section         { padding: .35rem 0; }
+.dropdown-section { padding: .35rem 0; }
 .dropdown-section + .dropdown-section { border-top: 1px solid var(--rule); }
 
+.dropdown-divider {
+  height:     1px;
+  background: rgba(60, 45, 30, 0.08);
+  margin:     .25rem 0;
+}
+
 .dd-item {
-  display:     flex;
-  align-items: center;
-  gap:         .6rem;
-  padding:     .48rem 1rem;
-  cursor:      pointer;
-  font-family: 'Crimson Pro', Georgia, serif;
-  font-size:   .9rem;
-  color:       var(--muted);
+  display:         flex;
+  align-items:     center;
+  gap:             .6rem;
+  padding:         .48rem 1rem;
+  cursor:          pointer;
+  font-family:     'Crimson Pro', Georgia, serif;
+  font-size:       .9rem;
+  color:           var(--muted);
   text-decoration: none;
-  transition:  color .15s, background .15s;
-  background:  none;
-  border:      none;
-  width:       100%;
-  text-align:  left;
+  transition:      color .15s, background .15s;
+  background:      none;
+  border:          none;
+  width:           100%;
+  text-align:      left;
 }
 .dd-item:hover        { background: rgba(139,37,0,.06); color: var(--ink); }
 .dd-item svg          { width: 13px; height: 13px; flex-shrink: 0; opacity: .7; }
 .dd-item.danger       { color: #a32d2d; }
 .dd-item.danger:hover { background: rgba(163,45,45,.07); color: #791f1f; }
+
+.dd-item--admin       { color: #c0392b !important; }
+.dd-item--admin:hover { background: rgba(192, 57, 43, 0.06) !important; }
 
 /* ── Bildirim Paneli ── */
 .notif-panel {
@@ -303,33 +332,34 @@
 .notif-mark-all:hover { color: var(--accent); }
 
 .notif-list {
-  max-height:    340px;
-  overflow-y:    auto;
+  max-height:      340px;
+  overflow-y:      auto;
   scrollbar-width: thin;
   scrollbar-color: var(--rule) transparent;
+  -webkit-overflow-scrolling: touch;
 }
 .notif-list::-webkit-scrollbar       { width: 3px; }
 .notif-list::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 2px; }
 
 .notif-item {
-  display:     flex;
-  align-items: flex-start;
-  gap:         .6rem;
-  padding:     .65rem 1rem;
+  display:       flex;
+  align-items:   flex-start;
+  gap:           .6rem;
+  padding:       .65rem 1rem;
   border-bottom: 1px solid rgba(200,191,173,.3);
-  cursor:      pointer;
-  transition:  background .15s;
-  position:    relative;
+  cursor:        pointer;
+  transition:    background .15s;
+  position:      relative;
 }
 .notif-item:last-child { border-bottom: none; }
 .notif-item:hover      { background: rgba(139,37,0,.04); }
 .notif-item.unread     { background: rgba(139,37,0,.03); }
 .notif-item.unread::before {
-  content:      '';
-  position:     absolute;
-  left:         0; top: 0; bottom: 0;
-  width:        3px;
-  background:   var(--accent);
+  content:       '';
+  position:      absolute;
+  left:          0; top: 0; bottom: 0;
+  width:         3px;
+  background:    var(--accent);
   border-radius: 0 2px 2px 0;
 }
 
@@ -361,12 +391,12 @@
 }
 
 .notif-empty, .notif-loading {
-  padding:    1.8rem 1rem;
-  text-align: center;
-  font-family:'Crimson Pro', serif;
-  font-size:  .82rem;
-  color:      var(--muted);
-  font-style: italic;
+  padding:     1.8rem 1rem;
+  text-align:  center;
+  font-family: 'Crimson Pro', serif;
+  font-size:   .82rem;
+  color:       var(--muted);
+  font-style:  italic;
 }
 
 .notif-panel-footer {
@@ -375,95 +405,23 @@
   text-align: center;
 }
 .notif-panel-footer a {
-  font-family: 'Crimson Pro', serif;
-  font-size:   .78rem;
-  color:       var(--accent);
+  font-family:     'Crimson Pro', serif;
+  font-size:       .78rem;
+  color:           var(--accent);
   text-decoration: none;
-  font-style:  italic;
+  font-style:      italic;
 }
 .notif-panel-footer a:hover { text-decoration: underline; }
 
-/* ── Responsive ── */
-@media (max-width: 640px) {
-  .topbar-tag   { display: none; }
-  .brand-divider { display: none; }
-  .topbar-inner { padding: 0 1rem; gap: 1rem; }
-  .notif-panel  { width: calc(100vw - 2rem); right: -1rem; }
-}
-/* ── TopBar.css'in SONUNA ekle ───────────────────────────────────────────── */
 
-/* Nav link'lerdeki ikonlar */
-.nav-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
+/* ══════════════════════════════════════════════════════
+   RESPONSIVE
+   ══════════════════════════════════════════════════════ */
 
-.nav-link svg {
-  opacity: 0.65;
-  transition: opacity 0.15s ease;
-  flex-shrink: 0;
-}
-
-.nav-link:hover svg,
-.nav-link.active svg {
-  opacity: 1;
-}
-
-/* Brand butonu — Link'ten button'a geçti, görünüm aynı kalmalı */
-button.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: inherit;
-  font-family: inherit;
-  text-decoration: none;
-}
-
-button.brand:hover .logo {
-  opacity: 0.8;
-}
-
-.dd-item--admin {
-  color: #c0392b !important;
-}
-.dd-item--admin:hover {
-  background: rgba(192, 57, 43, 0.06) !important;
-}
-.dropdown-divider {
-  height: 1px;
-  background: rgba(60, 45, 30, 0.08);
-  margin: 0.25rem 0;
-}
-.nav-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.nav-link svg {
-  opacity: 0.65;
-  transition: opacity 0.15s ease;
-  flex-shrink: 0;
-}
-.nav-link:hover svg,
-.nav-link.active svg {
-  opacity: 1;
-}
-button.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: inherit;
-  font-family: inherit;
-  text-decoration: none;
-
-}
-/* ══════════════════════════════════════════════
-   TOPBAR RESPONSIVE
-══════════════════════════════════════════════ */
-
-/* Tablet */
+/* ── Tablet (≤1024px) ── */
 @media (max-width: 1024px) {
   .topbar-inner {
-    padding-left: 18px;
+    padding-left:  18px;
     padding-right: 18px;
     gap: 16px;
   }
@@ -473,63 +431,50 @@ button.brand {
     display: none;
   }
 
-  .nav {
-    gap: 4px;
-  }
+  .nav { gap: 4px; }
 
   .nav-link {
-    padding-left: 9px;
+    padding-left:  9px;
     padding-right: 9px;
   }
 
-  .nav-right {
-    gap: 6px;
-  }
+  .nav-right { gap: 6px; }
 }
 
 
-/* Küçük tablet ve telefon */
+/* ── Küçük tablet ve telefon (≤768px) ── */
 @media (max-width: 768px) {
-  .topbar {
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-  }
-
   .topbar-inner {
-    width: 100%;
+    width:      100%;
+    height:     auto;
     min-height: auto;
 
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "brand actions"
-      "nav nav";
+      "brand   actions"
+      "nav     nav";
 
     align-items: center;
     gap: 0;
 
     padding: 10px 12px 0;
-    box-sizing: border-box;
   }
 
   /* Marka */
   .brand {
     grid-area: brand;
-
     min-width: 0;
     justify-self: start;
   }
 
   .logo {
-    display: block;
-
-    max-width: 100%;
-    overflow: hidden;
+    display:       block;
+    max-width:     100%;
+    overflow:      hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-
-    font-size: 1.18rem;
+    white-space:   nowrap;
+    font-size:     1.18rem;
   }
 
   .brand-divider,
@@ -537,38 +482,53 @@ button.brand {
     display: none;
   }
 
-  /* Sağ ikonlar */
+  /* Sağ ikonlar — 44px dokunma hedefi */
   .nav-right {
     grid-area: actions;
-
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 5px;
-
+    gap: 4px;
     min-width: 0;
   }
 
   .icon-btn {
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
-    padding: 8px;
+    width:     44px;
+    height:    44px;
+    min-width: 44px;
   }
 
+  .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--rule);
+    background: transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .mobile-menu-btn svg { width: 16px; height: 16px; color: var(--muted); }
+
+  .nav { display: none; }
+  .nav.nav--open { display: flex; }
+
   .icon-btn svg {
-    width: 16px;
+    width:  16px;
     height: 16px;
   }
 
-  /* Ana navigasyon */
+  /* Ana navigasyon — yatay kaydırmalı ikinci satır */
   .nav {
     grid-area: nav;
 
     width: calc(100% + 24px);
     min-width: 0;
 
-    margin-top: 9px;
+    margin-top:  9px;
     margin-left: -12px;
     margin-right: -12px;
 
@@ -590,14 +550,12 @@ button.brand {
     box-sizing: border-box;
   }
 
-  .nav::-webkit-scrollbar {
-    display: none;
-  }
+  .nav::-webkit-scrollbar { display: none; }
 
   .nav-link {
     flex: 0 0 auto;
 
-    min-height: 42px;
+    min-height: 44px;
     padding: 0 12px;
 
     display: inline-flex;
@@ -612,7 +570,7 @@ button.brand {
   }
 
   .nav-link svg {
-    width: 13px;
+    width:  13px;
     height: 13px;
   }
 
@@ -622,147 +580,115 @@ button.brand {
 
   /* Atölyem mobilde aşırı baskın olmasın */
   .nav-link.nav-cta {
-    min-height: 32px;
+    min-height: 34px;
     margin: 5px 0;
-
-    padding-left: 13px;
+    padding-left:  13px;
     padding-right: 13px;
-
     border-radius: 18px;
   }
 
-  /* Dropdown panelleri ekran dışına taşmasın */
-  /* .dropdown ve .notif-panel için mobil (768px) bloğundaki
-   position: fixed !important; top: 58px !important; ... satırlarını SİLİP
-   yerine bunu koy: */
+  /* Dropdown / bildirim paneli — .nav-right'a göre konumlanır,
+     navbar yüksekliği değişse bile doğru yerde açılır */
+  .dropdown {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    right: 0 !important;
+    left: auto !important;
 
-.dropdown {
-  position: absolute !important;
-  top: calc(100% + 8px) !important;
-  right: 0 !important;
-  left: auto !important;
-
-  width: min(290px, calc(100vw - 20px)) !important;
-  max-width: calc(100vw - 20px);
-}
-
-.notif-panel {
-  position: absolute !important;
-  top: calc(100% + 8px) !important;
-  right: 0 !important;
-  left: auto !important;
-
-  width: min(360px, calc(100vw - 20px)) !important;
-  max-width: calc(100vw - 20px);
-
-  max-height: calc(100dvh - 100px);
-  overflow: hidden;
-}
+    width: min(290px, calc(100vw - 20px)) !important;
+    max-width: calc(100vw - 20px);
+  }
 
   .notif-panel {
-    position: fixed !important;
-
-    top: 58px !important;
-    right: 10px !important;
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    right: 0 !important;
     left: auto !important;
 
     width: min(360px, calc(100vw - 20px)) !important;
     max-width: calc(100vw - 20px);
 
-    max-height: calc(100dvh - 72px);
+    max-height: calc(100vh - 100px);
+    max-height: calc(100dvh - 100px);
     overflow: hidden;
   }
 
   .notif-list {
-    max-height: calc(100dvh - 190px);
+    max-height: calc(100vh - 220px);
+    max-height: calc(100dvh - 220px);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
 }
 
 
-/* Küçük telefon */
+/* ── Küçük telefon (≤480px) ── */
 @media (max-width: 480px) {
   .topbar-inner {
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left:  max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
   }
 
-  .logo {
-    font-size: 1.05rem;
-  }
+  .logo { font-size: 1.05rem; }
 
-  .nav-right {
-    gap: 3px;
-  }
+  .nav-right { gap: 3px; }
 
   .icon-btn {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    padding: 7px;
+    width:     42px;
+    height:    42px;
+    min-width: 42px;
   }
 
   .nav {
     width: calc(100% + 20px);
-
-    margin-left: -10px;
+    margin-left:  -10px;
     margin-right: -10px;
-
-    padding-left: 8px;
+    padding-left:  8px;
     padding-right: 8px;
   }
 
   .nav-link {
-    min-height: 40px;
-
-    padding-left: 10px;
+    min-height: 42px;
+    padding-left:  10px;
     padding-right: 10px;
-
     font-size: 0.71rem;
   }
 
   .nav-link.nav-cta {
-    padding-left: 12px;
+    padding-left:  12px;
     padding-right: 12px;
   }
 
   .dropdown,
   .notif-panel {
-    right: 8px !important;
+    right: max(8px, env(safe-area-inset-right)) !important;
     width: calc(100vw - 16px) !important;
     max-width: calc(100vw - 16px);
   }
 }
 
 
-/* Çok dar telefon */
+/* ── Çok dar telefon (≤360px) ── */
 @media (max-width: 360px) {
-  .logo {
-    font-size: 0.96rem;
-  }
+  .logo { font-size: 0.96rem; }
 
-  .nav-right {
-    gap: 2px;
-  }
+  .nav-right { gap: 2px; }
 
   .icon-btn {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-    padding: 6px;
+    width:     40px;
+    height:    40px;
+    min-width: 40px;
   }
 
   .nav-link {
-    padding-left: 9px;
+    padding-left:  9px;
     padding-right: 9px;
-
     font-size: 0.68rem;
   }
 }
 
 
-/* Dokunmatik cihazlarda takılı kalan hover durumlarını temizle */
+/* ── Dokunmatik cihazlarda takılı kalan hover durumlarını temizle ── */
 @media (hover: none) {
   .nav-link:hover,
   .icon-btn:hover,
@@ -770,63 +696,17 @@ button.brand {
     transform: none;
   }
 }
-/* ══════════════════════════════════════════════
-   MOBİL UYUM
-══════════════════════════════════════════════ */
-.mobile-menu-btn {
-  display: none;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 6px;
-  color: var(--ink-1, #2e2a22);
-}
-.mobile-menu-btn svg { width: 22px; height: 22px; }
 
-@media (max-width: 860px) {
-  .mobile-menu-btn { display: flex; align-items: center; order: 2; }
 
-  .topbar-inner {
-    flex-wrap: wrap;
-    padding: 8px 12px;
-  }
-
-  .brand { order: 1; }
-
-  .nav-right { order: 3; margin-left: auto; }
-
-  .topbar-tag { display: none; }
-
-  /* Nav: gizli menü, hamburger ile açılır */
-  .nav {
-    order: 4;
-    width: 100%;
-    max-height: 0;
-    overflow: hidden;
-    flex-direction: column;
-    gap: 0;
-    transition: max-height .25s ease;
-  }
-  .nav.nav--open {
-    max-height: 320px;
-    padding: 8px 0 4px;
-    border-top: 1px solid rgba(0,0,0,.06);
-    margin-top: 8px;
-  }
-  .nav-link {
-    width: 100%;
-    padding: 10px 6px;
-  }
-}
-
-@media (max-width: 480px) {
-  .logo { font-size: .95rem; }
-  .nav-right { gap: 2px; }
-  .icon-btn { padding: 5px; }
-  .notif-panel, .dropdown { 
-    position: fixed;
-    left: 10px; right: 10px;
-    width: auto;
-    max-width: none;
+/* ── Hareket azaltma tercihi ── */
+@media (prefers-reduced-motion: reduce) {
+  .logo,
+  .nav-link,
+  .nav-link::after,
+  .icon-btn,
+  .icon-btn svg,
+  .dropdown,
+  .notif-panel {
+    transition: none;
   }
 }
