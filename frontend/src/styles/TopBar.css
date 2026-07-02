@@ -632,16 +632,32 @@ button.brand {
   }
 
   /* Dropdown panelleri ekran dışına taşmasın */
-  .dropdown {
-    position: fixed !important;
+  /* .dropdown ve .notif-panel için mobil (768px) bloğundaki
+   position: fixed !important; top: 58px !important; ... satırlarını SİLİP
+   yerine bunu koy: */
 
-    top: 58px !important;
-    right: 10px !important;
-    left: auto !important;
+.dropdown {
+  position: absolute !important;
+  top: calc(100% + 8px) !important;
+  right: 0 !important;
+  left: auto !important;
 
-    width: min(290px, calc(100vw - 20px)) !important;
-    max-width: calc(100vw - 20px);
-  }
+  width: min(290px, calc(100vw - 20px)) !important;
+  max-width: calc(100vw - 20px);
+}
+
+.notif-panel {
+  position: absolute !important;
+  top: calc(100% + 8px) !important;
+  right: 0 !important;
+  left: auto !important;
+
+  width: min(360px, calc(100vw - 20px)) !important;
+  max-width: calc(100vw - 20px);
+
+  max-height: calc(100dvh - 100px);
+  overflow: hidden;
+}
 
   .notif-panel {
     position: fixed !important;
@@ -752,5 +768,65 @@ button.brand {
   .icon-btn:hover,
   .brand:hover {
     transform: none;
+  }
+}
+/* ══════════════════════════════════════════════
+   MOBİL UYUM
+══════════════════════════════════════════════ */
+.mobile-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  color: var(--ink-1, #2e2a22);
+}
+.mobile-menu-btn svg { width: 22px; height: 22px; }
+
+@media (max-width: 860px) {
+  .mobile-menu-btn { display: flex; align-items: center; order: 2; }
+
+  .topbar-inner {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+  }
+
+  .brand { order: 1; }
+
+  .nav-right { order: 3; margin-left: auto; }
+
+  .topbar-tag { display: none; }
+
+  /* Nav: gizli menü, hamburger ile açılır */
+  .nav {
+    order: 4;
+    width: 100%;
+    max-height: 0;
+    overflow: hidden;
+    flex-direction: column;
+    gap: 0;
+    transition: max-height .25s ease;
+  }
+  .nav.nav--open {
+    max-height: 320px;
+    padding: 8px 0 4px;
+    border-top: 1px solid rgba(0,0,0,.06);
+    margin-top: 8px;
+  }
+  .nav-link {
+    width: 100%;
+    padding: 10px 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .logo { font-size: .95rem; }
+  .nav-right { gap: 2px; }
+  .icon-btn { padding: 5px; }
+  .notif-panel, .dropdown { 
+    position: fixed;
+    left: 10px; right: 10px;
+    width: auto;
+    max-width: none;
   }
 }

@@ -580,6 +580,7 @@ export default function ChaptersPage() {
 
   const [chapters, dispatch]    = useReducer(chaptersReducer, []);
   const [pageTab,  setPageTab]  = useState(PAGE_TABS.BOLUMLER);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState("");
   const [activeChapterId, setActiveChapterId] = useState(null);
@@ -765,6 +766,7 @@ useEffect(() => {
 
   const jumpToChapter = useCallback((chapterId) => {
     setActiveChapterId(chapterId);
+    setSidebarOpen(false); 
     const ch=chaptersRef.current.find(c=>c._id===chapterId);
     if (ch?.pages?.[0]) { setActivePageId(ch.pages[0].id); setTimeout(()=>leafRefsMap.current[ch.pages[0].id]?.scrollIntoView({behavior:"smooth",block:"start"}),30); }
   }, []);
@@ -868,7 +870,7 @@ useEffect(() => {
     <>
     <div className="cp-root">
       {/* ── SIDEBAR ── */}
-      <aside className="cp-sidebar">
+      <aside className={`cp-sidebar ${sidebarOpen ? "cp-sidebar--open" : ""}`}>
         <div className="cp-sidebar-top">
           <button className="cp-back-btn" onClick={()=>navigate(`/work/${workId}`)}>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
@@ -950,6 +952,7 @@ useEffect(() => {
       <div className="cp-main">
         <header className="cp-topbar">
           <div className="cp-tb-left">
+            <button className="cp-mobile-menu-btn" onClick={()=>setSidebarOpen(v=>!v)}>☰</button>
             <span className={`cp-save-dot cp-save-dot--${saveStatus}`}/>
             <span className="cp-save-text">
               {saveStatus==="saved"&&"kaydedildi"}{saveStatus==="unsaved"&&"kaydedilmemiş"}

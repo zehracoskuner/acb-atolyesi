@@ -74,6 +74,11 @@ const IconAdmin = () => (
     <rect x="3" y="14" width="7" height="7" rx="1"/>
   </svg>
 );
+const IconMenu = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+  </svg>
+);
 
 /* ── Bildirim ikonları — tüm type'lar dahil ── */
 const NOTIF_ICON = {
@@ -233,6 +238,7 @@ export default function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [open,          setOpen]          = useState(false);
   const [notifOpen,     setNotifOpen]     = useState(false);
   const [storyOpen,     setStoryOpen]     = useState(false);
@@ -260,6 +266,9 @@ export default function TopBar() {
       if (stored) setUser(JSON.parse(stored));
     } catch { /* ignore */ }
   }, []);
+  useEffect(() => {
+  setMobileNavOpen(false);
+}, [location.pathname]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -339,8 +348,16 @@ export default function TopBar() {
             <span className="topbar-tag">acemi yazarlar birliği</span>
           </button>
 
+          <button
+          className="mobile-menu-btn"
+          onClick={() => setMobileNavOpen(v => !v)}
+          aria-label="Menü"
+        >
+          <IconMenu />
+        </button>
+
           {/* ── Nav ── */}
-          <nav className="nav">
+          <nav className={`nav ${mobileNavOpen ? "nav--open" : ""}`}>
             <Link to="/keşfet" className={`nav-link ${isActive("/keşfet") ? "active" : ""}`} data-tour="topbar-kesfet">
               <IconCompass />Keşfet
             </Link>
