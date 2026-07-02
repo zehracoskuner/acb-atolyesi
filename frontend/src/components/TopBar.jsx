@@ -237,8 +237,6 @@ function timeAgo(iso) {
 export default function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
-
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [open,          setOpen]          = useState(false);
   const [notifOpen,     setNotifOpen]     = useState(false);
   const [storyOpen,     setStoryOpen]     = useState(false);
@@ -266,9 +264,6 @@ export default function TopBar() {
       if (stored) setUser(JSON.parse(stored));
     } catch { /* ignore */ }
   }, []);
-  useEffect(() => {
-  setMobileNavOpen(false);
-}, [location.pathname]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -349,7 +344,7 @@ export default function TopBar() {
           </button>
 
           {/* ── Nav ── */}
-          <nav className={`nav ${mobileNavOpen ? "nav--open" : ""}`}>
+          <nav className="nav">
             <Link to="/keşfet" className={`nav-link ${isActive("/keşfet") ? "active" : ""}`} data-tour="topbar-kesfet">
               <IconCompass />Keşfet
             </Link>
@@ -366,13 +361,6 @@ export default function TopBar() {
 
           {/* ── Sağ ── */}
           <div className="nav-right">
-            <button
-          className="mobile-menu-btn"
-          onClick={() => setMobileNavOpen(v => !v)}
-          aria-label="Menü"
-        >
-          <IconMenu />
-        </button>
             <TourHelpButton />
 
             <button
