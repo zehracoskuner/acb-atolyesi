@@ -454,4 +454,303 @@ button.brand {
   gap: inherit;
   font-family: inherit;
   text-decoration: none;
+
+}
+/* ══════════════════════════════════════════════
+   TOPBAR RESPONSIVE
+══════════════════════════════════════════════ */
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .topbar-inner {
+    padding-left: 18px;
+    padding-right: 18px;
+    gap: 16px;
+  }
+
+  .topbar-tag,
+  .brand-divider {
+    display: none;
+  }
+
+  .nav {
+    gap: 4px;
+  }
+
+  .nav-link {
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+
+  .nav-right {
+    gap: 6px;
+  }
+}
+
+
+/* Küçük tablet ve telefon */
+@media (max-width: 768px) {
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+
+  .topbar-inner {
+    width: 100%;
+    min-height: auto;
+
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand actions"
+      "nav nav";
+
+    align-items: center;
+    gap: 0;
+
+    padding: 10px 12px 0;
+    box-sizing: border-box;
+  }
+
+  /* Marka */
+  .brand {
+    grid-area: brand;
+
+    min-width: 0;
+    justify-self: start;
+  }
+
+  .logo {
+    display: block;
+
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    font-size: 1.18rem;
+  }
+
+  .brand-divider,
+  .topbar-tag {
+    display: none;
+  }
+
+  /* Sağ ikonlar */
+  .nav-right {
+    grid-area: actions;
+
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+
+    min-width: 0;
+  }
+
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    padding: 8px;
+  }
+
+  .icon-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Ana navigasyon */
+  .nav {
+    grid-area: nav;
+
+    width: calc(100% + 24px);
+    min-width: 0;
+
+    margin-top: 9px;
+    margin-left: -12px;
+    margin-right: -12px;
+
+    padding: 0 12px;
+
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 2px;
+
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    border-top: 1px solid rgba(26, 18, 9, 0.06);
+
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+
+    box-sizing: border-box;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-link {
+    flex: 0 0 auto;
+
+    min-height: 42px;
+    padding: 0 12px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+
+    border-radius: 0;
+
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
+  .nav-link svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .nav-link.active {
+    border-bottom-color: #b8860b;
+  }
+
+  /* Atölyem mobilde aşırı baskın olmasın */
+  .nav-link.nav-cta {
+    min-height: 32px;
+    margin: 5px 0;
+
+    padding-left: 13px;
+    padding-right: 13px;
+
+    border-radius: 18px;
+  }
+
+  /* Dropdown panelleri ekran dışına taşmasın */
+  .dropdown {
+    position: fixed !important;
+
+    top: 58px !important;
+    right: 10px !important;
+    left: auto !important;
+
+    width: min(290px, calc(100vw - 20px)) !important;
+    max-width: calc(100vw - 20px);
+  }
+
+  .notif-panel {
+    position: fixed !important;
+
+    top: 58px !important;
+    right: 10px !important;
+    left: auto !important;
+
+    width: min(360px, calc(100vw - 20px)) !important;
+    max-width: calc(100vw - 20px);
+
+    max-height: calc(100dvh - 72px);
+    overflow: hidden;
+  }
+
+  .notif-list {
+    max-height: calc(100dvh - 190px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+
+/* Küçük telefon */
+@media (max-width: 480px) {
+  .topbar-inner {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .logo {
+    font-size: 1.05rem;
+  }
+
+  .nav-right {
+    gap: 3px;
+  }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    padding: 7px;
+  }
+
+  .nav {
+    width: calc(100% + 20px);
+
+    margin-left: -10px;
+    margin-right: -10px;
+
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .nav-link {
+    min-height: 40px;
+
+    padding-left: 10px;
+    padding-right: 10px;
+
+    font-size: 0.71rem;
+  }
+
+  .nav-link.nav-cta {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .dropdown,
+  .notif-panel {
+    right: 8px !important;
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px);
+  }
+}
+
+
+/* Çok dar telefon */
+@media (max-width: 360px) {
+  .logo {
+    font-size: 0.96rem;
+  }
+
+  .nav-right {
+    gap: 2px;
+  }
+
+  .icon-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    padding: 6px;
+  }
+
+  .nav-link {
+    padding-left: 9px;
+    padding-right: 9px;
+
+    font-size: 0.68rem;
+  }
+}
+
+
+/* Dokunmatik cihazlarda takılı kalan hover durumlarını temizle */
+@media (hover: none) {
+  .nav-link:hover,
+  .icon-btn:hover,
+  .brand:hover {
+    transform: none;
+  }
 }

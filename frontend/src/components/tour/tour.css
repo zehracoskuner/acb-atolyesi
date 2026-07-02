@@ -1,28 +1,131 @@
 /* ── Tur sırasında öne çıkan elemanın vurgulanması ───────────────────────── */
-/* Vurgu rengi: topbar logosundaki "ACB-Atölyesi" yazısının (--ink: #1a1209)
-   tonuyla uyumlu, koyu yeşil bir aksan. */
+
 [data-tour-active="true"] {
   position: relative;
   z-index: 999;
+
   outline: 3px solid rgba(88, 224, 43, 0.5);
   outline-offset: 3px;
   border-radius: 6px;
-  box-shadow: 0 0 0 6px rgba(34, 64, 24, 0.14), 0 4px 18px rgba(20, 40, 14, 0.3);
-  transition: outline-color 0.25s ease, box-shadow 0.25s ease;
+
+  box-shadow:
+    0 0 0 6px rgba(34, 64, 24, 0.14),
+    0 4px 18px rgba(20, 40, 14, 0.3);
+
+  transition:
+    outline-color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
-/* ── Mobil: tooltip ekrana sığsın ─────────────────────────────────────────── */
-@media (max-width: 480px) {
+
+/* ── Tur tooltip genel güvenlik ayarları ─────────────────────────────────── */
+
+.acb-tour-tooltip {
+  box-sizing: border-box;
+  max-width: min(360px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  overscroll-behavior: contain;
+}
+
+
+/* ── Tablet ve mobil ─────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
   .acb-tour-tooltip {
-    width: calc(100vw - 24px) !important;
-    left: 12px !important;
+    width: min(360px, calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 24px) !important;
+
+    padding: 16px !important;
+
+    font-size: 0.9rem;
+    line-height: 1.55;
+
+    border-radius: 10px;
+  }
+
+  .acb-tour-help-btn {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    flex-shrink: 0;
   }
 }
 
-/* ── Soru işareti butonu: dokunmatik alanı büyüt ──────────────────────────── */
+
+/* ── Telefon ─────────────────────────────────────────────────────────────── */
+
 @media (max-width: 480px) {
+  .acb-tour-tooltip {
+    position: fixed !important;
+
+    left: 12px !important;
+    right: 12px !important;
+
+    width: auto !important;
+    max-width: none !important;
+
+    max-height: calc(100dvh - 24px);
+
+    margin: 0 !important;
+  }
+
+  .acb-tour-tooltip button {
+    min-height: 40px;
+  }
+
   .acb-tour-help-btn {
     width: 36px !important;
     height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+  }
+
+  [data-tour-active="true"] {
+    outline-width: 2px;
+    outline-offset: 2px;
+
+    box-shadow:
+      0 0 0 4px rgba(34, 64, 24, 0.12),
+      0 3px 12px rgba(20, 40, 14, 0.22);
+  }
+}
+
+
+/* ── Çok dar telefon ─────────────────────────────────────────────────────── */
+
+@media (max-width: 360px) {
+  .acb-tour-tooltip {
+    left: 8px !important;
+    right: 8px !important;
+
+    padding: 14px !important;
+
+    font-size: 0.84rem;
+  }
+
+  .acb-tour-help-btn {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+  }
+}
+
+
+/* ── Dokunmatik cihazlarda gereksiz hover etkilerini kapat ───────────────── */
+
+@media (hover: none) {
+  .acb-tour-help-btn:hover {
+    transform: none;
   }
 }

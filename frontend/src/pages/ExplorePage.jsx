@@ -504,6 +504,70 @@ function NeedsReviewCard({ work, navigate }) {
   );
 }
 
+/* ── Keşfet ana eser kartı ── */
+function ExploreWorkCard({ work, index }) {
+  const navigate = useNavigate();
+
+  const authorName = work.isAnonymous
+    ? "Anonim Yazar"
+    : (
+        work.author?.kullaniciAdi ||
+        work.author?.username ||
+        "Yazar"
+      );
+
+  const chapterCount = Number(work.chapterCount || 0);
+
+  return (
+    <button
+      type="button"
+      className="explore-work-card"
+      style={{
+        animationDelay: `${index * 0.04}s`,
+      }}
+      onClick={() => navigate(`/story/${work._id}`)}
+      aria-label={`${work.title} eserine git`}
+    >
+      <div className="explore-work-cover-wrap">
+        {work.coverImage ? (
+          <img
+            src={work.coverImage}
+            alt={`${work.title} kitap kapağı`}
+            className="explore-work-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="explore-work-cover-placeholder">
+            <span>
+              {work.title?.slice(0, 2).toUpperCase() || "ES"}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="explore-work-content">
+        <p className="explore-work-title">
+          {work.title}
+        </p>
+
+        <p className="explore-work-author">
+          {authorName}
+        </p>
+
+        <div className="explore-work-genres">
+          <GenreChips work={work} max={2} />
+        </div>
+
+        <div className="explore-work-footer">
+          <span>
+            {chapterCount} bölüm
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 /* ── Arama sonuç kartları ── */
 function SearchWorkCard({ work, index }) {
   const navigate = useNavigate();
@@ -637,8 +701,7 @@ export default function ExplorePage() {
   const [searchUsers, setSearchUsers] = useState([]);
   const [searchLoad,  setSearchLoad]  = useState(false);
   const [searchTab,   setSearchTab]   = useState("works");
-
-  const [mode, setMode] = useState(isLoggedIn ? "feed" : "explore");
+const [mode, setMode] = useState("explore");
 
   useEffect(() => {
     document.title = "Keşfet · ACB Atölyesi";
@@ -902,16 +965,16 @@ export default function ExplorePage() {
               {isLoggedIn && (
                 <div style={layout.tabRow}>
                   <button
-                    style={{ ...layout.tab, ...(mode === "feed" ? layout.tabActive : {}) }}
-                    onClick={() => setMode("feed")}
-                  >
-                    Akış
-                  </button>
-                  <button
                     style={{ ...layout.tab, ...(mode === "explore" ? layout.tabActive : {}) }}
                     onClick={() => setMode("explore")}
                   >
                     Keşfet
+                  </button>
+                  <button
+                    style={{ ...layout.tab, ...(mode === "feed" ? layout.tabActive : {}) }}
+                    onClick={() => setMode("feed")}
+                  >
+                    Akış
                   </button>
                 </div>
               )}
@@ -955,26 +1018,34 @@ export default function ExplorePage() {
               )}
 
               {/* KEŞFET — hem misafir hem üye */}
-              {(mode === "explore" || !isLoggedIn) && (
-                discLoad ? (
-                  <div style={layout.spinnerWrap}><div style={layout.spinner} /></div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {discWorks.length === 0 ? (
-                      <div style={layout.empty}>
-                        <span style={{ fontSize: "2rem", opacity: .3 }}>📚</span>
-                        <p style={layout.emptyText}>
-                          {genreFilter !== "all"
-                            ? `"${genreFilter}" türünde yayınlanmış eser yok.`
-                            : "Henüz yayınlanmış eser yok."}
-                        </p>
-                      </div>
-                    ) : (
-                      discWorks.map((w, i) => <SearchWorkCard key={w._id} work={w} index={i} />)
-                    )}
-                  </div>
-                )
-              )}
+              {/* KEŞFET — hem misafir hem üye */}
+                {(mode === "explore" || !isLoggedIn) && (
+                  discLoad ? (
+                    <div style={layout.spinnerWrap}>
+                      <div style={layout.spinner} />
+                    </div>
+                  ) : discWorks.length === 0 ? (
+                    <div style={layout.empty}>
+                      <span style={{ fontSize: "2rem", opacity: .3 }}>📚</span>
+
+                      <p style={layout.emptyText}>
+                        {genreFilter !== "all"
+                          ? `"${genreFilter}" türünde yayınlanmış eser yok.`
+                          : "Henüz yayınlanmış eser yok."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="explore-work-grid">
+                      {discWorks.map((work, index) => (
+                        <ExploreWorkCard
+                          key={work._id}
+                          work={work}
+                          index={index}
+                        />
+                      ))}
+                    </div>
+                  )
+                )}
             </>
           )}
         </section>
@@ -1056,13 +1127,228 @@ export default function ExplorePage() {
       <Footer />
 
       <style>{`
-        @keyframes spin   { to { transform: rotate(360deg); } }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-        @media (max-width: 768px) {
-          .ex-main-grid { grid-template-columns: 1fr !important; }
-          .ex-sidebar   { display: none !important; }
-        }
-      `}</style>
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .explore-work-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .explore-work-card {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+
+    display: flex;
+    flex-direction: column;
+
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 12px;
+
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    appearance: none;
+    font: inherit;
+
+    animation: fadeUp 0.3s ease both;
+
+    transition:
+      transform 0.18s ease,
+      box-shadow 0.18s ease,
+      border-color 0.18s ease;
+  }
+
+  .explore-work-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(184, 134, 11, 0.26);
+    box-shadow: 0 12px 30px rgba(26, 18, 9, 0.08);
+  }
+
+  .explore-work-card:focus-visible {
+    outline: 2px solid #b8860b;
+    outline-offset: 3px;
+  }
+
+  .explore-work-cover-wrap {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    background: #ede9e0;
+  }
+
+  .explore-work-cover {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+
+    transition: transform 0.28s ease;
+  }
+
+  .explore-work-card:hover .explore-work-cover {
+    transform: scale(1.025);
+  }
+
+  .explore-work-cover-placeholder {
+    width: 100%;
+    height: 100%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background:
+      linear-gradient(
+        145deg,
+        #ede9e0,
+        #ddd5c4
+      );
+  }
+
+  .explore-work-cover-placeholder span {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: rgba(26, 18, 9, 0.18);
+    letter-spacing: 0.05em;
+  }
+
+  .explore-work-content {
+    flex: 1;
+    min-width: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    padding: 13px 14px 14px;
+  }
+
+  .explore-work-title {
+    margin: 0 0 4px;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1a1209;
+  }
+
+  .explore-work-author {
+    margin: 0 0 8px;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.72rem;
+    color: #9a8e80;
+  }
+
+  .explore-work-genres {
+    min-height: 20px;
+  }
+
+  .explore-work-footer {
+    margin-top: auto;
+    padding-top: 10px;
+
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.65rem;
+    color: #b0a898;
+  }
+
+  @media (max-width: 900px) {
+    .explore-work-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .ex-main-grid {
+      grid-template-columns: 1fr !important;
+      padding-left: 12px !important;
+      padding-right: 12px !important;
+    }
+
+    .ex-sidebar {
+      display: none !important;
+    }
+
+    .explore-work-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .explore-work-content {
+      padding: 10px 10px 12px;
+    }
+
+    .explore-work-title {
+      font-size: 0.9rem;
+    }
+
+    .explore-work-author {
+      font-size: 0.68rem;
+    }
+  }
+
+  @media (max-width: 390px) {
+    .ex-main-grid {
+      padding-left: 9px !important;
+      padding-right: 9px !important;
+    }
+
+    .explore-work-grid {
+      gap: 9px;
+    }
+
+    .explore-work-content {
+      padding: 8px;
+    }
+
+    .explore-work-title {
+      font-size: 0.84rem;
+    }
+  }
+
+  @media (hover: none) {
+    .explore-work-card:hover {
+      transform: none;
+      border-color: rgba(0, 0, 0, 0.06);
+      box-shadow: none;
+    }
+
+    .explore-work-card:hover .explore-work-cover {
+      transform: none;
+    }
+  }
+`}</style>
     </div>
   );
 }

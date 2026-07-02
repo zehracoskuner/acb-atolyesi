@@ -1874,3 +1874,673 @@
   background: var(--accent);
   color: #fff;
 } 
+
+/* ══════════════════════════════════════════════
+   PROFILE PAGE — SON MOBİL DÜZELTMELER
+   Bu blok dosyanın EN ALTINDA kalmalı
+══════════════════════════════════════════════ */
+
+/* Taşmaları genel olarak engelle */
+.pf-root,
+.pf-main,
+.pf-identity,
+.pf-info-row,
+.pf-grid,
+.pf-quotes-grid,
+.pf-reading-lists {
+  min-width: 0;
+}
+
+.pf-root img {
+  max-width: 100%;
+}
+
+
+/* ─────────────────────────────────────────────
+   TABLET
+───────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .pf-main {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .pf-identity {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .pf-info-row {
+    gap: 22px;
+  }
+
+  .pf-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px 14px;
+  }
+
+  .pf-quotes-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* ─────────────────────────────────────────────
+   TELEFON / KÜÇÜK TABLET
+───────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  /* Banner */
+  .pf-banner-wrap {
+    height: 140px !important;
+  }
+
+  .pf-banner-actions {
+    right: 10px;
+    bottom: 10px;
+    gap: 6px;
+  }
+
+  .pf-banner-btn,
+  .pf-banner-edit-btn {
+    padding: 6px 9px;
+    font-size: 0.67rem;
+  }
+
+  /* Kimlik alanı */
+  .pf-identity {
+    width: 100%;
+    max-width: 100%;
+
+    margin: 0 !important;
+    margin-bottom: 0 !important;
+    padding: 0 14px 14px;
+
+    transform: translateY(-34px) !important;
+
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "avatar name"
+      "actions actions";
+
+    align-items: end;
+    gap: 10px 12px;
+  }
+
+  .pf-avatar-wrap {
+    grid-area: avatar;
+  }
+
+  .pf-avatar,
+  .pf-avatar-placeholder {
+    width: 76px !important;
+    height: 76px !important;
+    font-size: 1.5rem !important;
+  }
+
+  .pf-avatar-edit-btn {
+    width: 25px;
+    height: 25px;
+  }
+
+  .pf-name-block {
+    grid-area: name;
+    min-width: 0;
+    padding-bottom: 7px;
+  }
+
+  .pf-username {
+    max-width: 100%;
+    margin: 0 0 3px;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    font-size: 1.2rem !important;
+    text-shadow: none !important;
+  }
+
+  .pf-handle {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Önceki display:none kuralını geri aç */
+  .pf-header-actions {
+    grid-area: actions;
+
+    display: flex !important;
+    width: 100%;
+    padding: 0;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+
+  .pf-header-actions .pf-btn {
+    flex: 1 1 auto;
+    min-width: 110px;
+    justify-content: center;
+
+    padding: 8px 11px;
+    font-size: 0.72rem;
+  }
+
+  /* Ana içerik */
+  .pf-main {
+    width: 100%;
+    max-width: 100%;
+
+    margin-top: -22px;
+    padding: 0 14px 48px;
+  }
+
+  /* Bio + istatistik */
+  .pf-info-row {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+
+    padding: 18px 0 22px;
+  }
+
+  .pf-bio {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .pf-bio p {
+    font-size: 0.88rem;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+  }
+
+  .pf-bio-meta {
+    gap: 8px 14px;
+  }
+
+  .pf-bio-meta span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .pf-stats-row {
+    width: 100%;
+
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+
+    gap: 8px;
+  }
+
+  .pf-stat {
+    min-width: 0;
+    padding: 7px 3px;
+  }
+
+  .pf-stat-num {
+    font-size: 1.15rem !important;
+  }
+
+  .pf-stat-label {
+    font-size: 0.57rem;
+    overflow-wrap: anywhere;
+  }
+
+  /* Sekmeler */
+  .pf-tabs {
+    width: calc(100% + 28px);
+
+    margin-left: -14px;
+    margin-right: -14px;
+    margin-top: 18px;
+    margin-bottom: 20px;
+
+    padding-left: 8px;
+    padding-right: 8px;
+
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    flex-wrap: nowrap !important;
+
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pf-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pf-tab {
+    flex: 0 0 auto;
+
+    padding: 10px 12px !important;
+    font-size: 0.73rem !important;
+    white-space: nowrap;
+  }
+
+  /* Eserler */
+  .pf-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 18px 11px !important;
+  }
+
+  .pf-work-card,
+  .pf-new-card {
+    min-width: 0;
+  }
+
+  .pf-work-cover,
+  .pf-new-cover {
+    border-radius: 8px;
+  }
+
+  .pf-work-title {
+    font-size: 0.83rem;
+  }
+
+  .pf-work-meta {
+    font-size: 0.61rem;
+  }
+
+  .pf-work-actions {
+    flex-wrap: wrap;
+  }
+
+  .pf-work-action-btn {
+    min-width: 0;
+    padding: 6px 3px;
+    font-size: 0.62rem;
+  }
+
+  /* Okuma listeleri başlığı */
+  .pf-lists-header,
+  .pf-notif-header {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* Klasik liste kartları */
+  .pf-list-card {
+    gap: 11px;
+    padding: 11px 12px;
+  }
+
+  .pf-list-covers {
+    width: 50px;
+    height: 50px;
+  }
+
+  .pf-list-name {
+    font-size: 0.86rem;
+  }
+
+  /* Genişletilebilir listeler */
+  .pf-list-card-header {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .pf-list-desc {
+    max-width: 100%;
+    white-space: normal;
+
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+
+    overflow: hidden;
+  }
+
+  .pf-list-actions {
+    gap: 3px;
+  }
+
+  .pf-list-action-btn {
+    width: 29px;
+    height: 29px;
+  }
+
+  .pf-list-work-row {
+    gap: 9px;
+    padding: 8px 11px;
+  }
+
+  .pf-list-work-cover-sm {
+    width: 34px;
+    height: 46px;
+  }
+
+  .pf-list-work-title {
+    font-size: 0.82rem;
+  }
+
+  .pf-list-work-author,
+  .pf-list-work-note {
+    font-size: 0.72rem;
+  }
+
+  /* Bildirimler */
+  .pf-notif-item {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .pf-notif-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 0.9rem;
+  }
+
+  .pf-notif-text {
+    padding-right: 10px;
+    font-size: 0.83rem;
+  }
+
+  .pf-notif-unread-dot {
+    top: 12px;
+    right: 12px;
+  }
+
+  /* Formlar */
+  .pf-edit-section,
+  .pf-settings-section {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .pf-form-input,
+  .pf-form-textarea {
+    font-size: 16px;
+  }
+
+  .pf-form-actions {
+    flex-wrap: wrap;
+  }
+
+  .pf-form-actions .pf-btn {
+    flex: 1 1 130px;
+    justify-content: center;
+  }
+
+  /* Tehlikeli bölge */
+  .pf-danger-zone {
+    padding: 15px;
+  }
+
+  .pf-danger-item {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pf-danger-item .pf-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Alıntılar */
+  .pf-quotes-filters {
+    flex-wrap: nowrap;
+
+    width: calc(100% + 28px);
+    margin-left: -14px;
+    margin-right: -14px;
+
+    padding: 0 14px 5px;
+
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pf-quotes-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pf-quotes-filter-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .pf-quotes-total {
+    flex: 0 0 auto;
+    margin-left: 8px;
+    white-space: nowrap;
+  }
+
+  .pf-quotes-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  .pf-quote-card {
+    padding: 16px 15px 13px;
+  }
+
+  .pf-quote-text {
+    padding-left: 20px;
+    font-size: 0.98rem;
+  }
+
+  /* Modal mobilde alt panel */
+  .pf-modal-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+
+  .pf-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 88dvh;
+
+    padding: 22px 18px;
+
+    overflow-y: auto;
+
+    border-radius: 16px 16px 0 0 !important;
+  }
+
+  .pf-modal-actions {
+    flex-wrap: wrap;
+  }
+
+  .pf-modal-actions .pf-btn {
+    flex: 1 1 120px;
+    justify-content: center;
+  }
+
+  .pf-page-footer {
+    padding-top: 32px;
+  }
+}
+
+
+/* ─────────────────────────────────────────────
+   KÜÇÜK TELEFON
+───────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .pf-banner-wrap {
+    height: 112px !important;
+  }
+
+  .pf-banner-actions {
+    right: 7px;
+    bottom: 7px;
+  }
+
+  /* Banner butonlarında sadece ikon kalabilir.
+     Buton metninin span içinde olması gerekir. */
+  .pf-banner-btn {
+    padding: 6px 8px;
+  }
+
+  .pf-identity {
+    padding-left: 10px;
+    padding-right: 10px;
+
+    transform: translateY(-30px) !important;
+  }
+
+  .pf-avatar,
+  .pf-avatar-placeholder {
+    width: 68px !important;
+    height: 68px !important;
+  }
+
+  .pf-name-block {
+    padding-bottom: 4px;
+  }
+
+  .pf-username {
+    font-size: 1.08rem !important;
+  }
+
+  .pf-header-actions .pf-btn {
+    min-width: calc(50% - 4px);
+    padding: 7px 8px;
+    font-size: 0.68rem;
+  }
+
+  .pf-main {
+    margin-top: -18px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .pf-stats-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .pf-stat-num {
+    font-size: 1.05rem !important;
+  }
+
+  .pf-stat-label {
+    font-size: 0.52rem;
+    letter-spacing: 0.02em;
+  }
+
+  .pf-tabs {
+    width: calc(100% + 20px);
+    margin-left: -10px;
+    margin-right: -10px;
+  }
+
+  .pf-tab {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    font-size: 0.69rem !important;
+  }
+
+  .pf-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 15px 8px !important;
+  }
+
+  .pf-work-title {
+    font-size: 0.78rem;
+  }
+
+  .pf-work-actions {
+    gap: 4px;
+  }
+
+  .pf-work-action-btn {
+    font-size: 0.58rem;
+  }
+
+  .pf-list-card-header {
+    padding: 10px;
+  }
+
+  .pf-list-covers {
+    width: 44px;
+    height: 44px;
+  }
+
+  .pf-list-actions {
+    flex-direction: column;
+  }
+
+  .pf-list-action-btn {
+    width: 27px;
+    height: 27px;
+  }
+
+  .pf-list-work-row {
+    padding: 7px 9px;
+  }
+
+  .pf-list-work-cover-sm {
+    width: 31px;
+    height: 42px;
+  }
+
+  .pf-notif-mark-all {
+    font-size: 0.67rem;
+  }
+
+  .pf-notif-text {
+    font-size: 0.79rem;
+  }
+
+  .pf-quotes-filters {
+    width: calc(100% + 20px);
+    margin-left: -10px;
+    margin-right: -10px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .pf-quote-source {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .pf-quote-date {
+    margin-left: 0;
+  }
+
+  .pf-privacy-toggle {
+    flex-direction: column;
+  }
+
+  .pf-privacy-btn {
+    width: 100%;
+  }
+
+  .pf-modal {
+    padding: 20px 15px;
+  }
+}
+
+
+/* Dokunmatik cihazlarda hover efektlerinin takılı kalmasını engelle */
+@media (hover: none) {
+  .pf-work-card:hover .pf-work-cover,
+  .pf-list-card:hover,
+  .pf-quote-card:hover {
+    transform: none;
+  }
+
+  .pf-work-card:hover .pf-work-cover,
+  .pf-list-card:hover,
+  .pf-notif-item:hover,
+  .pf-quote-card:hover {
+    box-shadow: none;
+  }
+}
