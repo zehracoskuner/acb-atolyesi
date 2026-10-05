@@ -1,131 +1,18 @@
-/* ── Tur sırasında öne çıkan elemanın vurgulanması ───────────────────────── */
-
-[data-tour-active="true"] {
-  position: relative;
-  z-index: 999;
-
-  outline: 3px solid rgba(88, 224, 43, 0.5);
-  outline-offset: 3px;
-  border-radius: 6px;
-
-  box-shadow:
-    0 0 0 6px rgba(34, 64, 24, 0.14),
-    0 4px 18px rgba(20, 40, 14, 0.3);
-
-  transition:
-    outline-color 0.25s ease,
-    box-shadow 0.25s ease;
-}
-
-
-/* ── Tur tooltip genel güvenlik ayarları ─────────────────────────────────── */
-
-.acb-tour-tooltip {
-  box-sizing: border-box;
-  max-width: min(360px, calc(100vw - 24px));
-  max-height: calc(100dvh - 24px);
-
-  overflow-y: auto;
-  overflow-x: hidden;
-
-  overscroll-behavior: contain;
-}
-
-
-/* ── Tablet ve mobil ─────────────────────────────────────────────────────── */
-
-@media (max-width: 768px) {
-  .acb-tour-tooltip {
-    width: min(360px, calc(100vw - 24px)) !important;
-    max-width: calc(100vw - 24px) !important;
-
-    padding: 16px !important;
-
-    font-size: 0.9rem;
-    line-height: 1.55;
-
-    border-radius: 10px;
-  }
-
-  .acb-tour-help-btn {
-    width: 38px !important;
-    height: 38px !important;
-    min-width: 38px !important;
-    min-height: 38px !important;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    flex-shrink: 0;
-  }
-}
-
-
-/* ── Telefon ─────────────────────────────────────────────────────────────── */
-
-@media (max-width: 480px) {
-  .acb-tour-tooltip {
-    position: fixed !important;
-
-    left: 12px !important;
-    right: 12px !important;
-
-    width: auto !important;
-    max-width: none !important;
-
-    max-height: calc(100dvh - 24px);
-
-    margin: 0 !important;
-  }
-
-  .acb-tour-tooltip button {
-    min-height: 40px;
-  }
-
-  .acb-tour-help-btn {
-    width: 36px !important;
-    height: 36px !important;
-    min-width: 36px !important;
-    min-height: 36px !important;
-  }
-
-  [data-tour-active="true"] {
-    outline-width: 2px;
-    outline-offset: 2px;
-
-    box-shadow:
-      0 0 0 4px rgba(34, 64, 24, 0.12),
-      0 3px 12px rgba(20, 40, 14, 0.22);
-  }
-}
-
-
-/* ── Çok dar telefon ─────────────────────────────────────────────────────── */
-
-@media (max-width: 360px) {
-  .acb-tour-tooltip {
-    left: 8px !important;
-    right: 8px !important;
-
-    padding: 14px !important;
-
-    font-size: 0.84rem;
-  }
-
-  .acb-tour-help-btn {
-    width: 34px !important;
-    height: 34px !important;
-    min-width: 34px !important;
-    min-height: 34px !important;
-  }
-}
-
-
-/* ── Dokunmatik cihazlarda gereksiz hover etkilerini kapat ───────────────── */
-
-@media (hover: none) {
-  .acb-tour-help-btn:hover {
-    transform: none;
-  }
+﻿/* A portal avoids editor transforms and sidebar stacking contexts. No scroll locks. */
+.acb-tour-layer { position: fixed; inset: 0; z-index: 12000; pointer-events: none; }
+.acb-tour-shade { position: absolute; inset: 0; background: rgb(30 24 18 / 20%); }
+.acb-tour-highlight { position: fixed; outline: 3px solid #b8860b; outline-offset: 3px; border-radius: 5px; box-shadow: 0 0 0 6px rgb(184 134 11 / 16%); }
+.acb-tour-tooltip { position: fixed; box-sizing: border-box; width: 360px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); overflow: auto; pointer-events: auto; padding: 24px 20px 18px; background: #faf8f3; color: #3d3122; border: 1px solid #b8a47e; border-top: 3px solid #8b2500; border-radius: 8px; box-shadow: 0 10px 36px rgb(50 35 20 / 25%); font-family: 'DM Sans', sans-serif; }
+.acb-tour-tooltip h2 { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.5rem; line-height: 1.2; margin: 0 28px 12px 0; }
+.acb-tour-tooltip p { font-size: .9rem; line-height: 1.6; margin: 12px 0; }
+.acb-tour-tooltip .acb-tour-note, .acb-tour-tooltip .acb-tour-count { font-size: .75rem; color: #6a5945; }
+.acb-tour-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.acb-tour-tooltip button { min-height: 44px; padding: 8px 12px; border: 1px solid #c8b99a; border-radius: 4px; background: #f3ece0; color: #59472d; font: inherit; font-size: .85rem; cursor: pointer; }
+.acb-tour-tooltip button:disabled { opacity: .5; cursor: default; }
+.acb-tour-tooltip button:focus-visible, .acb-tour-help-btn:focus-visible { outline: 3px solid #8b2500; outline-offset: 2px; }
+.acb-tour-tooltip .acb-tour-close { position: absolute; top: 4px; right: 4px; font-size: 1.4rem; border: 0; background: transparent; }
+.acb-tour-help-btn { border: 1px solid #c8b99a; border-radius: 50%; width: 38px; height: 38px; flex-shrink: 0; background: #f3ece0; color: #59472d; font: bold 18px Georgia, serif; cursor: pointer; }
+.acb-tour-help-floating { position: fixed; right: 14px; bottom: 14px; z-index: 1001; }
+@media (max-width: 600px) {
+  .acb-tour-tooltip { left: 12px !important; right: 12px; top: auto !important; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; max-height: min(55dvh, 440px); padding: 20px 16px 14px; }
 }

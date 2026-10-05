@@ -26,3 +26,10 @@ frontend/node_modules/
 Thumbs.db
 not.txt
 *.log
+# Share placeholders only; local tool permissions may contain credentials.
+!**/.env.example
+.claude/settings.local.json
+selamCodex.txt
+.review-cache/
+review-evidence/
+tumkodlarrr.txt

@@ -8,8 +8,8 @@
   position:       relative;
   width:          220px;
   min-height:     110px;
-  background:     var(--card-bg, #faf8f5);
-  border:         1.5px solid #e2dcd4;
+  background:     var(--card-bg, var(--pw-surface, #fffdf9));
+  border:         1px solid var(--pw-border, #e2dcd4);
   border-radius:  10px;
   display:        flex;
   flex-direction: column;
@@ -19,15 +19,15 @@
   font-family:    'DM Sans', sans-serif;
 }
 
-.wn-node--idea     { background-color: #faf8f5; border-color: #e8e0d4; }
+.wn-node--idea     { background-color: var(--pw-surface, #fffdf9); border-color: #e8e0d4; }
 .wn-node--drafting { background-color: #fdfbf4; border-color: #e8dfc0; }
 .wn-node--writing  { background-color: #f8f9ff; border-color: #c8d4ee; }
 .wn-node--done     { background-color: #f5fbf7; border-color: #b8dfc5; }
 
 .wn-node--selected {
   border-color: var(--act-color, #6d28d9);
-  box-shadow:   0 0 0 2.5px color-mix(in srgb, var(--act-color,#6d28d9) 20%, transparent),
-                0 4px 16px rgba(0,0,0,.10);
+  box-shadow:   0 0 0 2px color-mix(in srgb, var(--act-color,#6d28d9) 18%, transparent),
+                0 3px 12px rgba(0,0,0,.06);
 }
 
 .wn-node--dimmed {
@@ -103,7 +103,7 @@
 .wn-handle {
   width: 10px; height: 10px;
   border: 2px solid #c4b9ae;
-  background: #faf8f5;
+  background: var(--pw-surface, #fffdf9);
   border-radius: 50%;
   transition: border-color 150ms, background 150ms;
 }
@@ -155,7 +155,7 @@
   font-family:        'Lora', Georgia, serif;
   font-size:          14px;
   font-weight:        500;
-  color:              #1c1917;
+  color:              var(--pw-ink, #30281f);
   line-height:        1.35;
   word-break:         break-word;
   display:            -webkit-box;
@@ -177,7 +177,7 @@
 }
 .wn-goal-mark {
   font-size:   9px;
-  color:       #a8998a;
+  color:       var(--pw-muted, #655746);
   margin-top:  1.5px;
   flex-shrink: 0;
   line-height: 1.4;
@@ -243,7 +243,7 @@
   bottom:         calc(100% + 4px);
   left:           50%;
   transform:      translateX(-50%);
-  background:     #1c1917;
+  background:     var(--pw-ink, #30281f);
   color:          #fff;
   font-size:      10px;
   padding:        3px 7px;
@@ -259,7 +259,7 @@
   top:           100%; left: 50%;
   transform:     translateX(-50%);
   border:        4px solid transparent;
-  border-top-color: #1c1917;
+  border-top-color: var(--pw-ink, #30281f);
 }
 .wn-chardot-extra { font-size: 9px; color: #9d8e82; margin-left: 3px; }
 

@@ -1,3 +1,4 @@
+import { PLOTWORLD_SCENE_AI_ENABLED } from "../../../../shared/features.js";
 // components/plotworld/DetailPanel.jsx
 // Fix: ACT_META artık prop olarak geliyor — dinamik perde yapısıyla uyumlu.
 // PlotWorldPage'de <DetailPanel actMeta={actMeta} ... /> olarak çağır.
@@ -119,7 +120,7 @@ export default function DetailPanel({
         </div>
 
         {/* AI davet kartı */}
-        <div className="pw-ai-card" aria-label="AI önerileri">
+        {PLOTWORLD_SCENE_AI_ENABLED && <div className="pw-ai-card" aria-label="AI önerileri">
           <div className="pw-ai-header">
             <span className="pw-ai-icon" aria-hidden="true">✦</span>
             <span className="pw-ai-label">Kelebek Etkisi</span>
@@ -130,6 +131,7 @@ export default function DetailPanel({
           </div>
         </div>
 
+        }
         {/* Aksiyonlar */}
         <div className="pw-detail-actions">
           <button
@@ -151,12 +153,12 @@ export default function DetailPanel({
           >
             ✎ Düzenle
           </button>
-          <button
+          {PLOTWORLD_SCENE_AI_ENABLED && (<button
             className="pw-btn pw-btn--ai"
             onClick={onButterfly}
           >
             🦋 Kelebek Etkisi
-          </button>
+          </button>)}
           <button
             className="pw-btn pw-btn--danger-ghost"
             onClick={() => setConfirm(true)}

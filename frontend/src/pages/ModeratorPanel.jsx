@@ -1,3 +1,5 @@
+import ContentModerationPanel from "../components/ContentModerationPanel";
+import ReportReviewList from "../components/ReportReviewList";
 // src/pages/ModeratorPanel.jsx
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -275,21 +277,21 @@ function ChapterQueue({ onRefresh }) {
     try {
       const res = await apiGet(`/moderator/chapters?sayfa=${p}&limit=12&neden=${n}`);
       setItems(res.bolumler || []); setMeta(res.meta || {}); setPage(p);
-    } catch {} finally { setLoading(false); }
+    } catch (error) { alert(error.message || "Liste yüklenemedi. Lütfen tekrar deneyin."); } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(1, neden); }, [neden]);
+  useEffect(() => { load(1, neden); }, [neden, load]);
 
   async function approve(id) {
     setBusy(b => ({ ...b, [id]: true }));
-    try { await apiPut(`/moderator/chapters/${id}/approve`); setItems(p => p.filter(i => i._id !== id)); onRefresh(); }
+    try { await apiPut(`/moderator/chapters/${id}/approve`, { expectedRevision: items.find(i => i._id === id)?.revision ?? 0, reason: window.prompt("Onay gerekçesi") || "" }); setItems(p => p.filter(i => i._id !== id)); onRefresh(); }
     catch (err) { alert(err.message || "Hata."); }
     finally { setBusy(b => ({ ...b, [id]: false })); }
   }
 
   async function reject(id, note) {
     setBusy(b => ({ ...b, [id]: true }));
-    try { await apiPut(`/moderator/chapters/${id}/reject`, { reviewNote: note }); setItems(p => p.filter(i => i._id !== id)); setRejectModal(null); onRefresh(); }
+    try { await apiPut(`/moderator/chapters/${id}/reject`, { expectedRevision: items.find(i => i._id === id)?.revision ?? 0, reviewNote: note }); setItems(p => p.filter(i => i._id !== id)); setRejectModal(null); onRefresh(); }
     catch (err) { alert(err.message || "Hata."); }
     finally { setBusy(b => ({ ...b, [id]: false })); }
   }
@@ -387,7 +389,7 @@ function CommentQueue({ onRefresh }) {
     try {
       const res = await apiGet(`/moderator/comments?sayfa=${p}&limit=20`);
       setItems(res.yorumlar || []); setMeta(res.meta || {}); setPage(p);
-    } catch {} finally { setLoading(false); }
+    } catch (error) { alert(error.message || "Liste yüklenemedi. Lütfen tekrar deneyin."); } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(1); }, [load]);
@@ -481,10 +483,10 @@ function CommentReports({ onRefresh }) {
     try {
       const res = await apiGet(`/admin/reports?sayfa=${p}&limit=15&status=${sf}&targetType=comment`);
       setItems(res.sikayetler || []); setMeta(res.meta || {}); setPage(p);
-    } catch {} finally { setLoading(false); }
+    } catch (error) { alert(error.message || "Liste yüklenemedi. Lütfen tekrar deneyin."); } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(1, statusFilter); }, [statusFilter]);
+  useEffect(() => { load(1, statusFilter); }, [statusFilter, load]);
 
   async function resolve(id) {
     setBusy(b => ({ ...b, [id]: true }));
@@ -518,6 +520,7 @@ function CommentReports({ onRefresh }) {
     <>
       <div className="mod-section-head">
         <h2 className="mod-section-title">Yorum Şikayetleri</h2>
+        <p>Telif dosyaları yönetici tarafından gerekçeli karar ve itiraz akışında incelenir.</p>
         <span className="mod-section-meta">{meta.toplam || 0} şikayet</span>
       </div>
 
@@ -721,7 +724,7 @@ export default function ModeratorPanel() {
           {page === "dashboard" && <Dashboard stats={stats} loading={statsLoading} error={statsError} onRetry={fetchStats} onNav={setPage} />}
           {page === "chapters"  && <ChapterQueue onRefresh={fetchStats} />}
           {page === "comments"  && <CommentQueue onRefresh={fetchStats} />}
-          {page === "reports"   && <CommentReports onRefresh={fetchStats} />}
+          {page === "reports" && <><ContentModerationPanel /><ReportReviewList /><CommentReports onRefresh={fetchStats} /></>}
         </div>
       </main>
     </div>

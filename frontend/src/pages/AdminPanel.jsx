@@ -1,3 +1,6 @@
+import ContentModerationPanel from "../components/ContentModerationPanel";
+import ReportCase from "../components/ReportCase";
+import AdminFeedback from "../components/AdminFeedback";
 // src/pages/AdminPanel.jsx
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -175,7 +178,7 @@ const REASON_LABELS = {
   spam:"Spam", uygunsuz_icerik:"Uygunsuz İçerik", telif_ihlali:"Telif İhlali",
   taciz:"Taciz / Zorbalık", nefret_soylemi:"Nefret Söylemi", diger:"Diğer",
 };
-const TARGET_LABELS = { work:"Eser", chapter:"Bölüm", user:"Kullanıcı", comment:"Yorum" };
+const TARGET_LABELS = { work:"Eser", chapter:"Bölüm", user:"Kullanıcı", comment:"Yorum", cover:"Eser kapağı", avatar:"Profil görseli", banner:"Banner görseli" };
 
 /* ════════════════════════════════════════════════════════════
    RejectModal — bölüm reddi
@@ -418,7 +421,7 @@ function WarnModal({ reportId, targetName, onClose, onWarned }) {
 /* ════════════════════════════════════════════════════════════
    ReportDetailModal — şikayet edeni + edileni tam göster
 ════════════════════════════════════════════════════════════ */
-function ReportDetailModal({ report, onClose, onResolve, onDismiss, onCommentDeleted, onWarned }) {
+function ReportDetailModal({ report, onClose, onResolve, onDismiss, onCommentDeleted, onWarned, onChanged }) {
   const navigate = useNavigate();
   const [busy,          setBusy]          = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -464,7 +467,7 @@ function ReportDetailModal({ report, onClose, onResolve, onDismiss, onCommentDel
         <div className="adm-modal-box adm-modal-box--wide" style={{ maxHeight: "88vh", overflowY: "auto" }}
           onClick={e => e.stopPropagation()}>
  
-          <h3 className="adm-modal-title">Şikayet Detayı</h3>
+          <div className="adm-section-head"><h3 className="adm-modal-title">Bildirim ayrıntıları</h3><button className="adm-btn" onClick={onClose}>Kapat</button></div>
  
           {/* ── Meta bilgiler ── */}
           <div className="adm-rdetail-grid">
@@ -687,7 +690,8 @@ function ReportDetailModal({ report, onClose, onResolve, onDismiss, onCommentDel
           )}
  
           {/* ── Aksiyon butonları ── */}
-          {report.status === "pending" && (
+          {report.reason === "telif_ihlali" && <ReportCase id={report._id} staff onChanged={onChanged} />}
+          {report.reason !== "telif_ihlali" && report.status === "pending" && (
             <div className="adm-modal-foot" style={{ justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: ".5rem" }}>
               <button className="adm-btn" onClick={onClose} disabled={busy || deleting}>Kapat</button>
               <div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
@@ -794,36 +798,14 @@ function Dashboard({ stats, loading, onNav }) {
         ))}
       </div>
 
-      {(b.reviewQueue > 0 || b.sikayetler > 0) && (
-        <div className="adm-pending-grid">
-          {b.reviewQueue > 0 && (
-            <div className="adm-pending-card" onClick={() => onNav("review")}>
-              <div className="adm-pending-icon adm-pending-icon--orange">◎</div>
-              <div className="adm-pending-info">
-                <div className="adm-pending-count adm-pending-count--orange">{b.reviewQueue}</div>
-                <div className="adm-pending-label">İnceleme bekleyen bölüm</div>
-              </div>
-              <span style={{ color:"var(--adm-ink-ghost)", fontSize:".8rem" }}>→</span>
-            </div>
-          )}
-          {b.sikayetler > 0 && (
-            <div className="adm-pending-card" onClick={() => onNav("reports")}>
-              <div className="adm-pending-icon adm-pending-icon--red">⚑</div>
-              <div className="adm-pending-info">
-                <div className="adm-pending-count adm-pending-count--red">{b.sikayetler}</div>
-                <div className="adm-pending-label">Bekleyen şikayet</div>
-              </div>
-              <span style={{ color:"var(--adm-ink-ghost)", fontSize:".8rem" }}>→</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {b.reviewQueue === 0 && b.sikayetler === 0 && (
-        <div style={{ padding:"1.5rem", background:"rgba(74,124,89,0.07)", border:"1px solid rgba(74,124,89,0.2)", borderRadius:6, marginBottom:"1.8rem" }}>
-          <span style={{ fontSize:".78rem", color:"#4a7c59" }}>✓ Bekleyen aksiyon yok — her şey temiz.</span>
-        </div>
-      )}
+      <div className="adm-pending-grid">
+        {NAV_ITEMS.filter(item => item.badgeKey && b[item.badgeKey] > 0).map(item =>
+          <button key={item.id} className="adm-pending-card" onClick={() => onNav(item.id)}>
+            <span className="adm-pending-icon adm-pending-icon--orange">{item.icon}</span>
+            <span className="adm-pending-info"><span className="adm-pending-count">{b[item.badgeKey]}</span><span className="adm-pending-label">{item.label}</span></span>
+          </button>
+        )}
+      </div>
 
       {!dLoading && detail && (
         <div className="adm-chart-grid">
@@ -914,21 +896,21 @@ function ReviewQueue({ onRefresh }) {
     try {
       const res = await adminGet(`/review-queue?sayfa=${p}&limit=15`);
       setItems(res.bolumler || []); setMeta(res.meta || {}); setPage(p);
-    } catch {} finally { setLoading(false); }
+    } catch (error) { alert(error.message || "Liste yüklenemedi. Lütfen tekrar deneyin."); } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(1); }, [load]);
 
   async function approve(id) {
     setBusy(b => ({ ...b, [id]:true }));
-    try { await adminPut(`/review/${id}/approve`); setItems(p => p.filter(i => i._id !== id)); onRefresh(); }
+    try { await adminPut(`/review/${id}/approve`, { expectedRevision: items.find(i => i._id === id)?.revision ?? 0, reason: window.prompt("Onay gerekçesi") || "" }); setItems(p => p.filter(i => i._id !== id)); onRefresh(); }
     catch (err) { alert(err.message); }
     finally { setBusy(b => ({ ...b, [id]:false })); }
   }
 
   async function reject(id, note) {
     setBusy(b => ({ ...b, [id]:true }));
-    try { await adminPut(`/review/${id}/reject`, { reviewNote:note }); setItems(p => p.filter(i => i._id !== id)); setRejectModal(null); onRefresh(); }
+    try { await adminPut(`/review/${id}/reject`, { expectedRevision: items.find(i => i._id === id)?.revision ?? 0, reviewNote:note }); setItems(p => p.filter(i => i._id !== id)); setRejectModal(null); onRefresh(); }
     catch (err) { alert(err.message); }
     finally { setBusy(b => ({ ...b, [id]:false })); }
   }
@@ -1040,7 +1022,7 @@ function TargetSummary({ item }) {
 /* ════════════════════════════════════════════════════════════
    ŞİKAYETLER  ←  Ana yenilenen bileşen
 ════════════════════════════════════════════════════════════ */
-function Reports({ onRefresh }) {
+function Reports({ onRefresh, category = 'other', title = 'Diğer bildirimler' }) {
   const [items,        setItems]        = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [statusFilter, setStatusFilter] = useState("pending");
@@ -1049,16 +1031,17 @@ function Reports({ onRefresh }) {
   const [meta,         setMeta]         = useState({});
   const [busy,         setBusy]         = useState({});
   const [detail,       setDetail]       = useState(null);
+  const [error, setError] = useState('');
 
   const load = useCallback(async (p = 1, sf = "pending", tf = "all") => {
-    setLoading(true);
+    setLoading(true); setError('');
     try {
-      const res = await apiGet(`/admin/reports?sayfa=${p}&limit=15&status=${sf}&targetType=${tf}`);
+      const res = await apiGet(`/admin/reports?sayfa=${p}&limit=15&status=${sf}&targetType=${tf}&category=${category}`);
       setItems(res.sikayetler || []); setMeta(res.meta || {}); setPage(p);
-    } catch {} finally { setLoading(false); }
-  }, []);
+    } catch (e) { setError(e.message); } finally { setLoading(false); }
+  }, [category]);
 
-  useEffect(() => { load(1, statusFilter, typeFilter); }, [statusFilter, typeFilter]);
+  useEffect(() => { load(1, statusFilter, typeFilter); }, [load, statusFilter, typeFilter]);
 
   async function act(id, action) {
     setBusy(b => ({ ...b, [id]: true }));
@@ -1076,27 +1059,32 @@ function Reports({ onRefresh }) {
   return (
     <>
       <div className="adm-section-head">
-        <h2 className="adm-section-title">Şikayetler</h2>
+        <h2 className="adm-section-title">{title}</h2>
         <span className="adm-section-meta">{meta.toplam || 0} kayıt</span>
       </div>
  
       <div className="adm-search-row">
-        <select className="adm-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+        <select className="adm-filter-select" aria-label="Başvuru durumu" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="pending">Bekleyen</option>
           <option value="resolved">Çözüldü</option>
           <option value="dismissed">Geçersiz</option>
           <option value="all">Tümü</option>
         </select>
-        <select className="adm-filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+        <select className="adm-filter-select" aria-label="İçerik türü" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
           <option value="all">Tüm Türler</option>
           <option value="comment">Yorum</option>
           <option value="user">Kullanıcı</option>
           <option value="work">Eser</option>
           <option value="chapter">Bölüm</option>
+          <option value="cover">Eser kapağı</option>
+          <option value="avatar">Profil görseli</option>
+          <option value="banner">Banner görseli</option>
         </select>
+        <button className="adm-btn" disabled={loading} onClick={() => load(page, statusFilter, typeFilter)}>Yenile</button>
       </div>
  
-      {loading ? <Spinner /> : items.length === 0 ? <Empty msg="Şikayet bulunamadı." /> : (
+      {error && <p role="alert">{error} <button className="adm-btn" onClick={() => load(page, statusFilter, typeFilter)}>Tekrar dene</button></p>}
+      {loading ? <Spinner /> : error ? null : items.length === 0 ? <Empty msg="Bu kategoride bekleyen bildirim bulunmuyor." /> : (
         <div className="adm-table-wrap">
           <table className="adm-table">
             <thead><tr>
@@ -1132,7 +1120,7 @@ function Reports({ onRefresh }) {
                   <td>
                     <div className="adm-btn-row">
                       <button className="adm-btn" onClick={() => setDetail(item)}>Detay</button>
-                      {item.status === "pending" && (
+                      {!item.contentCase && item.reason !== "telif_ihlali" && item.status === "pending" && (
                         <>
                           <button className="adm-btn adm-btn--approve" disabled={busy[item._id]}
                             onClick={() => act(item._id, "resolve")}>
@@ -1155,9 +1143,16 @@ function Reports({ onRefresh }) {
  
       <Pager page={page} total={meta.toplamSayfa || 1} onPage={p => load(p, statusFilter, typeFilter)} />
  
-      {detail && (
+      {detail?.contentCase && <div className="adm-modal-veil" onClick={() => setDetail(null)}>
+        <div className="adm-modal-box adm-modal-box--wide" role="dialog" aria-modal="true" aria-label="İçerik incelemesi" onClick={e => e.stopPropagation()}>
+          <button className="adm-btn" onClick={() => setDetail(null)}>Kapat</button>
+          <ContentModerationPanel key={detail.contentCase} caseId={detail.contentCase} onChanged={() => { load(page, statusFilter, typeFilter); onRefresh(); }} />
+        </div>
+      </div>}
+      {detail && !detail.contentCase && (
         <ReportDetailModal
           report={detail}
+          onChanged={() => { load(page, statusFilter, typeFilter); onRefresh(); }}
           onClose={() => setDetail(null)}
           onResolve={() => act(detail._id, "resolve")}
           onDismiss={() => act(detail._id, "dismiss")}
@@ -1197,10 +1192,10 @@ function Stories() {
       const params = `?sayfa=${p}&limit=20&status=${s}${q ? `&ara=${encodeURIComponent(q)}` : ""}`;
       const r = await adminGet(`/stories${params}`);
       setItems(r.eserler||[]); setMeta(r.meta||{}); setPage(p);
-    } catch {} finally { setLoading(false); }
+    } catch (error) { alert(error.message || "Liste yüklenemedi. Lütfen tekrar deneyin."); } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(1, query, statusFilter); }, [query, statusFilter]);
+  useEffect(() => { load(1, query, statusFilter); }, [query, statusFilter, load]);
 
   async function feature(id, featured) {
     setBusy(b => ({ ...b, [id]:true }));
@@ -1322,10 +1317,10 @@ function Users() {
       const params = `?sayfa=${p}&limit=20${q ? `&ara=${encodeURIComponent(q)}` : ""}`;
       const res = await adminGet(`/users${params}`);
       setItems(res.kullanicilar || []); setMeta(res.meta || {}); setPage(p);
-    } catch {} finally { setLoading(false); }
+    } catch (error) { alert(error.message || "Liste yüklenemedi. Lütfen tekrar deneyin."); } finally { setLoading(false); }
   }, []);
  
-  useEffect(() => { load(1, query); }, [query]);
+  useEffect(() => { load(1, query); }, [query, load]);
  
   async function changeRole(id, rol) {
     if (!window.confirm(`Rol değiştirilecek: ${rol}. Emin misin?`)) return;
@@ -1535,16 +1530,19 @@ function Users() {
    ANA PANEL
 ════════════════════════════════════════════════════════════ */
 const NAV_ITEMS = [
-  { id:"dashboard", icon:"◈", label:"Dashboard",        section:"Genel" },
-  { id:"review",    icon:"◎", label:"İnceleme Kuyruğu", section:"Moderasyon", badgeKey:"reviewQueue", badgeColor:"orange" },
-  { id:"reports",   icon:"⚑", label:"Şikayetler",       section:"Moderasyon", badgeKey:"sikayetler",  badgeColor:"red" },
-  { id:"stories",   icon:"◉", label:"Hikayeler",        section:"İçerik" },
-  { id:"users",     icon:"👥", label:"Kullanıcılar",     section:"Yönetim" },
+  { id:"copyright", icon:"①", label:"Telif hakkı", section:"Öncelikli incelemeler", badgeKey:"copyright" },
+  { id:"inappropriate", icon:"②", label:"Uygunsuz içerik", section:"Öncelikli incelemeler", badgeKey:"inappropriate", badgeColor:"orange" },
+  { id:"reports", icon:"⚑", label:"Diğer bildirimler", section:"Diğer başvurular", badgeKey:"otherReports" },
+  { id:"feedback", icon:"✉", label:"Öneri veya şikâyetler", section:"Diğer başvurular", badgeKey:"feedback" },
+  { id:"review", icon:"◎", label:"Yayın onayı bekleyenler", section:"İçerik yönetimi", badgeKey:"reviewQueue", badgeColor:"orange" },
+  { id:"stories", icon:"◉", label:"Eserler", section:"İçerik yönetimi" },
+  { id:"users", icon:"♙", label:"Kullanıcılar", section:"Yönetim" },
+  { id:"dashboard", icon:"◈", label:"Genel bakış", section:"Yönetim" },
 ];
 
 export default function AdminPanel() {
   const navigate = useNavigate();
-  const [page, setPage] = useState("dashboard");
+  const [page, setPage] = useState("copyright");
   const { stats, loading: statsLoading, refetch: refetchStats } = useStats();
 
   useEffect(() => {
@@ -1559,10 +1557,7 @@ export default function AdminPanel() {
   const bekleyen = stats?.bekleyen || {};
   const sections = [...new Set(NAV_ITEMS.map(n => n.section))];
 
-  const pageTitle = {
-    dashboard:"Dashboard", review:"İnceleme Kuyruğu",
-    reports:"Şikayetler",  stories:"Hikaye Yönetimi", users:"Kullanıcılar",
-  }[page];
+  const pageTitle = NAV_ITEMS.find(item => item.id === page)?.label;
 
   return (
     <div className="adm-root">
@@ -1581,6 +1576,7 @@ export default function AdminPanel() {
                   <button
                     key={item.id}
                     className={`adm-nav-item ${page===item.id ? "adm-nav-item--active" : ""}`}
+                    aria-current={page === item.id ? 'page' : undefined}
                     onClick={() => setPage(item.id)}
                   >
                     <span style={{ fontSize:".9rem", opacity:.7 }}>{item.icon}</span>
@@ -1611,7 +1607,10 @@ export default function AdminPanel() {
         <div className="adm-content">
           {page==="dashboard" && <Dashboard stats={stats} loading={statsLoading} onNav={setPage} />}
           {page==="review"    && <ReviewQueue onRefresh={refetchStats} />}
-          {page==="reports"   && <Reports onRefresh={refetchStats} />}
+          {page==="copyright" && <Reports key="copyright" category="copyright" title="Telif hakkı başvuruları" onRefresh={refetchStats} />}
+          {page==="inappropriate" && <Reports key="inappropriate" category="inappropriate" title="Uygunsuz eser, bölüm ve kapak bildirimleri" onRefresh={refetchStats} />}
+          {page==="reports" && <Reports key="other" category="other" title="Diğer bildirimler" onRefresh={refetchStats} />}
+          {page==="feedback" && <AdminFeedback onRefresh={refetchStats} />}
           {page==="stories"   && <Stories />}
           {page==="users"     && <Users />}
         </div>

@@ -1,18 +1,15 @@
+import readerAccess from "../middlewares/readerAccess.js";
 import express from "express";
 import User from "../models/User.js";
 
 const router = express.Router();
+router.use(readerAccess);
 
 // ─── KULLANICI PROFİLİNİ VE KÜTÜPHANESİNİ GETİR (GET /api/profile/:id) ───
 router.get("/:id", async (req, res) => {
   try {
     const userDoc = await User.findById(req.params.id)
-      .select("-password -email")
-      .populate({
-        path: "library",
-        select: "title coverImage universe author",
-        populate: { path: "author", select: "username" }
-      });
+      .select("_id kullaniciAdi avatarUrl bannerImage bio location website followers following createdAt");
 
     if (!userDoc) {
       return res.status(404).json({ message: "Kullanıcı bulunamadı." });

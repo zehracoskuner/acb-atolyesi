@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 
 const drawingSchema = new mongoose.Schema(
   {
+    revision: { type: Number, default: 0 },
+    mutationId: { type: String, default: null },
     work: {
       type:     mongoose.Schema.Types.ObjectId,
       ref:      "Work",

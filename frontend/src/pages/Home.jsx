@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import useExperience from "../store/useExperience";
+import "../styles/Home.css";
 
 
 export default function Home() {

@@ -1,5 +1,9 @@
+import ReportActions from "../components/ReportActions";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../lib/api";
+import { useMembership } from "../lib/membershipContext";
+import { useSession } from "../lib/session";
 import {
-  useEffect, useState, useRef, useCallback, useMemo,
+  useEffect, useLayoutEffect, useState, useRef, useCallback, useMemo,
 } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import TopBar from "../components/TopBar";
@@ -7,36 +11,14 @@ import Footer from "../components/Footer";
 import "../styles/Read.css";
 import ReportModal from "../components/ReportModal";
 import { useReadingProgress } from "../hooks/useReadingProgress";
-import { getProgressForStory } from "../services/readingProgressService";
+import { getProgressForStory, resolveReadingResume } from "../services/readingProgressService";
 import { cleanHtml } from "../lib/sanitize";
 
-const API_BASE = import.meta.env?.VITE_API_URL ?? "/api";
 
 /* ════════════════════════════
    HELPERS
 ════════════════════════════ */
-function getCurrentUser() {
-  try { return JSON.parse(localStorage.getItem("user")); } catch { return null; }
-}
 
-async function apiFetch(path, options = {}) {
-  const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...options,
-  });
-  if (!res.ok) {
-    const err = new Error(`Hata ${res.status}`);
-    err.status = res.status;
-    throw err;
-  }
-  return res.json();
-}
-const apiGet  = (path)       => apiFetch(path);
-const apiPost = (path, body) => apiFetch(path, { method: "POST", body: JSON.stringify(body) });
 
 function readingTime(text = "") {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
@@ -286,7 +268,7 @@ function InlineParagraph({ html, index, comments, onOpenDrawer }) {
 // <b>/<i>/<span>/<a>/<br> vb. satır-içi öğeler) aynı paragraf tamponunda birikir.
 const RDIC_BLOCK_TAGS = new Set(["P", "DIV", "H1", "H2", "H3", "UL", "OL", "BLOCKQUOTE", "HR", "IMG"]);
 
-function InlineParagraphs({ text, chapterId, workId, commentMap, onOpenDrawer }) {
+function InlineParagraphs({ text, commentMap, onOpenDrawer }) {
   const blocks = useMemo(() => {
     const clean = cleanHtml(text || "");      // ← tek kapı: önce temizle
     if (!clean.trim()) return [];
@@ -495,14 +477,7 @@ function InlineCommentItem({ comment, currentUser, onUpdated, onDeleted }) {
     if (editText.trim() === displayContent) { setEditOpen(false); return; }
     setEditError(""); setEditSaving(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/inline-comments/${comment._id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content: editText.trim() }),
-      });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
+      const data = await apiPatch(`/inline-comments/${comment._id}`, { content: editText.trim() });
       const updated = data.item?.content ?? editText.trim();
       setDisplayContent(updated);
       setEditOpen(false);
@@ -518,12 +493,7 @@ function InlineCommentItem({ comment, currentUser, onUpdated, onDeleted }) {
     if (deleting) return;
     setDeleting(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/inline-comments/${comment._id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error();
+      await apiDelete(`/inline-comments/${comment._id}`);
       setDeleted(true);
       onDeleted?.(comment._id);
     } catch {
@@ -722,14 +692,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
     if (editText.trim() === displayContent) { setEditOpen(false); return; }
     setEditError(""); setEditSaving(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/comments/${comment._id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content: editText.trim() }),
-      });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
+      const data = await apiPatch(`/comments/${comment._id}`, { content: editText.trim() });
       setDisplayContent(data.item?.content ?? editText.trim());
       setEditOpen(false);
     } catch {
@@ -744,12 +707,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
     if (deleting) return;
     setDeleting(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/comments/${comment._id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error();
+      await apiDelete(`/comments/${comment._id}`);
       setDeleted(true);
       onDeleted?.(comment._id);
     } catch {
@@ -999,7 +957,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
    YORUM BÖLÜMÜ
 ════════════════════════════ */
 function CommentSection({ chapterId, workId }) {
-  const currentUser = useMemo(() => getCurrentUser(), []);
+  const currentUser = useSession().user;
   const isLoggedIn  = !!currentUser;
   const [comments,  setComments]  = useState([]);
   const [total,     setTotal]     = useState(0);
@@ -1118,7 +1076,7 @@ function CommentSection({ chapterId, workId }) {
    BÖLÜM BEĞENİ
 ════════════════════════════ */
 function ChapterLikeButton({ chapterId, workId }) {
-  const currentUser = useMemo(() => getCurrentUser(), []);
+  const currentUser = useSession().user;
   const isLoggedIn  = !!currentUser;
   const [liked,     setLiked]     = useState(false);
   const [likeCount, setLikeCount] = useState(0);
@@ -1174,10 +1132,11 @@ const FONT_OPTIONS = [
    ANA SAYFA
 ════════════════════════════ */
 export default function ReadPage() {
+  const { requireMember } = useMembership();
   const { workId }     = useParams();
-  const [searchParams] = useSearchParams();          // ← FIX: URL param okunuyor
+  const [searchParams, setSearchParams] = useSearchParams();          // ← FIX: URL param okunuyor
   const navigate       = useNavigate();
-  const currentUser    = useMemo(() => getCurrentUser(), []);
+  const currentUser    = useSession().user;
 
   const contentRef       = useRef(null);
   const tocRef           = useRef(null);
@@ -1206,7 +1165,11 @@ export default function ReadPage() {
     });
   }, []);
 
-  const chapter    = chapters[activeIdx] ?? null;
+  const [chapterResult, setChapterResult] = useState(null);
+  const [chapterError, setChapterError] = useState(null);
+  const selectedChapter = chapters[activeIdx] ?? null;
+  const chapter = chapterResult?.workId === workId && chapterResult.item._id === selectedChapter?._id
+    ? chapterResult.item : null;
   const authorName = work?.isAnonymous
     ? "Anonim Yazar"
     : (work?.author?.kullaniciAdi || work?.author?.username || "Yazar");
@@ -1224,6 +1187,9 @@ export default function ReadPage() {
     (async () => {
       try {
         setLoading(true);
+        setError("");
+        setChapterResult(null);
+        pendingScrollRef.current = null;
         const [workRes, chRes] = await Promise.all([
           apiGet(`/public/works/${workId}`),
           apiGet(`/public/works/${workId}/chapters`),
@@ -1231,47 +1197,19 @@ export default function ReadPage() {
         if (cancelled) return;
 
         const item      = workRes.item;
-        const published = item.publishedChapterIds ?? [];
         const allChs    = chRes.items ?? [];
-        const visible   = published.length > 0
-          ? published.map(id => allChs.find(c => c._id === id)).filter(Boolean)
-          : allChs;
+        const visible = allChs; // The API returns narrative order and metadata only.
 
         setWork(item);
         setChapters(visible);
 
-        // Öncelik: ?chapter= > ?restart=true > kayıtlı ilerleme > baştan
-        if (chapterFromUrl) {
-          const idx = visible.findIndex(c => String(c._id) === String(chapterFromUrl));
-          setActiveIdx(idx !== -1 ? idx : 0);
-          setPrefaceOpen(false);
-          return;
-        }
+        const savedProgress = restartFromUrl ? null : await getProgressForStory(workId, currentUser);
+        if (cancelled) return;
 
-        if (restartFromUrl) {
-          setActiveIdx(0);
-          setPrefaceOpen(false);
-          return;
-        }
-
-        try {
-          const saved    = await getProgressForStory(workId, currentUser);
-          const savedId  = saved?.chapterId || saved?.chapter?._id || saved?.chapter;
-          const savedIdx = savedId ? visible.findIndex(c => String(c._id) === String(savedId)) : -1;
-
-          if (savedIdx !== -1) {
-            setActiveIdx(savedIdx);
-            setPrefaceOpen(false);
-            const pct = saved.scrollPosition;
-            if (typeof pct === "number" && pct > 2) pendingScrollRef.current = pct;
-            return;
-          }
-        } catch {
-          // kayıtlı ilerleme okunamadı
-        }
-
-        setActiveIdx(0);
-        setPrefaceOpen(!!item.preface);
+        const target = resolveReadingResume(visible, savedProgress, { chapterId: chapterFromUrl, restart: restartFromUrl });
+        pendingScrollRef.current = target.scrollPosition;
+        setActiveIdx(target.index);
+        setPrefaceOpen(!chapterFromUrl && !restartFromUrl && !target.resume && !!item.preface);
 
       } catch (e) {
         if (!cancelled) setError(e.message || "Eser yüklenemedi.");
@@ -1281,7 +1219,24 @@ export default function ReadPage() {
     })();
 
     return () => { cancelled = true; };
-  }, [workId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workId, currentUser?.id, currentUser?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let cancelled = false;
+    setChapterResult(null);
+    setChapterError(null);
+    setDrawerOpen(false);
+    setInlineCommentMap({});
+    if (loading || prefaceOpen || !selectedChapter?._id) return;
+    apiGet(`/public/works/${workId}/chapters/${selectedChapter._id}`)
+      .then(data => { if (!cancelled) setChapterResult({ workId, item: data.item }); })
+      .catch(err => {
+        if (cancelled) return;
+        if (err.code === "MATURE_CANCELLED") { navigate(`/story/${workId}`, { replace: true }); return; }
+        setChapterError({ id: selectedChapter._id, status: err.status });
+      });
+    return () => { cancelled = true; };
+  }, [workId, selectedChapter?._id, loading, prefaceOpen, navigate]);
 
   /* ─── Scroll → progress ─── */
   useEffect(() => {
@@ -1295,43 +1250,37 @@ export default function ReadPage() {
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
-  }, [activeIdx, prefaceOpen]);
+  }, [activeIdx, prefaceOpen, loading, chapter?._id]);
 
   useReadingProgress(workId, !loading ? chapter : null, contentRef, currentUser);
 
   /* ─── Kayıtlı scroll pozisyonu ─── */
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (pendingScrollRef.current === undefined || pendingScrollRef.current === null) return;
     if (!chapter?._id) return;
     const pct = pendingScrollRef.current;
     pendingScrollRef.current = null;
-    if (!pct || pct <= 0) return;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          const el = contentRef.current;
-          if (!el) return;
-          const max = el.scrollHeight - el.clientHeight;
-          if (max > 0) el.scrollTo({ top: Math.round((pct / 100) * max), behavior: "smooth" });
-        }, 250);
-      });
-    });
+    const el = contentRef.current;
+    if (!el) return;
+    const max = el.scrollHeight - el.clientHeight;
+    el.scrollTop = Math.round(((pct || 0) / 100) * Math.max(0, max));
   }, [chapter?._id]);
 
   /* ─── Bölüme git ─── */
   const goToChapter = useCallback((idx) => {
+    pendingScrollRef.current = null;
     setActiveIdx(idx);
+    if (chapters[idx]) setSearchParams({ chapter: chapters[idx]._id }, { replace: true });
     setTocOpen(false);
     setPrefaceOpen(false);
     setProgress(0);
     requestAnimationFrame(() => { if (contentRef.current) contentRef.current.scrollTop = 0; });
-  }, []);
+  }, [chapters, setSearchParams]);
 
   /* ─── Inline yorumları yükle ─── */
   useEffect(() => {
     if (!chapter?._id) return;
-    fetch(`${API_BASE}/inline-comments?chapterId=${chapter._id}`)
-      .then(r => r.json())
+    apiGet(`/inline-comments?chapterId=${chapter._id}`)
       .then(data => {
         const map = {};
         (data.items || []).forEach(c => {
@@ -1379,7 +1328,7 @@ export default function ReadPage() {
         <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
       </svg>
       <span>{error}</span>
-      <button className="rd-splash-btn" onClick={() => navigate(-1)}>Geri Dön</button>
+      <button className="rd-splash-btn" onClick={() => navigate(`/story/${workId}`)}>Geri Dön</button>
     </div>
   );
 
@@ -1387,9 +1336,6 @@ export default function ReadPage() {
 
   const customTitle  = work.customChapterTitles?.[chapter?._id];
   const displayTitle = customTitle || chapter?.title || `Bölüm ${activeIdx + 1}`;
-  const totalWords   = chapters.reduce(
-    (s, c) => s + (c.content?.trim().split(/\s+/).filter(Boolean).length ?? 0), 0
-  );
 
   return (
     <div className={`rd-root rd-theme-${theme}`}>
@@ -1417,7 +1363,7 @@ export default function ReadPage() {
       {/* ── Toolbar ── */}
       <nav className="rd-toolbar" aria-label="Okuma araçları">
         <div className="rd-tb-left">
-          <button className="rd-tb-btn" onClick={() => navigate(-1)} title="Geri">
+          <button className="rd-tb-btn" onClick={() => navigate(`/story/${workId}`)} title="Geri">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
@@ -1446,6 +1392,7 @@ export default function ReadPage() {
         </div>
 
         <div className="rd-tb-right">
+          <ReportActions isOwner={work.isOwner} targetOwner={work.author || work.user} targetType={chapter && !prefaceOpen ? "chapter" : "work"} targetId={chapter && !prefaceOpen ? chapter._id : work._id} targetLabel={chapter && !prefaceOpen ? chapter.title : work.title} />
           <div className="rd-font-btns" role="group" aria-label="Yazı boyutu">
             {FONT_OPTIONS.map(({ scale, label }) => (
               <button key={scale}
@@ -1486,8 +1433,6 @@ export default function ReadPage() {
         </div>
         <div className="rd-toc-meta">
           <span>{chapters.length} bölüm</span>
-          <span className="rd-dot">·</span>
-          <span>{totalWords.toLocaleString("tr-TR")} kelime</span>
         </div>
 
         {work.preface && (
@@ -1514,7 +1459,6 @@ export default function ReadPage() {
               onClick={() => goToChapter(idx)}>
               <span className="rd-toc-num">{String(idx + 1).padStart(2, "0")}</span>
               <span className="rd-toc-name">{ct}</span>
-              <span className="rd-toc-time">{readingTime(ch.content)}</span>
             </button>
           );
         })}
@@ -1539,8 +1483,6 @@ export default function ReadPage() {
                 {work.description && <p className="rd-book-desc">{work.description}</p>}
                 <div className="rd-book-stats">
                   <span>{chapters.length} Bölüm</span>
-                  <span className="rd-dot">·</span>
-                  <span>{totalWords.toLocaleString("tr-TR")} kelime</span>
                 </div>
               </div>
             </div>
@@ -1566,6 +1508,16 @@ export default function ReadPage() {
               </div>
             </article>
 
+          ) : !chapter && selectedChapter ? (
+            <article className="rd-article">
+              <h2 className="rd-chapter-title">{work.customChapterTitles?.[selectedChapter._id] || selectedChapter.title}</h2>
+              {chapterError?.id === selectedChapter._id ? (
+                chapterError.status === 401 ? <>
+                  <p>Bölümün tamamını okumak için giriş yapmalısın.</p>
+                  <button className="rd-next-btn" onClick={() => requireMember(`/read/${workId}?chapter=${selectedChapter._id}`)}>Giriş yap ve okumaya devam et</button>
+                </> : <p>{chapterError.status === 403 ? "Bu içeriğe erişim iznin yok." : "Bölüm yüklenemedi veya artık yayında değil."}</p>
+              ) : <p>Bölüm yükleniyor…</p>}
+            </article>
           ) : chapter ? (
             <article className="rd-article">
               <header className="rd-article-header">

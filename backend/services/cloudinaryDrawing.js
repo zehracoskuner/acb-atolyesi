@@ -1,66 +1,29 @@
-// backend/services/cloudinaryDrawing.js
-import { v2 as cloudinary } from "cloudinary";
-import { Readable } from "stream";
+﻿import { v2 as cloudinary } from "cloudinary";
+import { Readable } from "node:stream";
+import { randomUUID } from "node:crypto";
+import { validateDrawing } from "../../shared/drawingProtocol.js";
 
-// Cloudinary config zaten cloudinary.js'de yapılıyor,
-// ama burada da garantiye alalım
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-/**
- * Tldraw snapshot objesini Cloudinary'e JSON dosyası olarak yükler.
- * Aynı publicId varsa üzerine yazar (invalidate: true).
- *
- * @param {object} snapshot  - tldraw getSnapshot() çıktısı
- * @param {string} workId    - eser ID'si (dosya adı için)
- * @param {string|null} existingPublicId - varsa üzerine yaz
- * @returns {{ url: string, publicId: string }}
- */
-export async function uploadDrawingSnapshot(snapshot, workId, existingPublicId = null) {
-  const jsonString = JSON.stringify(snapshot);
-  const buffer     = Buffer.from(jsonString, "utf-8");
-
-  // public_id: aynı kalırsa Cloudinary üzerine yazar
-  const publicId = existingPublicId || `acb-drawings/${workId}`;
-
+export async function uploadDrawingSnapshot(snapshot, workId) {
+  validateDrawing(snapshot);
+  const buffer = Buffer.from(JSON.stringify(snapshot), "utf8");
   return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        public_id:     `acb-drawings/${workId}`,
-        resource_type: "raw",        // JSON dosyası
-        format:       "json",
-        overwrite:    true,
-        invalidate:   true,
-      },
-      (error, result) => {
-        if (error) return reject(error);
-        resolve({
-          url:      result.secure_url,
-          publicId: result.public_id,
-        });
-      }
-    );
-
-    // Buffer'ı stream'e çevir ve pipe et
-    const readable = new Readable();
-    readable.push(buffer);
-    readable.push(null);
-    readable.pipe(uploadStream);
+    const stream = cloudinary.uploader.upload_stream({
+      public_id: `acb-drawings/${workId}/${randomUUID()}`,
+      resource_type: "raw", format: "json", overwrite: false,
+    }, (error, result) => error ? reject(error) : resolve({ url: result.secure_url, publicId: result.public_id }));
+    stream.on("error", reject);
+    Readable.from(buffer).pipe(stream);
   });
 }
 
-/**
- * Cloudinary'den drawing dosyasını siler.
- * @param {string} publicId
- */
 export async function deleteDrawingSnapshot(publicId) {
   if (!publicId) return;
-  try {
-    await cloudinary.uploader.destroy(publicId, { resource_type: "raw" });
-  } catch (err) {
-    console.warn("Cloudinary drawing silinemedi:", err.message);
-  }
+  try { await cloudinary.uploader.destroy(publicId, { resource_type: "raw" }); }
+  catch (error) { console.warn("Çizim dosyası temizlenemedi:", error.message); }
 }

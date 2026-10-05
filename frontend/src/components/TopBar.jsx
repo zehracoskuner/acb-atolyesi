@@ -1,9 +1,11 @@
+import { useSession, logoutSession } from "../lib/session";
+import { EXPLORE_PATH } from "../lib/routes";
+import { rememberLoginReturn } from "../lib/loginReturn";
 // src/components/TopBar.jsx
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect, useCallback} from "react";
 import { createPortal } from "react-dom";
 import { apiGet, apiPatch, adminGet } from "../lib/api";
-import { clearAuth } from "../lib/auth";
 import "../styles/TopBar.css";
 import ManifestoModal from "./ManifestoModal";
 import { TourHelpButton } from "./tour/TourManager";
@@ -244,7 +246,8 @@ export default function TopBar() {
   const [notifLoading,  setNotifLoading]  = useState(false);
   const [unreadCount,   setUnreadCount]   = useState(0);
   const [pendingCount,  setPendingCount]  = useState(0);
-  const [user,          setUser]          = useState({ kullaniciAdi: "Yazar", email: "", role: "user" });
+  const { user: sessionUser, status } = useSession();
+  const user = sessionUser || {};
 
   const dropdownRef = useRef(null);
   const notifRef    = useRef(null);
@@ -259,30 +262,12 @@ export default function TopBar() {
   }, []);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("user");
-      if (stored) setUser(JSON.parse(stored));
-    } catch { /* ignore */ }
-  }, []);
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    apiGet("/notifications")
-      .then(res => {
-        const items = res.items || [];
-        setUnreadCount(items.filter(n => !n.read).length);
-      })
-      .catch(() => {});
-
-    const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-    if (storedUser.role === "admin" || storedUser.role === "moderator") {
-      adminGet("/stats")
-        .then(res => setPendingCount(res.bekleyen?.reviewQueue || 0))
-        .catch(() => {});
-    }
-  }, []);
+    if (status !== "authenticated") { setOpen(false); setNotifOpen(false); setNotifications([]); setUnreadCount(0); setPendingCount(0); return; }
+    let active = true;
+    apiGet("/notifications").then(res => { if (active) setUnreadCount((res.items || []).filter(n => !n.read).length); }).catch(() => {});
+    if (["admin", "moderator"].includes(user.role)) adminGet("/stats").then(res => { if (active) setPendingCount((res.bekleyen?.reviewQueue || 0) + (res.bekleyen?.sikayetler || 0) + (res.bekleyen?.feedback || 0)); }).catch(() => {});
+    return () => { active = false; };
+  }, [status, user.role]);
 
   const handleNotifOpen = useCallback(async () => {
     const willOpen = !notifOpen;
@@ -313,11 +298,11 @@ export default function TopBar() {
 
   function goTo(path) { setOpen(false); navigate(path); }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (window.confirm("Atölyeden ayrılmak istediğine emin misin?")) {
-      clearAuth();
+      try { await logoutSession(); } catch (error) { alert(error.message); return; }
       setOpen(false);
-      navigate("/login");
+      navigate(EXPLORE_PATH);
     }
   };
 
@@ -333,22 +318,27 @@ export default function TopBar() {
 
           {/* ── Marka ── */}
           <button
+            type="button"
             className="brand"
             onClick={() => setStoryOpen(true)} data-tour="topbar-marka"
             style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
-            title="Proje hakkında"
+            title="ACB Atölyesi hakkında"
+            aria-haspopup="dialog"
           >
             <span className="logo">ACB-Atölyesi</span>
             <span className="brand-divider" />
-            <span className="topbar-tag">acemi yazarlar birliği</span>
+            <span className="topbar-tag">
+            acemi yazarlar birliği
+            </span>
           </button>
 
           {/* ── Nav ── */}
+          {status === "authenticated" ? <>
           <nav className="nav">
-            <Link to="/keşfet" className={`nav-link ${isActive("/keşfet") ? "active" : ""}`} data-tour="topbar-kesfet">
+            <Link to={EXPLORE_PATH} className={`nav-link ${isActive(EXPLORE_PATH) ? "active" : ""}`} data-tour="topbar-kesfet">
               <IconCompass />Keşfet
             </Link>
-            <Link to="/library" className={`nav-link ${isActive("/library") ? "active" : ""}`}>
+            <Link to="/library" data-tour="topbar-library" className={`nav-link ${isActive("/library") ? "active" : ""}`}>
               <IconBookmark />Kütüphanem
             </Link>
             <Link to="/profile/me" className={`nav-link ${location.pathname.startsWith("/profile") ? "active" : ""}`} data-tour="topbar-profil">
@@ -396,7 +386,7 @@ export default function TopBar() {
                       <div
                         key={n._id}
                         className={`notif-item ${!n.read ? "unread" : ""}`}
-                        onClick={() => markRead(n._id)}
+                        onClick={() => { markRead(n._id); if (n.type === "report_update" && n.report) goTo(`/basvurular/${n.report}`); }}
                       >
                         <span className="notif-item-icon">
                           {NOTIF_ICON[n.type] ?? "📢"}
@@ -431,10 +421,8 @@ export default function TopBar() {
                   <span className="d-email">{user.email || "—"}</span>
                 </div>
                 <div className="dropdown-section">
-                  <button className="dd-item" onClick={() => goTo("/profile/me")}><IconUser /> Profilim</button>
-                  <button className="dd-item" onClick={() => goTo("/studio")}><IconDoc /> Atölyem</button>
-                  <button className="dd-item" onClick={() => goTo("/notes")}><IconDoc /> Notlarım</button>
-                  <button className="dd-item" onClick={() => goTo("/kutuphane")}><IconLibrary /> Kütüphane</button>
+                  <button className="dd-item" onClick={() => goTo("/basvurular")}><IconDoc /> Başvurularım</button>
+                  <button className="dd-item" onClick={() => goTo("/ayarlar#geri-bildirim")}><IconDoc /> Öneri veya şikâyetler</button>
                   <button className="dd-item" onClick={() => goTo("/ayarlar")}><IconSettings /> Ayarlar</button>
                 </div>
 
@@ -490,6 +478,14 @@ export default function TopBar() {
             </div>
 
           </div>
+          </> : <nav className="guest-navigation" aria-label="Misafir menüsü">
+            <Link to={EXPLORE_PATH}>Keşfet</Link>
+            {status === "guest" && <>
+              <Link to={"/login?returnTo=" + encodeURIComponent(location.pathname + location.search)}>Giriş Yap</Link>
+              <Link to="/register" onClick={() => rememberLoginReturn(location.pathname + location.search)}>Aramıza Katıl</Link>
+            </>}
+            {status === "checking" && <span role="status">Oturum kontrol ediliyor…</span>}
+          </nav>}
         </div>
       </header>
 

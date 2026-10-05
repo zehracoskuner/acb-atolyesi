@@ -453,7 +453,7 @@ export default function CharactersUniversePage() {
           <div className="u-sub">Shift + sürükle: bağ kur · Çift tıkla: düzenle</div>
         </div>
         <div className="universe-actions">
-          <button className="u-btn" onClick={() => navigate(-1)}>← Geri</button>
+          <button className="u-btn" onClick={() => navigate(`/work/${workId}`)}>← Geri</button>
           <button className="u-theme-toggle" onClick={toggleTheme}>
             {theme === "dark" ? "☀ Açık" : "🌙 Koyu"}
           </button>

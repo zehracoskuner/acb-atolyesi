@@ -1,19 +1,13 @@
+import { useSession } from "../lib/session";
+import { EXPLORE_PATH } from "../lib/routes";
 import { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import { apiGet, apiPost, apiDelete } from "../lib/api";
 
 const PLACEHOLDER = "https://via.placeholder.com/200x300?text=Kapak+Yok";
 
-function getCurrentUser() {
-  try {
-    const raw = localStorage.getItem("user");
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
 
 /* ─── Listeye Ekle Dropdown ─── */
 function AddToListDropdown({ workId, onClose, anchorRef }) {
@@ -120,7 +114,8 @@ function AddToListDropdown({ workId, onClose, anchorRef }) {
 
 /* ─── Kart ─── */
 function LibCard({ w, onRemove, removingId }) {
-  const navigate   = useNavigate();
+  const navigate = useNavigate();
+
   const [showDrop, setShowDrop] = useState(false);
   const btnRef = useRef(null);
 
@@ -188,7 +183,7 @@ function LibCard({ w, onRemove, removingId }) {
       <div className="lib-card-body">
         <div className="lib-card-title">{w.title}</div>
         <div className="lib-card-author">
-          {w.author?.kullaniciAdi || w.author?.username || "Bilinmeyen Yazar"}
+          {w.isAnonymous ? "Anonim Yazar" : (w.author?.kullaniciAdi || w.author?.username || "Yazar")}
         </div>
         <div className="lib-card-meta">{w.chapterCount ?? 0} bölüm</div>
       </div>
@@ -198,9 +193,10 @@ function LibCard({ w, onRemove, removingId }) {
 
 /* ─── Ana Sayfa ─── */
 export default function LibraryPage() {
-  const navigate    = useNavigate();
-  const token       = localStorage.getItem("token");
-  const currentUser = getCurrentUser();
+
+  const { user: currentUser, status } = useSession();
+  const token = status === "authenticated";
+
 
   const [items,      setItems]      = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -208,7 +204,7 @@ export default function LibraryPage() {
   const [search,     setSearch]     = useState("");
 
   useEffect(() => {
-    if (!token) { navigate("/login"); return; }
+    if (!token) return;
     setLoading(true);
     apiGet("/library")
       .then(res => setItems(res.items || []))
@@ -238,7 +234,7 @@ export default function LibraryPage() {
   const displayName = currentUser?.kullaniciAdi || currentUser?.username;
 
   return (
-    <div className="lib-root">
+    <div className="lib-root" data-tour={!loading ? "tour-page-ready" : undefined}>
       <TopBar />
 
       <style>{`
@@ -564,7 +560,7 @@ export default function LibraryPage() {
         <div className="lib-empty">
           <span className="lib-empty-icon">📖</span>
           Kütüphanende henüz hiç eser yok.{" "}
-          <a onClick={() => navigate("/")}>Keşfetmeye başla →</a>
+          <Link to={EXPLORE_PATH}>Keşfetmeye başla →</Link>
         </div>
       ) : filtered.length === 0 ? (
         <div className="lib-empty">

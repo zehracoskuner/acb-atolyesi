@@ -1,0 +1,9 @@
+.book-download { position: relative; }
+.book-download-panel { box-sizing: border-box; position: fixed; inset: 0; margin: auto; width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: clamp(18px, 4vw, 28px); border: 1px solid #cdbda7; border-top: 3px solid #8b2500; border-radius: 10px; background: #faf7f0; color: #392c21; box-shadow: 0 18px 60px #261b1633; font: 14px/1.7 'DM Sans', sans-serif; text-align: left; }
+.book-download-panel::backdrop { background: #17112280; }
+.book-download-panel p { margin: 0 0 12px; }
+.book-download-panel select { display: block; width: 100%; min-width: 0; min-height: 44px; padding: 10px; margin: 8px 0 16px; border: 1px solid #cdbda7; border-radius: 6px; color: #392c21; background: #fffdf8; font: inherit; }
+.book-download-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.book-download-actions button { padding: 8px 12px; border: 1px solid #b9afca; border-radius: 6px; background: #f3edf9; color: #292333; cursor: pointer; }
+.book-download-actions button:disabled { opacity: .5; cursor: wait; }
+.book-download-panel [role="status"] { margin-top: 12px; }

@@ -1,9 +1,12 @@
+import readerAccess from "../middlewares/readerAccess.js";
 import express from "express";
 import ensureAuth from "../middlewares/ensureAuth.js";
 import Library from "../models/Library.js";
 import Work from "../models/Work.js";
+import { serializeWorkAuthor } from "../services/publicWork.js";
 
 const router = express.Router();
+router.use(readerAccess);
 
 
 // GET /api/library — kullanıcının kütüphanesi
@@ -14,8 +17,8 @@ router.get("/", ensureAuth, async (req, res) => {
     const entries = await Library.find({ user: userId })
       .populate({
         path: "work",
-        select: "title coverImage status publishedChapterIds",
-        populate: { path: "user", select: "_id username" },
+        select: "title coverImage status publishedChapterIds user isAnonymous",
+        populate: { path: "user", select: "_id kullaniciAdi avatarUrl" },
       })
       .sort({ createdAt: -1 });
 
@@ -27,7 +30,8 @@ router.get("/", ensureAuth, async (req, res) => {
         title:        e.work.title,
         coverImage:   e.work.coverImage || "",
         chapterCount: e.work.publishedChapterIds?.length ?? 0,
-        author:       e.work.user ?? {},
+        isAnonymous:  e.work.isAnonymous ?? false,
+        author:       serializeWorkAuthor(e.work),
         addedAt:      e.createdAt,
       }));
 

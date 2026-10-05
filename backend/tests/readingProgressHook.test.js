@@ -1,0 +1,32 @@
+import { beforeEach, afterEach, it, expect, vi } from 'vitest';
+const state = vi.hoisted(() => ({ effect: null }));
+vi.mock('../../frontend/node_modules/react/index.js', () => ({ useEffect: fn => { state.effect = fn; } }));
+vi.mock('../../frontend/src/services/readingProgressService', () => ({ trackReadingProgress: vi.fn(), clearProgressForStory: vi.fn() }));
+import { useReadingProgress } from '../../frontend/src/hooks/useReadingProgress.js';
+import { trackReadingProgress } from '../../frontend/src/services/readingProgressService';
+beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', new EventTarget()); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+const element = () => Object.assign(new EventTarget(), { scrollTop: 0, scrollHeight: 1100, clientHeight: 100 });
+it('flushes a pending scroll on exit with the old work and chapter identity', () => {
+  const el = element();
+  useReadingProgress('work-a', { _id: 'chapter-a', order: 2, title: 'A' }, { current: el }, { id: 'user-a' });
+  const cleanup = state.effect();
+  el.scrollTop = 640;
+  el.dispatchEvent(new Event('scroll'));
+  cleanup();
+  expect(trackReadingProgress).toHaveBeenCalledWith('work-a', 'chapter-a', 2, 'A', 64, { id: 'user-a' });
+  vi.runAllTimers();
+  expect(trackReadingProgress).toHaveBeenCalledTimes(1);
+});
+it('records a newly opened chapter even without scroll and flushes on pagehide', () => {
+  const el = element();
+  useReadingProgress('work-b', { _id: 'chapter-b', order: 1, title: 'B' }, { current: el }, { id: 'user-a' });
+  const cleanup = state.effect();
+  vi.advanceTimersByTime(500);
+  expect(trackReadingProgress).toHaveBeenLastCalledWith('work-b', 'chapter-b', 1, 'B', 0, { id: 'user-a' });
+  el.scrollTop = 800;
+  el.dispatchEvent(new Event('scroll'));
+  window.dispatchEvent(new Event('pagehide'));
+  expect(trackReadingProgress).toHaveBeenLastCalledWith('work-b', 'chapter-b', 1, 'B', 80, { id: 'user-a' });
+  cleanup();
+});

@@ -809,7 +809,8 @@ export default function CreateWorkModal({ isOpen, onClose, onSuccess }) {
         formData.append("file", coverFile);
         const uploadRes = await fetch(`${API_BASE}/upload`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          headers: localStorage.getItem("token") ? { Authorization: `Bearer ${localStorage.getItem("token")}` } : {},
+          credentials: "include",
           body: formData,
         });
         const uploadData = await safeJson(uploadRes);
@@ -1026,6 +1027,7 @@ export default function CreateWorkModal({ isOpen, onClose, onSuccess }) {
         </div>
 
         {/* ── Footer ── */}
+        <p className="cwm-cover-formats">Eser yayınlandığında yazar olarak kullanıcı adın gösterilir.</p>
         <div className="cwm-footer">
           <button type="button" className="cwm-btn cwm-btn--ghost" onClick={onClose}>
             İptal

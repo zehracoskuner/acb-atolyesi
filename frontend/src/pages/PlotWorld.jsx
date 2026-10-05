@@ -1,5 +1,6 @@
+import { PLOTWORLD_SCENE_AI_ENABLED, PLOTWORLD_DRAW_ENABLED } from "../../../shared/features.js";
 import {
-  useState, useEffect, useCallback, useRef, useMemo, useReducer,
+  useState, useEffect, useCallback, useRef, useMemo, useReducer, lazy, Suspense,
 } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -21,7 +22,6 @@ import {
 import SceneNode           from "../components/plotworld/SceneNode";
 import DetailPanel         from "../components/plotworld/DetailPanel";
 import SceneModal          from "../components/plotworld/SceneModal";
-import PlotDrawArea        from "../components/plotworld/PlotDrawArea";
 import CharacterArcPanel   from "../components/plotworld/CharacterArcPanel";
 import StructureSetupModal from "../components/plotworld/StructureSetupModal";
 import ButterflyModal      from "../components/plotworld/ButterflyModal";
@@ -39,6 +39,7 @@ import "../styles/PlotWorldAiStyles.css";
 
 /* ─── Sabitler ──────────────────────────────────────────── */
 const NODE_TYPES = { sceneNode: SceneNode };
+const PlotDrawArea = lazy(() => import("../components/plotworld/PlotDrawArea"));
 const EDGE_TYPES_MAP = { causal: CausalEdge };  
 
 const WORLD_CATEGORIES = ["locations", "timeline", "rules", "notes"];
@@ -50,7 +51,7 @@ const SIDE_TABS = [
 ];
 
 const MAIN_TABS = [
-  { key: "plot", label: "Plot Board" },
+  { key: "plot", label: "Sahne Panosu" },
   { key: "draw", label: "Çizim Alanı" },
   { key: "arc",  label: "Karakter Arkı" },
 ];
@@ -74,7 +75,7 @@ const createEntryModal  = (category)             => ({ mode: "add_entry", catego
 /* ══════════════════════════════════════════════════════════
    TOAST BİLEŞENİ
 ══════════════════════════════════════════════════════════ */
-function Toast({ toasts, dispatch }) {
+function Toast({ toasts }) {
   if (!toasts.length) return null;
   return (
     <div
@@ -108,14 +109,15 @@ function Toast({ toasts, dispatch }) {
 /* ══════════════════════════════════════════════════════════
    SIDEBAR İTEM BİLEŞENİ
 ══════════════════════════════════════════════════════════ */
-function CharacterItem({ char, index, isActive, sceneCount, isDraggable, onToggleFilter }) {
+function CharacterItem({ char, index, isActive, sceneCount, isDraggable, onOpen }) {
   const color = char.color || CHAR_PALETTE[index % CHAR_PALETTE.length];
   const cId   = String(char._id);
+  const dragging = useRef(false);
 
   return (
     <div
-      role={isDraggable ? undefined : "button"}
-      aria-pressed={!isDraggable ? isActive : undefined}
+      role="button"
+      aria-label={`${char.name} — karakter detayını aç`}
       tabIndex={0}
       className={[
         "pw-sitem",
@@ -123,10 +125,12 @@ function CharacterItem({ char, index, isActive, sceneCount, isDraggable, onToggl
         isActive && "pw-sitem--active",
         isDraggable && "pw-sitem--draggable",
       ].filter(Boolean).join(" ")}
-      onClick={() => !isDraggable && onToggleFilter(cId)}
-      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") !isDraggable && onToggleFilter(cId); }}
+      onClick={() => { if (!dragging.current) onOpen(); }}
+      onPointerDown={() => { dragging.current = false; }}
+      onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(); } }}
       draggable={isDraggable}
       onDragStart={e => {
+        dragging.current = true;
         e.dataTransfer.setData("application/character", JSON.stringify({
           charId: cId, name: char.name, color, role: char.role || "",
         }));
@@ -154,25 +158,27 @@ function CharacterItem({ char, index, isActive, sceneCount, isDraggable, onToggl
 /* ══════════════════════════════════════════════════════════
    WORLD ENTRY İTEM BİLEŞENİ
 ══════════════════════════════════════════════════════════ */
-function WorldEntryItem({ item, dotColor, onDelete }) {
+function WorldEntryItem({ item, dotColor, onDelete, onOpen }) {
   return (
     <div className="pw-sitem" style={{ position: "relative" }}>
+      <button className="pw-entry-open" onClick={onOpen}>
       <span className="pw-sdot" style={{ background: dotColor }} />
-      <div style={{ flex: 1, paddingRight: 24 }}>
-        <div className="pw-sname">{item.name}</div>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span className="pw-sname">{item.name}</span>
         {item.description && (
-          <div className="pw-ssub">
+          <span className="pw-ssub">
             {item.description.length > 55
               ? `${item.description.slice(0, 55)}…`
               : item.description}
-          </div>
+          </span>
         )}
-      </div>
+      </span>
+      </button>
       <button
         className="pw-delete-btn"
         aria-label={`${item.name} sil`}
         title="Sil"
-        onClick={() => onDelete(item._id)}
+        onClick={e => { e.stopPropagation(); onDelete(item._id); }}
       >
         ✕
       </button>
@@ -284,6 +290,7 @@ export default function PlotWorldPage() {
   ══════════════════════════════════════════════════════ */
   useEffect(() => {
     function handleKey(e) {
+      if (e.defaultPrevented || e.target.closest?.("dialog")) return;
       // Escape — kapat / iptal
       if (e.key === "Escape") {
         if (connecting)        { stopConnect();      return; }
@@ -391,11 +398,11 @@ export default function PlotWorldPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [workId]);
+  }, [workId, setNodes, setEdges]);
 
 useEffect(() => {
   window.__acbTourTrigger = window.__acbTourTrigger || {};
-  window.__acbTourTrigger.openDrawTab = () => setActiveMain("draw");
+  window.__acbTourTrigger.openDrawTab = () => { if (PLOTWORLD_DRAW_ENABLED) setActiveMain("draw"); };
   window.__acbTourTrigger.openArcTab  = () => setActiveMain("arc");
   return () => {
     delete window.__acbTourTrigger.openDrawTab;
@@ -413,7 +420,7 @@ useEffect(() => {
       if (n) setModal(createEditModal(n));
       return prev;
     });
-  }, []);
+  }, [setNodes]);
 
   const handleButterflyRequest = useCallback((nodeId) => {
     setNodes(prev => {
@@ -421,11 +428,15 @@ useEffect(() => {
       if (n) setButterflyNode(n);
       return prev;
     });
-  }, []);
+  }, [setNodes]);
 
-  const handleConnectRequest = useCallback((nodeId) => {
-    startConnectFrom(nodeId);
-  }, []); // eslint-disable-line
+  const startConnectFrom = useCallback((nodeId) => {
+    setConnectFrom(nodeId);
+    setConnecting(true);
+    connectingRef.current = true;
+    setSelectedNode(null);
+  }, []);
+  const handleConnectRequest = startConnectFrom;
 
   const handleDeleteSceneById = useCallback(async (nodeId) => {
     // Optimistic update
@@ -444,7 +455,7 @@ useEffect(() => {
       setEdges(prevEdges);
       toast("Sahne silinemedi.", "error");
     }
-  }, [workId, nodes, edges, toast]);
+  }, [workId, nodes, edges, toast, setNodes, setEdges]);
 
   /* ══════════════════════════════════════════════════════
      DISPLAY NODES — filtre + stabil callback referansları
@@ -466,27 +477,12 @@ const displayNodes = useMemo(() => {
     const actColor = actMeta[n.data.act]?.color || "#888";
     const actLabel = actMeta[n.data.act]?.label || n.data.act || "—";
 
-    const charDots = (n.data.charIds || [])
-      .map(id => {
-        const c = characterMap[id];
-        if (!c) return null;
-        const idx = characters.findIndex(x => String(x._id) === id);
-        return { name: c.name, color: c.color || CHAR_PALETTE[idx % CHAR_PALETTE.length] || "#94a3b8" };
-      })
-      .filter(Boolean);
-
-    const connOut = edges.filter(e => e.source === n.id).length;
-    const connIn  = edges.filter(e => e.target === n.id).length;
-
     return {
       ...n,
       data: {
         ...n.data,
         actColor,
         actLabel,
-        charDots,
-        connOut,
-        connIn,
         dimmed:      !visible,
         highlighted: visible && (!!filterActId || !!filterCharId || !!sceneSearch),
         onEdit:      () => handleEditRequest(n.id),
@@ -497,8 +493,7 @@ const displayNodes = useMemo(() => {
     };
   });
 }, [
-  nodes, edges, filterCharId, filterActId, sceneSearch, actMeta,
-  characterMap, characters,
+  nodes, filterCharId, filterActId, sceneSearch, actMeta,
   handleEditRequest, handleConnectRequest, handleButterflyRequest, handleDeleteSceneById,
 ]);
 
@@ -571,12 +566,6 @@ const onNodeClick = useCallback((_, node) => {
   /* ══════════════════════════════════════════════════════
      BAĞLANTI MODU
   ══════════════════════════════════════════════════════ */
-  function startConnectFrom(nodeId) {
-    setConnectFrom(nodeId);
-    setConnecting(true);
-    connectingRef.current = true;
-    setSelectedNode(null);
-  }
 
   function stopConnect() {
     setConnecting(false);
@@ -717,27 +706,29 @@ const onNodeClick = useCallback((_, node) => {
   /* ══════════════════════════════════════════════════════
      CRUD — DÜNYA GİRİŞLERİ
   ══════════════════════════════════════════════════════ */
-  async function handleAddWorldEntry(formData) {
+  async function handleSaveEntry(formData) {
     setSaving(true);
     try {
-      const res = await apiPost(`/world/${workId}/entries`, formData);
-      const { entry, category } = res;
-
-      setWorldData(prev => ({
-        ...prev,
-        world: {
-          ...prev.world,
-          [category]: [...(prev.world[category] || []), entry],
-        },
-      }));
-
-      setModal(null);
-      toast(`"${entry.name}" eklendi.`);
-    } catch {
-      toast("Giriş eklenemedi.", "error");
-    } finally {
-      setSaving(false);
-    }
+      const { category, ...fields } = formData;
+      if (category === "characters") {
+        const res = await apiPatch(`/characters/${modal.entry._id}`, { ...fields, workId });
+        if (!res.item) throw new Error("Eksik kayıt yanıtı");
+        setCharacters(prev => prev.map(c => c._id === res.item._id ? res.item : c));
+        setCharacterMap(prev => ({ ...prev, [res.item._id]: res.item }));
+        setModal(prev => ({ ...prev, entry: res.item }));
+      } else {
+        const res = modal.entry
+          ? await apiPatch(`/world/${workId}/entries/${modal.entry._id}`, formData)
+          : await apiPost(`/world/${workId}/entries`, formData);
+        if (!res.entry) throw new Error("Eksik kayıt yanıtı");
+        setWorldData(prev => ({ ...prev, world: { ...prev.world, [category]: modal.entry
+          ? (prev.world[category] || []).map(e => e._id === res.entry._id ? res.entry : e)
+          : [...(prev.world[category] || []), res.entry] } }));
+        setModal(prev => ({ ...prev, mode: "edit_entry", entry: res.entry }));
+      }
+      return true;
+    } catch { return false; }
+    finally { setSaving(false); }
   }
 
   async function handleDeleteWorldEntry(entryId) {
@@ -856,7 +847,7 @@ const onNodeClick = useCallback((_, node) => {
               isActive={filterCharId === String(c._id)}
               sceneCount={charSceneCount(String(c._id))}
               isDraggable={isDraggable}
-              onToggleFilter={toggleCharFilter}
+              onOpen={() => setModal({ mode: "edit_entry", category: "characters", entry: c })}
             />
           ))}
           {filterCharId && (
@@ -888,6 +879,7 @@ const onNodeClick = useCallback((_, node) => {
         item={item}
         dotColor={dotColor}
         onDelete={handleDeleteWorldEntry}
+        onOpen={() => setModal({ mode: "edit_entry", category, entry: item })}
       />
     ));
   }
@@ -927,7 +919,7 @@ const onNodeClick = useCallback((_, node) => {
   const hasActiveFilters = filterCharId || filterActId || sceneSearch;
 
   return (
-    <div className="pw-root">
+    <div className="pw-root" data-theme="light">
 
       {/* ─── TOAST ─── */}
       <Toast toasts={toasts} dispatch={dispatchToast} />
@@ -998,7 +990,7 @@ const onNodeClick = useCallback((_, node) => {
         </nav>
 
         {/* İçerik sekmeleri */}
-        <nav className="pw-stabs" role="tablist" aria-label="Sidebar sekmeleri">
+        <nav data-tour="plotworld-world-tabs" className="pw-stabs" role="tablist" aria-label="Sidebar sekmeleri">
           {SIDE_TABS.map(({ key, label }) => (
             <button
               key={key}
@@ -1013,6 +1005,7 @@ const onNodeClick = useCallback((_, node) => {
         </nav>
 
         <div className="pw-sidebar-body" role="tabpanel">
+          {sideTab !== "characters" && <details className="pw-help"><summary>Hikâyenin dünyası için küçük bir not</summary><p>Hikâyenin dünyasını senden iyi kimse bilmiyor. Evrenin ve karakterlerin hakkında dilediğin kadar not bırakabilirsin.</p></details>}
           {renderSideContent()}
         </div>
 
@@ -1030,7 +1023,7 @@ const onNodeClick = useCallback((_, node) => {
               className="pw-add-btn"
               onClick={() => navigate(`/work/${workId}/characters`)}
             >
-              + karakter ekle
+              + Karakter ekle
             </button>
           </>
         )}
@@ -1040,46 +1033,11 @@ const onNodeClick = useCallback((_, node) => {
             className="pw-add-btn"
             onClick={() => setModal(createEntryModal(WORLD_CAT_BY_TAB[sideTab]))}
           >
-            + {sideTab === "rules" ? "yeni kural" : "yeni not"} ekle
+            {sideTab === "rules" ? "+ Evren bilgisi ekle" : "+ Not ekle"}
           </button>
         )}
 
         {/* Gösterge */}
-        <div className="pw-legend" aria-label="Renk göstergesi">
-          <div className="pw-legend-title">Gösterge</div>
-          {Object.entries(actMeta).map(([act, meta]) => (
-            <div key={act} className="pw-legend-item">
-              <span
-                className="pw-legend-dot"
-                style={{ background: meta.color }}
-                aria-hidden="true"
-              />
-              <span className="pw-legend-label">
-                {meta.roman ? `${meta.roman}. Perde — ` : ""}{meta.label}
-              </span>
-            </div>
-          ))}
-          <div className="pw-legend-item">
-            <span className="pw-legend-dot" style={{ background: "#ca8a04" }} aria-hidden="true" />
-            <span className="pw-legend-label">Alternatif Dal</span>
-          </div>
-          <div className="pw-legend-item">
-            <span className="pw-legend-line" aria-hidden="true" />
-            <span className="pw-legend-label">Nedensellik bağı</span>
-          </div>
-          <div className="pw-legend-item">
-            <span className="pw-legend-dash" aria-hidden="true" />
-            <span className="pw-legend-label">Alternatif bağlantı</span>
-          </div>
-        </div>
-
-        {/* Klavye ipuçları */}
-        <div className="pw-keyboard-hints" aria-label="Klavye kısayolları">
-          <div className="pw-hint"><kbd>Esc</kbd> Kapat/İptal</div>
-          <div className="pw-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> Yeni sahne</div>
-          <div className="pw-hint"><kbd>Ctrl</kbd>+<kbd>F</kbd> Ara</div>
-          <div className="pw-hint"><kbd>Del</kbd> Seçili öğeyi sil</div>
-        </div>
       </aside>
 
       {/* ─── SAĞ ALAN ─── */}
@@ -1087,20 +1045,20 @@ const onNodeClick = useCallback((_, node) => {
 
         {/* Tab bar */}
         <nav className="pw-tabbar" role="tablist" aria-label="Ana görünüm sekmeleri">
-          {MAIN_TABS.map(({ key, label }) => (
+          {MAIN_TABS.filter(tab => tab.key !== "draw" || PLOTWORLD_DRAW_ENABLED).map(({ key, label }) => (
             <button
               key={key}
               role="tab"
               aria-selected={activeMain === key}
               className={`pw-mtab ${activeMain === key ? "pw-mtab--active" : ""}`}
               onClick={() => setActiveMain(key)}
-              data-tour={key === "arc" ? "plotworld-ark-btn" : undefined}
+              data-tour={key === "plot" ? "plotworld-board-tab" : key === "arc" ? "plotworld-ark-btn" : undefined}
             >
               {label}
             </button>
           ))}
 
-          <button
+          {PLOTWORLD_SCENE_AI_ENABLED && (<button
             className={`pw-mtab pw-mtab--ai ${showGapPanel ? "pw-mtab--ai-active" : ""}`}
             data-tour="plotworld-ai-btn"
             aria-pressed={showGapPanel}
@@ -1108,7 +1066,7 @@ const onNodeClick = useCallback((_, node) => {
             onClick={() => setShowGapPanel(prev => !prev)}
           >
             {showGapPanel ? "× Kapat" : "✦ AI Analiz"}
-          </button>
+          </button>)}
 
           {/* Arama — sadece plot board'da */}
           {activeMain === "plot" && (
@@ -1126,7 +1084,7 @@ const onNodeClick = useCallback((_, node) => {
         </nav>
 
         {/* AI Analiz Paneli */}
-        {showGapPanel && activeMain === "plot" && (
+        {PLOTWORLD_SCENE_AI_ENABLED && showGapPanel && activeMain === "plot" && (
           <AiAnalysisPanel
             nodes={nodes}
             actOrder={actOrder}
@@ -1199,9 +1157,10 @@ const onNodeClick = useCallback((_, node) => {
         {activeMain === "plot" && (
           <div
             className={`pw-canvas ${connecting ? "pw-canvas--connecting" : ""}`}
-            aria-label="Plot board"
+            aria-label="Sahne Panosu"
           >
             <ReactFlow
+              proOptions={{ hideAttribution: true }}
               nodes={displayNodes}
               edges={edges}
               edgeTypes={EDGE_TYPES_MAP}
@@ -1219,9 +1178,8 @@ const onNodeClick = useCallback((_, node) => {
               fitView
               fitViewOptions={{ padding: 0.3 }}
               deleteKeyCode="Delete"
-              proOptions={{ hideAttribution: true }}
-              style={{ background: "#f5f0e8" }}
-              aria-label={`Plot board — ${nodes.length} sahne`}
+              style={{ background: "var(--pw-bg)" }}
+              aria-label={`Sahne Panosu — ${nodes.length} sahne`}
             >
               <Background
                 variant={BackgroundVariant.Dots}
@@ -1235,34 +1193,10 @@ const onNodeClick = useCallback((_, node) => {
                   if (n.data?.isAlternative) return "#ca8a04";
                   return actMeta[n.data?.act]?.color || "#888";
                 }}
-                maskColor="rgba(245,240,232,0.78)"
-                style={{ background: "#faf7f2" }}
+                maskColor="var(--pw-mask)"
+                style={{ background: "var(--pw-surface)" }}
                 aria-label="Küçük harita"
               />
-
-              {/* Perde özeti — sol üst */}
-              <Panel position="top-left">
-                <div className="pw-act-legend" aria-label="Perde özeti">
-                  {Object.entries(actMeta).map(([k, v]) => (
-                    <div key={k} className="pw-act-legend-item">
-                      <span
-                        className="pw-act-legend-dot"
-                        style={{ background: v.color }}
-                        aria-hidden="true"
-                      />
-                      <span className="pw-act-legend-label">{v.label}</span>
-                      <span className="pw-act-legend-cnt">
-                        {nodes.filter(n => n.data?.act === k).length}
-                      </span>
-                    </div>
-                  ))}
-                  {totalPages > 0 && (
-                    <div className="pw-act-legend-total">
-                      ~{totalPages} sayfa tahmini
-                    </div>
-                  )}
-                </div>
-              </Panel>
 
               {/* Bağlantı modu banner */}
               {connecting && (
@@ -1313,10 +1247,12 @@ const onNodeClick = useCallback((_, node) => {
           </div>
         )}
 
-        {activeMain === "draw" && (
+        {PLOTWORLD_DRAW_ENABLED && activeMain === "draw" && (
           <div data-tour="plotworld-cizim-alani">
+          <Suspense fallback={null}>
           <PlotDrawArea workId={workId} characters={characters}
            />
+          </Suspense>
            </div>
         )}
 
@@ -1356,17 +1292,20 @@ const onNodeClick = useCallback((_, node) => {
       )}
 
       {/* Dünya girişi ekle */}
-      {modal?.mode === "add_entry" && (
+      {(modal?.mode === "add_entry" || modal?.mode === "edit_entry") && (
         <WorldEntryModal
           category={modal.category}
-          onClose={() => !saving && setModal(null)}
-          onSave={handleAddWorldEntry}
+          initial={modal.entry}
+          onFilter={modal.category === "characters" ? () => toggleCharFilter(String(modal.entry._id)) : undefined}
+          onManage={modal.category === "characters" ? () => navigate(`/work/${workId}/characters`) : undefined}
+          onClose={() => setModal(null)}
+          onSave={handleSaveEntry}
           saving={saving}
         />
       )}
 
       {/* Kelebek etkisi */}
-      {butterflyNode && (
+      {PLOTWORLD_SCENE_AI_ENABLED && butterflyNode && (
         <ButterflyModal
           node={butterflyNode}
           edges={edges}

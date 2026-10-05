@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiGet } from "../lib/api";
+import BookDownload from "../components/BookDownload";
 import { isLoggedIn } from "../lib/auth";
 import "../styles/WorkStudioPage.css";
 import TopBar from "../components/TopBar";
@@ -55,6 +56,7 @@ async function safePatch(path, body) {
 
   const res = await fetch(url, {
     method: "PATCH",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -163,12 +165,12 @@ export default function WorkStudioPage() {
       const uploadRes = await fetch(`${API_BASE}/upload`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
         body: formData,
       });
 
-      if (!uploadRes.ok) throw new Error("Resim sunucuya yüklenemedi.");
-
       const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadData.message || "Resim sunucuya yüklenemedi.");
       const secureUrl  = uploadData.url || uploadData.secure_url;
       if (!secureUrl) throw new Error("Cloudinary URL döndürmedi.");
 
@@ -297,6 +299,7 @@ export default function WorkStudioPage() {
 
             {/* Hero aksiyonlar */}
             <div className="ws-hero-actions">
+              <BookDownload workId={workId} />
               <button
                 className="ws-btn-primary"
                 onClick={() => navigate(`/work/${workId}/chapters`)}

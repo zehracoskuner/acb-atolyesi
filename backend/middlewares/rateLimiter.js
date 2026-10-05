@@ -1,4 +1,5 @@
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import { UploadRateStore } from "../services/uploadRateStore.js";
 
 /* ─── Genel API limiti ─── */
 export const generalLimiter = rateLimit({
@@ -40,6 +41,8 @@ export const writeLimiter = rateLimit({
 /* ─── Upload limiti ─── */
 // Dosya yükleme pahalı bir işlem — saatte 20 yükleme yeterli
 export const uploadLimiter = rateLimit({
+  store: new UploadRateStore("upload:ip:"),
+  passOnStoreError: false,
   windowMs: 60 * 60 * 1000,
   max:      20,
   standardHeaders: true,
@@ -55,4 +58,16 @@ export const aiLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: "AI limitine ulaştın. 1 saat sonra tekrar dene." },
   keyGenerator: (req) => req.user?.id || ipKeyGenerator(req.ip),
+});
+
+// Authentication must run first: changing IP must not reset an account's quota.
+export const uploadUserLimiter = rateLimit({
+  store: new UploadRateStore("upload:user:"),
+  passOnStoreError: false,
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.user.id),
+  message: { message: "Çok fazla dosya yüklendi. 1 saat sonra tekrar dene." },
 });

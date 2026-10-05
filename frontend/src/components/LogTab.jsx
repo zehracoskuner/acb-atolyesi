@@ -1,6 +1,7 @@
+import { useMembership } from "../lib/membershipContext";
 // src/components/LogTab.jsx
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { apiGet, apiPost, apiDelete } from "../lib/api";
 
 const MAX_CHARS = 400;
@@ -15,9 +16,6 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString("tr-TR");
 }
 
-function getCurrentUser() {
-  try { return JSON.parse(localStorage.getItem("user")); } catch { return null; }
-}
 
 const VIS = {
   public:    { icon: "🌐", label: "Herkese açık" },
@@ -33,7 +31,7 @@ function CommentSection({ logId, isLoggedIn, logAuthorId }) {
   const [text,      setText]      = useState("");
   const [posting,   setPosting]   = useState(false);
   const [error,     setError]     = useState("");
-  const currentUser = getCurrentUser();
+  const { user: currentUser, requireMember } = useMembership();
   const myId = currentUser?._id || currentUser?.id;
 
   async function loadComments() {
@@ -148,7 +146,7 @@ function CommentSection({ logId, isLoggedIn, logAuthorId }) {
               {error && <p className="log-comment-error">{error}</p>}
             </form>
           ) : (
-            <p className="log-comment-login-hint">Yorum yapmak için <a href="/login">giriş yap</a></p>
+            <p className="log-comment-login-hint">Yorum yapmak için <button onClick={() => requireMember()}>aramıza katıl</button></p>
           )}
         </div>
       )}
@@ -158,11 +156,13 @@ function CommentSection({ logId, isLoggedIn, logAuthorId }) {
 
 /* ── Tek girdi ── */
 function LogEntry({ log, isOwner, onDelete, isLoggedIn }) {
+  const { requireMember } = useMembership();
   const [likeCount, setLikeCount] = useState(log.likeCount ?? 0);
   const [likedByMe, setLikedByMe] = useState(log.likedByMe ?? false);
   const [liking,    setLiking]    = useState(false);
 
   async function handleLike() {
+    if (!requireMember()) return;
     if (liking) return;
     setLiking(true);
     const was = likedByMe;
@@ -218,7 +218,7 @@ function LogEntry({ log, isOwner, onDelete, isLoggedIn }) {
           <button
             className={`log-like-btn ${likedByMe ? "log-like-btn--active" : ""}`}
             onClick={handleLike}
-            disabled={liking || !isLoggedIn}
+            disabled={liking}
             title={!isLoggedIn ? "Beğenmek için giriş yap" : ""}
           >
             <svg width="13" height="13" viewBox="0 0 24 24"
@@ -326,13 +326,9 @@ export default function LogTab({ userId, isOwner, works }) {
   const [hasMore, setHasMore] = useState(false);
   const [page,    setPage]    = useState(1);
 
-  const isLoggedIn = !!localStorage.getItem("token");
+  const isLoggedIn = useMembership().status === "authenticated";
 
-  useEffect(() => {
-    setLogs([]); setPage(1); loadLogs(1, true);
-  }, [userId]);
-
-  async function loadLogs(p = 1, reset = false) {
+  const loadLogs = useCallback(async (p = 1, reset = false) => {
     try {
       setLoading(true);
       const res = await apiGet(`/logs/${userId}?page=${p}&limit=10`);
@@ -341,7 +337,11 @@ export default function LogTab({ userId, isOwner, works }) {
       setPage(p);
     } catch { /* sessizce geç */ }
     finally { setLoading(false); }
-  }
+  }, [userId]);
+
+  useEffect(() => {
+    setLogs([]); setPage(1); loadLogs(1, true);
+  }, [loadLogs]);
 
   async function handleDelete(logId) {
     if (!window.confirm("Bu girdiyi silmek istiyor musun?")) return;

@@ -1,0 +1,27 @@
+/* The legacy home and beginner routes share this writing workspace. */
+.ws-shell.light { min-height: 100dvh; background: #f5f0e8; color: #392c21; font-family: 'DM Sans', sans-serif; }
+.ws-shell .ws-topbar { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #d9cdbc; }
+.ws-shell .ws-grid { display: grid; grid-template-columns: 230px minmax(0, 1fr) 260px; gap: 24px; padding: 24px; }
+.ws-shell :is(.ws-left, .ws-main, .ws-right) { min-width: 0; }
+.ws-shell :is(.ws-left, .ws-main, .postit) { background: #fffaf2; border: 1px solid #d9cdbc; border-radius: 10px; padding: 20px; }
+.ws-shell :is(.section-title, .postit-title) { margin-bottom: 16px; }
+.ws-shell :is(.option, .accordion-head) { margin-bottom: 12px; }
+.ws-shell .editor-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.ws-shell .ws-textarea { width: 100%; min-height: 55dvh; resize: vertical; border: 1px solid #d9cdbc; border-radius: 6px; background: #fffdf8; padding: 16px; color: inherit; font: 18px/1.8 Georgia, serif; }
+.ws-shell button { min-height: 44px; max-width: 100%; padding: 10px 12px; border: 1px solid #cdbda7; border-radius: 6px; background: #eee6d9; color: #6e321c; cursor: pointer; font: inherit; }
+.ws-shell :focus-visible { outline: 3px solid #8b2500; outline-offset: 3px; }
+.ws-shell .note-list { list-style: none; }
+.ws-shell .note-item { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.ws-shell .note-title { flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: left; }
+.ws-shell .note-time { width: 100%; font-size: 12px; color: #756452; }
+.ws-shell :is(.tips, .stats) { padding-left: 20px; line-height: 1.8; }
+.ws-shell .profile-fab { margin: 0 24px 24px; }
+@media (max-width: 1000px) {
+  .ws-shell .ws-grid { grid-template-columns: 200px minmax(0, 1fr); }
+  .ws-shell .ws-right { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .ws-shell .ws-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 16px; }
+  .ws-shell .ws-main { grid-row: 1; }
+  .ws-shell :is(.ws-left, .ws-main, .postit) { padding: 16px; }
+}

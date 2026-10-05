@@ -1,3 +1,4 @@
+import { PLOTWORLD_SCENE_AI_ENABLED } from "../../../../shared/features.js";
 // components/plotworld/SceneNode.jsx
 
 import { useState } from "react";
@@ -24,22 +25,6 @@ function resolveActStyle(data) {
   return { color, label };
 }
 
-function CharDot({ name, color }) {
-  const [tip, setTip] = useState(false);
-  return (
-    <div className="wn-chardot-wrap">
-      <div
-        className="wn-chardot"
-        style={{ background: color || "#94a3b8" }}
-        onMouseEnter={() => setTip(true)}
-        onMouseLeave={() => setTip(false)}
-        aria-label={name}
-      />
-      {tip && <div className="wn-chardot-tip" role="tooltip">{name}</div>}
-    </div>
-  );
-}
-
 function VolumePip({ volume }) {
   const meta = VOLUME_META[volume];
   if (!meta) return null;
@@ -56,7 +41,7 @@ function VolumePip({ volume }) {
 function ActionBtn({ icon, label, onClick, mod }) {
   return (
     <button
-      className={`wn-act-btn${mod ? ` wn-act-btn--${mod}` : ""}`}
+      className={`nodrag nopan wn-act-btn${mod ? ` wn-act-btn--${mod}` : ""}`}
       title={label}
       aria-label={label}
       onClick={onClick}
@@ -80,15 +65,7 @@ export default function SceneNode({ data, selected }) {
   const { color: actColor, label: actLabel } = resolveActStyle(data);
 
   const [expanded, setExpanded] = useState(false);
-  const [hovered,  setHovered]  = useState(false);
 
-  const charDots    = data.charDots || [];
-  const extraDots   = charDots.length > 4 ? charDots.length - 4 : 0;
-  const visibleDots = charDots.slice(0, 4);
-
-  const connOut = data.connOut ?? null;
-  const connIn  = data.connIn  ?? null;
-  const hasConn = connOut !== null || connIn !== null;
 
   function stop(e, fn) { e.stopPropagation(); fn?.(); }
 
@@ -108,8 +85,6 @@ export default function SceneNode({ data, selected }) {
         "--card-accent": card.accent,
         "--act-color":   actColor,
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       onDoubleClick={e => { e.stopPropagation(); if (hasDesc) setExpanded(v => !v); }}
       role="article"
       aria-label={`Sahne: ${data.label}`}
@@ -148,7 +123,7 @@ export default function SceneNode({ data, selected }) {
         <div className={`wn-goal${!hasGoal ? " wn-goal--empty" : ""}`}>
           <span className="wn-goal-mark" aria-hidden="true">◎</span>
           <span className="wn-goal-text">
-            {hasGoal ? data.goal : "Amaç belirtilmemiş"}
+            {hasGoal ? data.goal : hasDesc ? data.desc : "Amaç belirtilmemiş"}
           </span>
         </div>
 
@@ -163,25 +138,9 @@ export default function SceneNode({ data, selected }) {
           <span className="wn-status-text">{sm.label}</span>
         </div>
         <div className="wn-footer-r">
-          {visibleDots.length > 0 && (
-            <div className="wn-chardots" aria-label="Karakterler">
-              {visibleDots.map((d, i) => (
-                <CharDot key={i} name={d.name} color={d.color} />
-              ))}
-              {extraDots > 0 && (
-                <span className="wn-chardot-extra">+{extraDots}</span>
-              )}
-            </div>
-          )}
-          {hasConn && (
-            <span className="wn-conn">
-              {connOut !== null && <span className="wn-conn-out">→{connOut}</span>}
-              {connIn  !== null && <span className="wn-conn-in">←{connIn}</span>}
-            </span>
-          )}
           {hasDesc && (
             <button
-              className="wn-expand-btn"
+              className="wn-expand-btn nodrag nopan"
               aria-label={expanded ? "Küçült" : "Açıklamayı göster"}
               onClick={e => stop(e, () => setExpanded(v => !v))}
             >
@@ -191,11 +150,11 @@ export default function SceneNode({ data, selected }) {
         </div>
       </div>
 
-      {hovered && !dimmed && (
+      {!dimmed && (
         <div className="wn-actions" role="toolbar" aria-label="Sahne aksiyonları">
           <ActionBtn icon="✎"  label="Düzenle"       onClick={e => stop(e, data.onEdit)} />
           <ActionBtn icon="⇢"  label="Bağlantı ekle" onClick={e => stop(e, data.onConnect)} />
-          <ActionBtn icon="🦋" label="Kelebek Etkisi" onClick={e => stop(e, data.onButterfly)} mod="butterfly" />
+          {PLOTWORLD_SCENE_AI_ENABLED && <ActionBtn icon="🦋" label="Kelebek Etkisi" onClick={e => stop(e, data.onButterfly)} mod="butterfly" />}
           <ActionBtn icon="✕"  label="Sil"           onClick={e => stop(e, data.onDelete)} mod="danger" />
         </div>
       )}

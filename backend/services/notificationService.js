@@ -244,3 +244,12 @@ export const notifyLogComment = async ({ senderId, logId, logAuthorId, commentPr
       : `${senderName} günlük girdine yorum yaptı.`,
   });
 };
+// Report detail remains the durable inbox even when a notification delivery fails.
+export async function notifyReport(report, operation) {
+  const recipients = [report.reporter];
+  if (report.decisions?.length && report.targetOwner) recipients.push(report.targetOwner);
+  await Promise.all([...new Set(recipients.map(String))].map(recipient => Notification.create({
+    recipient, type: 'report_update', report: report._id,
+    text: `Başvuru ${report._id}: ${operation === 'decision' ? 'Gerekçeli karar verildi. Kararı okuyabilir ve itiraz edebilirsiniz.' : 'Dosyanız güncellendi.'}`,
+  })));
+}

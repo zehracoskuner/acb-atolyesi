@@ -1,9 +1,14 @@
+import readerAccess from "../middlewares/readerAccess.js";
 // backend/routes/search.js
 import { Router } from "express";
 import Work from "../models/Work.js";
 import User from "../models/User.js";
 
+import { PUBLIC_WORK_FIELDS, serializePublicWorkCard } from "../services/publicWork.js";
+import { getPublishedChapterIdsByWork } from "../services/publishedChapters.js";
+
 const router = Router();
+router.use(readerAccess);
 
 /* ═══════════════════════════════════════════
    GET /api/search/works?q=...&genre=...
@@ -30,25 +35,14 @@ router.get("/works", async (req, res) => {
     }
 
     const works = await Work.find(filter)
+      .select(PUBLIC_WORK_FIELDS)
       .populate("user", "_id kullaniciAdi avatarUrl")
       .sort({ updatedAt: -1 })
       .limit(20)
       .lean();
 
-    const items = works.map(w => ({
-      _id:          w._id,
-      title:        w.title,
-      description:  w.description,
-      coverImage:   w.coverImage ?? null,
-      chapterCount: w.publishedChapterIds?.length ?? 0,
-      genre:        w.universe?.genre ?? "",
-      author:       w.user ? {
-        _id:          w.user._id,
-        kullaniciAdi: w.user.kullaniciAdi,
-        avatarUrl:    w.user.avatarUrl,
-      } : null,
-      updatedAt: w.updatedAt,
-    }));
+    const publishedIds = await getPublishedChapterIdsByWork(works);
+    const items = works.map(work => serializePublicWorkCard(work, publishedIds.get(String(work._id))));
 
     return res.json({ items });
   } catch (err) {

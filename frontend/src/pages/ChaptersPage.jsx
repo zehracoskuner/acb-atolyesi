@@ -4,12 +4,22 @@ import {
   useRef, useReducer,
 } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../lib/api";
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, isChapterSaveReceipt } from "../lib/api";
+import DevelopmentCoachDialog from "../components/DevelopmentCoachDialog";
+import DevelopmentCoachPreference from "../components/DevelopmentCoachPreference";
+import DevelopmentCoachArchive from "../components/DevelopmentCoachArchive";
+import { DEVELOPMENT_COACH_LAUNCH_ENABLED } from "../../../shared/features.js";
+import { CHAPTER_HISTORY_ENABLED } from "../../../shared/features.js";
+import BookDownload from "../components/BookDownload";
+import { saveBeforeBookDownload } from "../lib/bookDownload";
 import "../styles/ChaptersPage.css";
 import EtikHatirlatma from "../components/EtikHatirlatma";
 import AtelierTab from "../components/AtelierTab";
+import ChapterHistory, { ChapterPreview } from "../components/ChapterHistory";
+import { draftKey, readDrafts, persistDraft } from "../lib/chapterDrafts";
+import DOMPurify from "dompurify";
+import { setWritingFocus } from "../lib/writingFocus";
 
-const WORDS_PER_PAGE   = 400;
 const AUTOSAVE_DELAY   = 2000;
 const WORDS_PER_MINUTE = 200;
 const MAX_UNDO         = 50;
@@ -32,69 +42,14 @@ function wcFromHtml(html) {
   if (!html) return 0;
   const d = document.createElement("div");
   d.innerHTML = html;
-  const t = d.innerText.trim();
+  d.querySelectorAll("br").forEach(node => node.replaceWith(document.createTextNode(" ")));
+  d.querySelectorAll("p, div, li, h1, h2, h3, h4, h5, h6, blockquote, pre, tr").forEach(node => node.append(" "));
+  const t = (d.textContent || "").trim();
   return t ? t.split(/\s+/).filter(Boolean).length : 0;
 }
 function readTime(w) {
   const m = Math.ceil(w / WORDS_PER_MINUTE);
   return m < 1 ? "<1 dk" : `${m} dk`;
-}
-
-/*
-  normalizeChapter: içerik ham HTML olabilir ya da düz metin.
-  Eğer içerik HTML tag içermiyorsa satır sonlarını <br> çevir.
-*/
-/* ── HTML-aware pagination ──
-   HTML içeriği <div>/<p> bloklarına göre böl, kelime limitine göre sayfalara ayır
-*/
-function paginateHtml(chapterId, html) {
-  if (!html || !html.trim()) {
-    return [{ id: `${chapterId}-p0`, content: "" }];
-  }
-
-  // Geçici div ile blokları parse et
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  const blocks = Array.from(tmp.childNodes);
-
-  const pages = [];
-  let pageIdx = 0;
-  let pageWordCount = 0;
-  let pageContent = "";
-
-  function blockText(node) {
-    const d = document.createElement("div");
-    d.appendChild(node.cloneNode(true));
-    return d.innerText || "";
-  }
-
-  function blockHtml(node) {
-    const d = document.createElement("div");
-    d.appendChild(node.cloneNode(true));
-    return d.innerHTML;
-  }
-
-  for (const block of blocks) {
-    const bText = blockText(block);
-    const bWc   = bText.trim() ? bText.trim().split(/\s+/).filter(Boolean).length : 0;
-    const bHtml = blockHtml(block);
-
-    if (pageWordCount + bWc > WORDS_PER_PAGE && pageContent) {
-      pages.push({ id: `${chapterId}-p${pageIdx}`, content: pageContent });
-      pageIdx++;
-      pageContent  = bHtml;
-      pageWordCount = bWc;
-    } else {
-      pageContent  += bHtml;
-      pageWordCount += bWc;
-    }
-  }
-
-  if (pageContent) {
-    pages.push({ id: `${chapterId}-p${pageIdx}`, content: pageContent });
-  }
-
-  return pages.length > 0 ? pages : [{ id: `${chapterId}-p0`, content: "" }];
 }
 
 function htmlify(raw) {
@@ -118,27 +73,25 @@ function normalizeChapter(ch) {
     status:     ch.status      || "draft",
     reviewNote: ch.reviewNote  || "",
     order:      ch.order       ?? 0,
-    pages:      paginateHtml(ch._id, fullContent),
     _dirty:     false,
+    revision: ch.revision ?? 0,
+    savedAt: ch.savedAt || ch.updatedAt || null,
+    _edit:      0,
+    _eligibleWords: 0, _savedEligibleWords: 0,
   };
 }
 
-function mergePages(pages) {
-  return pages.map((p) => p.content).join("").trim();
-}
-
 /* ── Undo ── */
-const undoStacksRef_GLOBAL = { current: {} };
-function pushUndoSnapshot(id, content) {
-  const stacks = undoStacksRef_GLOBAL.current;
+function pushUndoSnapshot(id, content, stacksRef) {
+  const stacks = stacksRef.current;
   if (!stacks[id]) stacks[id] = [];
   const s = stacks[id];
   if (s.length && s[s.length - 1] === content) return;
   s.push(content);
   if (s.length > MAX_UNDO) s.shift();
 }
-function popUndoSnapshot(id) {
-  const stacks = undoStacksRef_GLOBAL.current;
+function popUndoSnapshot(id, stacksRef) {
+  const stacks = stacksRef.current;
   if (!stacks[id] || stacks[id].length < 2) return null;
   stacks[id].pop();
   return stacks[id][stacks[id].length - 1];
@@ -151,27 +104,55 @@ function chaptersReducer(state, action) {
     case "ADD":    return [...state, action.chapter];
     case "DELETE": return state.filter((c) => c._id !== action.id);
     case "UPDATE_TITLE":
-      return state.map((c) => c._id === action.id ? { ...c, title: action.title, _dirty: true } : c);
-    case "UPDATE_CONTENT":
-      return state.map((ch) => {
-        if (ch._id !== action.chapterId) return ch;
-        // Sayfanın içeriğini güncelle, sonra tüm içeriği yeniden paginate et
-        const updatedPages = ch.pages.map((p) => p.id === action.pageId ? { ...p, content: action.value } : p);
-        const merged = updatedPages.map(p => p.content).join("");
-        const repaginated = paginateHtml(ch._id, merged);
-        return { ...ch, pages: repaginated, _dirty: true };
-      });
+      return state.map((c) => c._id === action.id && !c._deleting ? { ...c, title: action.title, _dirty: true, _edit: c._edit + 1, _saveError: false } : c);
+    case "UPDATE_CHAPTER_CONTENT":
     case "UNDO_CONTENT":
       return state.map((ch) => {
-        if (ch._id !== action.chapterId) return ch;
-        return { ...ch, pages: paginateHtml(ch._id, action.content), _dirty: true };
+        if (ch._id !== action.chapterId || ch._deleting) return ch;
+        return { ...ch, content: action.content, _eligibleWords: (ch._eligibleWords || 0) + (action.eligibleWords || 0), _dirty: true, _edit: ch._edit + 1, _saveError: false };
       });
     case "UPDATE_STATUS":
       return state.map((c) => c._id !== action.id ? c : { ...c, status: action.status, reviewNote: action.reviewNote ?? c.reviewNote });
-    case "MARK_CLEAN":
-      return state.map((c) => c._id === action.id ? { ...c, _dirty: false } : c);
-    case "REORDER":
-      return [...action.chapters].map((c, i) => ({ ...c, order: i }));
+    case "DEVELOPMENT_STATUS":
+      return state.map(c => (c._developmentSequence || 0) > (action.development.analysisCount || 0) ? c : {
+        ...c, _developmentSequence: action.development.analysisCount || 0,
+        _developmentEligible: !!action.development.eligibleForDevelopmentReview,
+      });
+    case "SAVE_START":
+      return state.map(c => c._id === action.id ? { ...c, _request: action.request, _saving: true, _saveError: false } : c);
+    case "SAVE_SUCCESS":
+      return state.map(c => c._id !== action.id || c._request !== action.request ? c : {
+        ...c, revision: action.item.revision, savedAt: action.item.savedAt,
+        _savedEligibleWords: action.eligibleWords ?? c._savedEligibleWords,
+        _developmentSequence: Math.max(c._developmentSequence || 0, action.development?.analysisCount || 0),
+        _developmentEligible: (action.development?.analysisCount || 0) < (c._developmentSequence || 0)
+          ? c._developmentEligible : action.development?.eligibleForDevelopmentReview ?? c._developmentEligible,
+        status: action.item.status, reviewNote: action.item.reviewNote ?? "",
+        // A receipt acknowledges a snapshot; it must not rewrite the live DOM
+        // (even harmless sanitizer serialization like <br /> moves the caret).
+        _saving: false, _saveError: false, _dirty: c._edit !== action.edit,
+      });
+    case "SAVE_ERROR":
+      return state.map(c => c._id === action.id && c._request === action.request ? { ...c, _saving: false, _saveError: true, _conflict: action.current || c._conflict } : c);
+    case "RESOLVE":
+      return state.map(c => c._id !== action.id ? c : { ...c,
+        title: action.title, content: action.content, revision: action.revision,
+        _savedEligibleWords: c._eligibleWords || 0,
+        _resolvedDraftKeys: [...(c._resolvedDraftKeys || []), ...(action.draftKey ? [action.draftKey] : [])],
+        _dirty: true, _edit: c._edit + 1, _saveError: false, _conflict: null, _recovery: null });
+    case "RESTORED":
+      return state.map(c => c._id !== action.id ? c : c._edit === action.edit ? action.chapter : {
+        ...c, revision: action.chapter.revision, savedAt: action.chapter.savedAt, status: "draft", _dirty: true });
+    case "CONFLICT_REFRESH":
+      return state.map(c => c._id !== action.id ? c : { ...c, _conflict: action.current });
+    case "DISMISS_DRAFT":
+      return state.map(c => {
+        if (c._id !== action.id) return c;
+        const remaining = c._recovery?.filter(d => d.key !== action.key);
+        return { ...c, _recovery: remaining?.length ? remaining : null };
+      });
+    case "DELETING":
+      return state.map(c => c._id === action.id ? { ...c, _deleting: action.value } : c);
     default: return state;
   }
 }
@@ -297,16 +278,9 @@ function BubbleToolbar({ editorRef }) {
 /* ══════════════════════════════════════════════════════════
    RICH EDITOR  — bubble toolbar, static toolbar yok
 ══════════════════════════════════════════════════════════ */
-function RichEditor({ value, onChange, placeholder, className }) {
+function RichEditor({ value, onChange, placeholder, className, readOnly = false }) {
   const editorRef    = useRef(null);
   const isComposing  = useRef(false);
-
-  // İlk mount: içeriği set et
-  useEffect(() => {
-    const el = editorRef.current;
-    if (el && el.innerHTML !== (value || "")) el.innerHTML = value || "";
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Dış değer değişirse (undo vs.) güncelle
   useEffect(() => {
@@ -320,11 +294,12 @@ function RichEditor({ value, onChange, placeholder, className }) {
       r.selectNodeContents(el); r.collapse(false);
       sel.removeAllRanges(); sel.addRange(r);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  function triggerChange() {
-    if (onChange && editorRef.current) onChange(editorRef.current.innerHTML);
+  function triggerChange(event, composition = false) {
+    if (isComposing.current) return;
+    const eligible = composition || ["insertText", "insertFromPaste", "insertFromDrop", "insertCompositionText", "insertParagraph", "insertLineBreak"].includes(event?.nativeEvent?.inputType);
+    if (onChange && editorRef.current) onChange(editorRef.current.innerHTML, eligible);
   }
 
   return (
@@ -333,15 +308,15 @@ function RichEditor({ value, onChange, placeholder, className }) {
       <div
         ref={editorRef}
         className="rich-content"
-        contentEditable
+        contentEditable={!readOnly}
         suppressContentEditableWarning
         data-placeholder={placeholder || "Yaz…"}
-        onInput={() => { if (!isComposing.current) triggerChange(); }}
+        onInput={triggerChange}
         onKeyUp={() => {}}
         onMouseUp={() => {}}
         onKeyDown={(e) => { if (e.key === "Tab") { e.preventDefault(); document.execCommand("insertText", false, "  "); } }}
         onCompositionStart={() => { isComposing.current = true; }}
-        onCompositionEnd={() => { isComposing.current = false; triggerChange(); }}
+        onCompositionEnd={() => { isComposing.current = false; triggerChange(null, true); }}
         spellCheck
         lang="tr"
       />
@@ -403,163 +378,73 @@ function AnnounceModal({ chapterTitle, workId, onClose }) {
   );
 }
 
-/* ── PageLeaf ── */
-function PageLeaf({ page, chapter, chapterIndex, isFirstPage, globalNum, onContentChange, onTitleChange, onFocus, leafRef, isFocused }) {
-  const chWc = chapter.pages.reduce((s,p) => s + wcFromHtml(p.content), 0);
-  const pct  = Math.min(100, Math.round((wcFromHtml(page.content) / WORDS_PER_PAGE) * 100));
-  return (
-    <article
-      ref={leafRef}
-      className={["leaf", isFirstPage?"leaf--open":"leaf--cont", isFocused===false?"leaf--dimmed":""].join(" ").trim()}
-      data-page-id={page.id} data-chapter-id={chapter._id}
-    >
-      {isFirstPage && chapter.status === "published"      && <div className="leaf-pub-banner"><span className="pub-dot"/>yayında · okurlar görebiliyor</div>}
-      {isFirstPage && chapter.status === "pending_review" && <div className="leaf-review-banner"><span className="review-dot"/>inceleniyor · en geç 6 saat içinde geri dönüş yapılacak</div>}
-      {isFirstPage && chapter.status === "rejected"       && <div className="leaf-rejected-banner"><span className="rejected-dot"/>yayınlanamıyor{chapter.reviewNote&&<span className="rejected-note"> · {chapter.reviewNote}</span>}</div>}
-
-      {isFirstPage && (
-        <div className="leaf-head">
-          <div className="leaf-eyebrow">
-            <span className="ch-order-label">bölüm {chapterIndex+1}</span>
-            <span className={`status-badge status-badge--${chapter.status}`}>
-              {chapter.status==="published"&&"yayında"}{chapter.status==="draft"&&"taslak"}
-              {chapter.status==="pending_review"&&"inceleniyor"}{chapter.status==="rejected"&&"reddedildi"}
-            </span>
-          </div>
-          <input className="title-input" value={chapter.title} onChange={(e)=>onTitleChange(chapter._id,e.target.value)} onFocus={()=>onFocus(page.id,chapter._id)} placeholder="Bölüm başlığı…" spellCheck lang="tr"/>
-        </div>
-      )}
-      {!isFirstPage && (
-        <div className="leaf-cont-head">
-          <span className="leaf-cont-title">{chapter.title||"—"}</span>
-          <span className="leaf-cont-sep">·</span>
-          <span className="leaf-cont-label">devam</span>
-        </div>
-      )}
-
-      <div onFocus={()=>onFocus(page.id,chapter._id)}>
-        <RichEditor value={page.content} onChange={(html)=>onContentChange(chapter._id,page.id,html)} placeholder={isFirstPage?"Yazmaya başla… her şey mümkün.":""}/>
-      </div>
-
-      <div className="leaf-fill-track"><div className="leaf-fill-bar" style={{width:`${pct}%`}}/></div>
-      <footer className="leaf-foot">
-        <span className="leaf-wc">{wcFromHtml(page.content).toLocaleString("tr-TR")} kelime</span>
-        {isFirstPage && <><span className="leaf-ch-wc">{chWc.toLocaleString("tr-TR")} toplam</span><span className="leaf-read-time">⏱ {readTime(chWc)}</span></>}
-        <span className="leaf-fill-pct">{pct}%</span>
-        <span className="leaf-page-num">{globalNum}</span>
-      </footer>
-    </article>
-  );
+function ChapterDocument({ chapter, chapterIndex, onContentChange, onTitleChange }) {
+  const count = useMemo(() => wcFromHtml(chapter.content), [chapter.content]);
+  return <article className="chapter-document" data-chapter-id={chapter._id}>
+    <header className="chapter-document-head">
+      <span className="ch-order-label">Bölüm {chapterIndex + 1}</span>
+      <span className={`status-badge status-badge--${chapter.status}`}>
+        {({ draft: "taslak", published: "yayında", pending_review: "inceleniyor", rejected: "reddedildi" })[chapter.status]}
+      </span>
+      <input className="title-input" aria-label="Bölüm başlığı" value={chapter.title}
+        disabled={chapter._deleting} onChange={e => onTitleChange(chapter._id, e.target.value)} placeholder="Bölüm başlığı…" spellCheck lang="tr" />
+      {chapter.status === "published" && <p className="chapter-document-note">Yayında · okurlar görebiliyor</p>}
+      {chapter.status === "pending_review" && <p className="chapter-document-note">İnceleniyor · moderatör onayı bekleniyor</p>}
+      {chapter.reviewNote && <p className="chapter-document-note">{chapter.reviewNote}</p>}
+    </header>
+    <RichEditor readOnly={chapter._deleting} value={chapter.content}
+      onChange={(html, eligible) => onContentChange(chapter._id, html, eligible)} placeholder="Yazmaya başla…" />
+    <footer className="chapter-document-note">{count.toLocaleString("tr-TR")} kelime · {readTime(count)}</footer>
+  </article>;
 }
 
 /* ── FocusOverlay ── */
-function FocusOverlay({ chapter, onClose, onContentChange, onTitleChange }) {
-  const [localTitle, setLocalTitle] = useState(chapter?.title||"");
-  const [localHtml,  setLocalHtml]  = useState((chapter?.pages||[]).map(p=>p.content).join(""));
+function FocusOverlay({ chapter, onClose, onContentChange, onTitleChange, saveStatus, onSave }) {
+  const overlayRef = useRef(null);
+  useEffect(() => {
+    const previous = document.activeElement;
+    overlayRef.current?.querySelector('[contenteditable="true"]')?.focus();
+    return () => previous?.isConnected && previous.focus();
+  }, []);
+  const localTitle = chapter.title;
+  const localHtml = chapter.content;
   const count = useMemo(()=>wcFromHtml(localHtml),[localHtml]);
-  function handleChange(html) {
-    setLocalHtml(html);
-    const fp = chapter?.pages?.[0];
-    if (fp) onContentChange(chapter._id, fp.id, html);
+  function handleChange(html, eligible) {
+    onContentChange(chapter._id, html, eligible);
   }
   return (
-    <div className="focus-veil">
+    <div className="focus-veil" ref={overlayRef} role="dialog" aria-modal="true" aria-label="Odak modu">
       <button className="focus-esc" onClick={onClose}>esc — çık</button>
       <div className="focus-paper">
-        <input className="focus-title" value={localTitle} onChange={(e)=>{setLocalTitle(e.target.value);if(chapter)onTitleChange(chapter._id,e.target.value);}} placeholder="Bölüm başlığı…"/>
+        <input disabled={chapter._deleting} className="focus-title" value={localTitle} onChange={(e)=>{if(chapter)onTitleChange(chapter._id,e.target.value);}} placeholder="Bölüm başlığı…"/>
         <div className="focus-rule"/>
-        <RichEditor value={localHtml} onChange={handleChange} placeholder="Yaz…" className="focus-rich"/>
+        <RichEditor readOnly={chapter._deleting} value={localHtml} onChange={handleChange} placeholder="Yaz…" className="focus-rich"/>
       </div>
+      <div className="focus-save" role="status">{saveLabel(saveStatus)}{saveStatus === "error" && <button onClick={onSave}>Tekrar dene</button>}</div>
       <div className="focus-wc">{count.toLocaleString("tr-TR")} kelime</div>
     </div>
   );
 }
 
-/* ── AIDrawer ── */
-function AIDrawer({ open, onClose, chapterId, chapter, workId, onReview, loading, review, onClear }) {
-  const hasContent = chapter?.pages?.some((p)=>p.content.trim());
-  const [noteSaveState, setNoteSaveState] = useState("idle"); // idle | saving | ok | err
-
-  const saveToWorkNotes = async () => {
-    if (!review) return;
-    setNoteSaveState("saving");
-    try {
-      await apiPost(`/works/${workId}/notes`, {
-        title: chapter?.title ? `AI Yorum — ${chapter.title}` : "AI Yorum",
-        body: review,
-        source: "ai-coach",
-        meta: { chapterId, chapterTitle: chapter?.title || "", focus: "chapter" },
-      });
-      setNoteSaveState("ok");
-    } catch {
-      setNoteSaveState("err");
-    }
-    setTimeout(() => setNoteSaveState("idle"), 2000);
-  };
-
-  return (
-    <>
-      {open && <div className="ai-veil" onClick={onClose}/>}
-      <aside className={`ai-drawer ${open?"ai-drawer--open":""}`}>
-        <div className="ai-drawer-head"><span className="ai-drawer-title">AI Yorum</span><button className="ai-close" onClick={onClose}>✕</button></div>
-        <div className="ai-body">
-          {!chapterId&&<p className="ai-muted">Önce bir bölüm seç.</p>}
-          {chapterId&&!hasContent&&<p className="ai-muted">Yorum için önce bir şeyler yaz.</p>}
-          {loading&&<div className="ai-thinking"><span/><span/><span/></div>}
-          {!loading&&review&&<p className="ai-review">{review}</p>}
-          {!loading&&review&&(
-            <p className="atelier-review-disclaimer">
-              Not: Buradaki AI bir editör gibi çalışır; işi seni övmek değil, geliştirebileceğin
-              noktaları göstermektir. Bu yüzden her zaman söyleyecek bir şey bulabilir. Bu, metnin
-              kötü olduğu anlamına gelmez. Eserin sana yeterince tamam geliyorsa son onayı AI'dan
-              bekleme; karar senin, yayınla gitsin.
-            </p>
-          )}
-          {!loading&&review&&(
-            <button className="btn-ai-save-note" onClick={saveToWorkNotes} disabled={noteSaveState==="ok"}>
-              {noteSaveState==="ok" ? "Eserin notlarına kaydedildi ✓"
-                : noteSaveState==="err" ? "Kaydedilemedi."
-                : "📌 Bu eserin notlarına kaydet"}
-            </button>
-          )}
-          {!loading&&!review&&chapterId&&hasContent&&<p className="ai-muted" style={{fontStyle:"normal"}}>Hazır. Analiz Et butonuna bas.</p>}
-        </div>
-        <div className="ai-foot">
-          <button className="ai-btn" onClick={onClear} disabled={loading||!review} style={{flex:".4"}}>Temizle</button>
-          <button className="ai-btn ai-btn--primary" onClick={onReview} disabled={!chapterId||!hasContent||loading}>{loading?"Analiz ediliyor…":"Analiz Et"}</button>
-        </div>
-      </aside>
-    </>
-  );
-}
-
-/* ── ChapterItem ── */
-function ChapterItem({ chapter, index, isActive, onJump, onDelete, onDragStart, onDragOver, onDrop, isDragging, isDragOver }) {
-  const chWc = chapter.pages.reduce((s,p)=>s+wcFromHtml(p.content),0);
-  const dotClass = chapter.status==="published"?"pub":chapter.status==="pending_review"?"pending":chapter.status==="rejected"?"rejected":"";
-  return (
-    <div
-      className={["cp-ch-item",isActive?"cp-ch-item--active":"",isDragging?"cp-ch-item--dragging":"",isDragOver?"cp-ch-item--drag-over":""].join(" ").trim()}
-      draggable onDragStart={(e)=>onDragStart(e,index)} onDragOver={(e)=>{e.preventDefault();onDragOver(index);}} onDrop={(e)=>{e.preventDefault();onDrop(index);}}
-    >
-      <button className="cp-ch-drag" onMouseDown={(e)=>e.stopPropagation()}>⠿</button>
-      <button className="cp-ch-btn" onClick={()=>onJump(chapter._id)}>
-        <div className="cp-ch-eyebrow">bölüm {index+1}</div>
-        <div className="cp-ch-name">{chapter.title||"Başlıksız"}</div>
-        <div className="cp-ch-meta">{chWc.toLocaleString("tr-TR")} kelime · {readTime(chWc)}</div>
-      </button>
-      <div className="cp-ch-right">
-        <span className={`cp-ch-dot ${dotClass}`}/>
-        <button className="cp-ch-del" onClick={(e)=>{e.stopPropagation();onDelete(chapter._id,chapter.title);}}>✕</button>
-      </div>
+function ChapterItem({ chapter, index, isActive, onJump, onDelete }) {
+  const chWc = wcFromHtml(chapter.content);
+  const dotClass = chapter.status === "published" ? "pub" : chapter.status === "pending_review" ? "pending" : chapter.status === "rejected" ? "rejected" : "";
+  return <div className={"cp-ch-item" + (isActive ? " cp-ch-item--active" : "")}>
+    <button className="cp-ch-btn" onClick={() => onJump(chapter._id)} disabled={chapter._deleting}>
+      <div className="cp-ch-eyebrow">bölüm {index + 1}</div>
+      <div className="cp-ch-name">{chapter.title || "Başlıksız"}</div>
+      <div className="cp-ch-meta">{chWc.toLocaleString("tr-TR")} kelime · {readTime(chWc)}</div>
+    </button>
+    <div className="cp-ch-right"><span className={"cp-ch-dot " + dotClass} />
+      <button className="cp-ch-del" aria-label={(chapter.title || "Bölüm") + " sil"} disabled={chapter._deleting} onClick={() => onDelete(chapter._id, chapter.title)}>✕</button>
     </div>
-  );
+  </div>;
 }
-/* ── AtelierTab ── */
+
 const ILHAM_NOTES = [
   "Sadece Başla: 300 kelime kötü yazmak, hiç yazmamaktan iyidir.",
   "Göster, Anlatma: 'Mutlu' deme — mutluluğun nasıl göründüğünü betimle.",
-  "Başlık En Sona Kalır: Baskısını at, şimdilik [Taslak] yaz ve devam et.",
+  "Başlık En Sona Kalır. Şimdilik yaz.",
   "Karakterinin elini tut, nereye gittiğini sen de merak et.",
 ];
 const CONSTRAINTS = [
@@ -572,48 +457,160 @@ const CONSTRAINTS = [
   "Sessizliği aktif bir karakter gibi yaz.",
 ];
 /* ── Ana Sayfa ── */
+const saveLabel = status => ({ saved: "Kaydedildi", saving: "Kaydediliyor…", error: "Kaydedilemedi", conflict: "Kayıt çakışması", recovery: "Yerel taslak bulundu", unsaved: "Kaydedilmedi" })[status];
 const PAGE_TABS = { BOLUMLER:"bolumler", ATOLYE:"atolye" };
 
 export default function ChaptersPage() {
   const { workId } = useParams();
+  const [identity, setIdentity] = useState(null);
+  const [authError, setAuthError] = useState("");
+  useEffect(() => {
+    let active = true, generation = 0;
+    const check = async () => {
+      const request = ++generation;
+      try {
+        const { user } = await apiGet("/auth/me");
+        if (active && request === generation) { setIdentity(user._id); setAuthError(""); }
+      } catch { if (active && request === generation) setAuthError("Oturum doğrulanamadı. Bağlantıyı kontrol edin."); }
+    };
+    const changed = e => { if (!e.key || e.key === "token" || e.key === "user") { setIdentity(null); check(); } };
+    check(); window.addEventListener("storage", changed); window.addEventListener("focus", check);
+    return () => { active = false; window.removeEventListener("storage", changed); window.removeEventListener("focus", check); };
+  }, []);
+  if (!identity) return <p role="status">{authError || "Oturum doğrulanıyor…"}</p>;
+  return <ChapterEditor key={identity + ":" + workId} userId={identity} />;
+}
+
+function ChapterEditor({ userId }) {
+  const { workId } = useParams();
   const navigate   = useNavigate();
 
-  const [chapters, dispatch]    = useReducer(chaptersReducer, []);
+  const [chapters, rawDispatch] = useReducer(chaptersReducer, []);
+  const creatingRef = useRef(false);
+  const chaptersRef = useRef([]);
+  const editorId = useRef(crypto.randomUUID());
+  const mounted = useRef(true);
+  const fetchGeneration = useRef(0);
+  const undoStacksRef = useRef({});
+  const [localError, setLocalError] = useState("");
+  const [historyId, setHistoryId] = useState(null);
+  const [development, setDevelopment] = useState(false);
+  const [developmentQuota, setDevelopmentQuota] = useState(null);
+  const developmentStatusGeneration = useRef(0);
+  const [coachPreference, setCoachPreference] = useState(null);
+  const [archiveRefresh, setArchiveRefresh] = useState(0);
+  const [hasDevelopmentAnalysis, setHasDevelopmentAnalysis] = useState(false);
+  useEffect(() => { if (chapters.some(ch => ch._developmentEligible)) setDevelopment(true); }, [chapters]);
+  const [developmentOpen, setDevelopmentOpen] = useState(false);
+  const developmentRequest = useRef(false);
+  const [developmentState, setDevelopmentState] = useState({ kind: "baseline", message: "Yazı örneklerin hazırlanıyor…" });
+  const openDevelopment = async () => {
+    if (!DEVELOPMENT_COACH_LAUNCH_ENABLED || coachPreference !== "enabled") return;
+    if (developmentRequest.current) { setDevelopmentOpen(true); return; }
+    if (developmentQuota?.remaining === 0) return;
+    developmentStatusGeneration.current++;
+    developmentRequest.current = true;
+    setDevelopmentOpen(true);
+    setDevelopmentState(previous => ({ kind: previous.kind, status: "loading", message: "Yazıların değerlendiriliyor…" }));
+    try {
+      const result = await apiPost("/chapters/development/" + workId, {});
+      if (mounted.current) {
+        setDevelopmentState(result);
+        if (result.status === "complete") {
+          setArchiveRefresh(value => value + 1);
+          setHasDevelopmentAnalysis(true);
+          setDevelopment(!!result.development.eligibleForDevelopmentReview);
+          setDevelopmentQuota(result.development.quota ?? null);
+          dispatch({ type: "DEVELOPMENT_STATUS", development: result.development });
+        }
+      }
+    } catch (error) {
+      if (mounted.current) {
+        if (error.data?.quota) setDevelopmentQuota(error.data.quota);
+        setDevelopmentState(previous => ({ ...previous, status: "error", message: error.message || "Değerlendirme tamamlanamadı. Yeni yazıların korunuyor." }));
+      }
+    } finally { developmentRequest.current = false; developmentStatusGeneration.current++; }
+  };
+  const openLatestDevelopment = async () => {
+    if (!DEVELOPMENT_COACH_LAUNCH_ENABLED) return;
+    if (developmentRequest.current) { setDevelopmentOpen(true); return; }
+    setDevelopmentOpen(true);
+    setDevelopmentState({ status: "loading", message: "Son değerlendirmen yükleniyor…" });
+    developmentRequest.current = true;
+    try {
+      const result = await apiGet("/chapters/development/" + workId + "/latest");
+      if (mounted.current) setDevelopmentState(result);
+    } catch (error) {
+      if (mounted.current) setDevelopmentState({ status: "error", message: error.message });
+    } finally { developmentRequest.current = false; }
+  };
+  const [restoreMessage, setRestoreMessage] = useState("");
+  useEffect(() => {
+    let active = true;
+    if (!DEVELOPMENT_COACH_LAUNCH_ENABLED) return;
+    const refresh = () => {
+      if (developmentRequest.current) return;
+      const generation = ++developmentStatusGeneration.current;
+      apiGet("/chapters/development/" + workId).then(data => {
+        if (active && generation === developmentStatusGeneration.current) {
+          setDevelopment(!!data.eligibleForDevelopmentReview); setHasDevelopmentAnalysis(data.analysisCount > 0);
+          setDevelopmentQuota(data.quota ?? null);
+        }
+      }).catch(() => {});
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    const timer = setInterval(refresh, 60000);
+    const resetTimer = developmentQuota?.retryAfter ? setTimeout(refresh, Math.min(developmentQuota.retryAfter * 1000 + 100, 2147483647)) : null;
+    return () => { active = false; clearInterval(timer); clearTimeout(resetTimer); window.removeEventListener("focus", refresh); };
+  }, [workId, developmentQuota?.retryAfter, coachPreference]);
+  useEffect(() => {
+    if (!restoreMessage) return;
+    const timer = setTimeout(() => setRestoreMessage(""), 7000);
+    return () => clearTimeout(timer);
+  }, [restoreMessage]);
+  const dispatch = useCallback(action => {
+    if (!mounted.current) return;
+    const next = chaptersReducer(chaptersRef.current, action);
+    chaptersRef.current = next;
+    rawDispatch(action);
+    try {
+      next.forEach(ch => {
+        persistDraft(localStorage, draftKey(userId, workId, ch._id, editorId.current), ch);
+        if (!ch._dirty && !ch._saving) ch._resolvedDraftKeys?.forEach(key => localStorage.removeItem(key));
+      });
+      setLocalError("");
+    } catch { setLocalError("Yerel taslak saklanamadı (depolama dolu veya kapalı). Metninizi kopyalayın; sunucu kaydı ayrı olarak gösterilir."); }
+  }, [userId, workId]);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [pageTab,  setPageTab]  = useState(PAGE_TABS.BOLUMLER);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState("");
   const [activeChapterId, setActiveChapterId] = useState(null);
-  const [activePageId,    setActivePageId]    = useState(null);
-  const [saveStatus,      setSaveStatus]      = useState("saved");
+  const saveStatus = chapters.some(c => c._conflict) ? "conflict"
+    : chapters.some(c => c._recovery) ? "recovery"
+    : chapters.some(c => c._saveError) ? "error"
+    : chapters.some(c => c._saving) ? "saving"
+    : chapters.some(c => c._dirty) ? "unsaved" : "saved";
+  const savesInFlight = useRef(new Map());
+  const publishingIds = useRef(new Set());
   const autoSaveTimers = useRef({});
 
-  const [viewMode,      setViewMode]      = useState("single");
   const [focusMode,     setFocusMode]     = useState(false);
-  const [aiOpen,        setAiOpen]        = useState(false);
-  const [aiLoading,     setAiLoading]     = useState(false);
-  const [aiReview,      setAiReview]      = useState("");
+  useEffect(() => {
+    setWritingFocus(focusMode);
+    return () => setWritingFocus(false);
+  }, [focusMode]);
   const [announceModal, setAnnounceModal] = useState(null);
   const [reviewPending, setReviewPending] = useState(false);
   const [publishing,    setPublishing]    = useState(false);
-  const [softFocus,     setSoftFocus]     = useState(false);
+
 
   const [theme, setTheme] = useState(getInitialTheme);
   useEffect(() => { applyTheme(theme); }, [theme]);
 
-  const [wordGoal,    setWordGoal]    = useState(() => Number(localStorage.getItem("acb_word_goal")) || 0);
-  const [editingGoal, setEditingGoal] = useState(false);
-  const [goalInput,   setGoalInput]   = useState("");
-  const [streak,      setStreak]      = useState({ currentStreak: 0, longestStreak: 0 });
-  const [goalBaseline, setGoalBaseline] = useState(null);
-  const [dragFromIdx, setDragFromIdx] = useState(null);
-  const [dragOverIdx, setDragOverIdx] = useState(null);
-
-  const leafRefsMap = useRef({});
   const deskRef     = useRef(null);
-  const observerRef = useRef(null);
-  const chaptersRef = useRef(chapters);
-  useEffect(() => { chaptersRef.current = chapters; }, [chapters]);
 
   useEffect(() => {
     const h = (e) => { if (chaptersRef.current.some(c=>c._dirty)) { e.preventDefault(); e.returnValue=""; } };
@@ -622,226 +619,259 @@ export default function ChaptersPage() {
   }, []);
 
   const fetchChapters = useCallback(async () => {
+    const generation = ++fetchGeneration.current;
     setLoading(true); setError("");
     try {
       const res = await apiGet(`/chapters?workId=${workId}`);
-      const raw = res.items || res || [];
+      const metadata = res.items || res || [];
+      const raw = await Promise.all(metadata.map(async ch => (await apiGet(`/chapters/${ch._id}`)).item));
       const sorted = [...raw].sort((a,b) => {
         const ao=a.order??9999, bo=b.order??9999;
         return ao!==bo ? ao-bo : new Date(a.createdAt||0)-new Date(b.createdAt||0);
       });
-      const items = sorted.map((ch,i) => normalizeChapter({...ch, order:i}));
+      if (!mounted.current || generation !== fetchGeneration.current) return;
+      const items = sorted.map((ch) => {
+        const item = normalizeChapter(ch);
+        try { item._recovery = readDrafts(localStorage, userId, workId, ch._id).filter(d => d.title !== item.title || d.content !== item.content); }
+        catch { setLocalError("Yerel taslaklar okunamadı."); }
+        if (!item._recovery?.length) item._recovery = null;
+        return item;
+      });
       dispatch({ type:"SET", chapters:items });
-      items.forEach(ch => pushUndoSnapshot(ch._id, ch.pages[0]?.content??""));
-      if (items.length > 0) { setActiveChapterId(items[0]._id); setActivePageId(items[0].pages[0].id); }
-    } catch(err) { setError(err.message||"Bölümler yüklenemedi."); }
-    finally { setLoading(false); }
-  }, [workId]);
+      items.forEach(ch => pushUndoSnapshot(ch._id, ch.content, undoStacksRef));
+      if (items.length > 0) { setActiveChapterId(items[0]._id); }
+    } catch(err) { if (mounted.current && generation === fetchGeneration.current) setError(err.message||"Bölümler yüklenemedi."); }
+    finally { if (mounted.current && generation === fetchGeneration.current) setLoading(false); }
+  }, [workId, userId, dispatch]);
 
   useEffect(() => { fetchChapters(); }, [fetchChapters]);
 
-  useEffect(() => {
-    apiGet("/user/streak").then(setStreak).catch(() => {});
-  }, []);
 
 useEffect(() => {
   window.__acbTourTrigger = window.__acbTourTrigger || {};
-  window.__acbTourTrigger.openAtelierTab = () => setPageTab(PAGE_TABS.ATOLYE);
-    window.__acbTourTrigger.openBolumlerTab = () => setPageTab(PAGE_TABS.BOLUMLER);
-  return () => {
-    delete window.__acbTourTrigger.openAtelierTab;
-    delete window.__acbTourTrigger.openBolumlerTab;
+  const prepare = () => {
+    setSidebarOpen(true);
+    return () => setSidebarOpen(sidebarOpen);
   };
-}); // dependency array YOK
+  window.__acbTourTrigger.openChapterSidebar = prepare;
+  const prepareAtelier = () => { setPageTab(PAGE_TABS.ATOLYE); setSidebarOpen(false); };
+  const prepareChapters = () => { setPageTab(PAGE_TABS.BOLUMLER); };
+  window.__acbTourTrigger.openAtelier = prepareAtelier;
+  window.__acbTourTrigger.openChapters = prepareChapters;
+  return () => {
+    if (window.__acbTourTrigger.openAtelier === prepareAtelier) delete window.__acbTourTrigger.openAtelier;
+    if (window.__acbTourTrigger.openChapters === prepareChapters) delete window.__acbTourTrigger.openChapters;
+    if (window.__acbTourTrigger.openChapterSidebar === prepare) delete window.__acbTourTrigger.openChapterSidebar;
+  };
+}, [sidebarOpen]);
+
+  const saveChapter = useCallback((chapterId) => {
+    if (savesInFlight.current.has(chapterId)) return savesInFlight.current.get(chapterId);
+    const ch = chaptersRef.current.find(c => c._id === chapterId);
+    if (!ch || ch._deleting || ch._conflict || ch._recovery || publishingIds.current.has(chapterId)) return Promise.resolve(false);
+    if (!ch._dirty) return Promise.resolve(true);
+    clearTimeout(autoSaveTimers.current[chapterId]);
+    const requestId = `${ch.revision ?? 0}:${ch._edit}`;
+    dispatch({ type: "SAVE_START", id: chapterId, request: requestId });
+    const request = (async () => {
+      try {
+        const result = await apiPut(`/chapters/${chapterId}`, {
+          title: ch.title, content: ch.content, expectedRevision: ch.revision ?? 0,
+          eligibleWordDelta: Math.max(0, (ch._eligibleWords || 0) - (ch._savedEligibleWords || 0)),
+        });
+        if (!isChapterSaveReceipt(result, chapterId, ch.revision ?? 0)) throw new Error("Geçersiz kayıt yanıtı.");
+        dispatch({ type: "SAVE_SUCCESS", id: chapterId, request: requestId, edit: ch._edit, eligibleWords: ch._eligibleWords || 0, development: result.development, item: { ...result.item, revision: result.revision, savedAt: result.savedAt } });
+        return true;
+      } catch (err) {
+        dispatch({ type: "SAVE_ERROR", id: chapterId, request: requestId, current: err.status === 409 ? err.data?.current : null });
+        return false;
+      } finally {
+        savesInFlight.current.delete(chapterId);
+      }
+    })();
+    savesInFlight.current.set(chapterId, request);
+    return request;
+  }, [dispatch]);
 
   useEffect(() => {
-    if (!deskRef.current) return;
-    observerRef.current?.disconnect();
-    observerRef.current = new IntersectionObserver((entries) => {
-      let best=null, bestR=0;
-      entries.forEach(e => { if(e.intersectionRatio>bestR){bestR=e.intersectionRatio;best=e.target;} });
-      if (best&&bestR>0.12) { const pgId=best.dataset.pageId, chId=best.dataset.chapterId; if(pgId&&chId){setActivePageId(pgId);setActiveChapterId(chId);} }
-    }, { root:deskRef.current, threshold:[0.12,0.4,0.7] });
-    Object.values(leafRefsMap.current).forEach(el => { if(el) observerRef.current.observe(el); });
-    return () => observerRef.current?.disconnect();
-  }, [chapters, viewMode]);
-
-  const saveChapter = useCallback(async (chapterId) => {
-    const ch = chaptersRef.current.find(c=>c._id===chapterId);
-    if (!ch) return;
-    try {
-      setSaveStatus("saving");
-      await apiPut(`/chapters/${chapterId}`, { title:ch.title, content:mergePages(ch.pages), status:ch.status, order:ch.order });
-      dispatch({ type:"MARK_CLEAN", id:chapterId });
-      setSaveStatus("saved");
-    } catch { setSaveStatus("error"); }
-  }, []);
-
-  useEffect(() => {
+    const timers = autoSaveTimers.current;
     chapters.forEach(ch => {
-      if (!ch._dirty) return;
-      if (autoSaveTimers.current[ch._id]) clearTimeout(autoSaveTimers.current[ch._id]);
-      setSaveStatus("unsaved");
-      autoSaveTimers.current[ch._id] = setTimeout(() => saveChapter(ch._id), AUTOSAVE_DELAY);
+      if (!ch._dirty || ch._deleting || ch._saving || ch._saveError || ch._conflict || ch._recovery || publishingIds.current.has(ch._id)) return;
+      timers[ch._id] = setTimeout(() => saveChapter(ch._id), AUTOSAVE_DELAY);
     });
-  }, [chapters, saveChapter]);
+    return () => { Object.values(timers).forEach(clearTimeout); };
+  }, [chapters, saveChapter, publishing]);
 
-  const undoDebounceRef = useRef({});
-  const handleContentChange = useCallback((chapterId, pageId, value) => {
-    dispatch({ type:"UPDATE_CONTENT", chapterId, pageId, value });
-    if (undoDebounceRef.current[chapterId]) clearTimeout(undoDebounceRef.current[chapterId]);
-    undoDebounceRef.current[chapterId] = setTimeout(() => pushUndoSnapshot(chapterId, value), 1500);
-  }, []);
-  const handleTitleChange = useCallback((chapterId, title) => dispatch({ type:"UPDATE_TITLE", id:chapterId, title }), []);
-  const handlePageFocus   = useCallback((pageId, chapterId) => { setActivePageId(pageId); setActiveChapterId(chapterId); }, []);
+  const handleContentChange = useCallback((chapterId, value, eligible = false) => {
+    const ch = chaptersRef.current.find(c => c._id === chapterId);
+    if (!ch || ch._deleting) return;
+    const before = ch.content;
+    if (before === value) return;
+    pushUndoSnapshot(chapterId, before, undoStacksRef);
+    dispatch({ type: "UPDATE_CHAPTER_CONTENT", chapterId, content: value,
+      eligibleWords: eligible ? Math.max(0, wcFromHtml(value) - wcFromHtml(before)) : 0 });
+    pushUndoSnapshot(chapterId, chaptersRef.current.find(c => c._id === chapterId).content, undoStacksRef);
+  }, [dispatch]);
+  const handleTitleChange = useCallback((chapterId, title) => dispatch({ type:"UPDATE_TITLE", id:chapterId, title }), [dispatch]);
 
   const handleCreateChapter = async () => {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     const cur = chaptersRef.current;
     try {
-      const res = await apiPost("/chapters", { workId, title:`Bölüm ${cur.length+1}`, status:"draft", order:cur.length });
+      const res = await apiPost("/chapters", { workId, title:`Bölüm ${cur.length+1}`, status:"draft" });
       const newCh = normalizeChapter({...res.item, content:res.item?.content||""});
       dispatch({ type:"ADD", chapter:newCh });
-      pushUndoSnapshot(newCh._id, "");
-      setActiveChapterId(newCh._id); setActivePageId(newCh.pages[0].id);
-      setTimeout(() => leafRefsMap.current[newCh.pages[0].id]?.scrollIntoView({behavior:"smooth",block:"start"}), 100);
+      pushUndoSnapshot(newCh._id, "", undoStacksRef);
+      setActiveChapterId(newCh._id);
     } catch(err) { setError(err.message||"Bölüm oluşturulamadı."); }
+    finally { creatingRef.current = false; }
   };
 
   const handleDeleteChapter = async (chapterId, title) => {
+    const ch = chaptersRef.current.find(c => c._id === chapterId);
+    if (!ch || ch._deleting || publishingIds.current.has(chapterId)) return;
     if (!window.confirm(`"${title||"Bu bölüm"}" kalıcı olarak silinecek. Emin misin?`)) return;
+    dispatch({ type: "DELETING", id: chapterId, value: true });
+    clearTimeout(autoSaveTimers.current[chapterId]);
     try {
+      await savesInFlight.current.get(chapterId);
       await apiDelete(`/chapters/${chapterId}`);
       dispatch({ type:"DELETE", id:chapterId });
       if (activeChapterId===chapterId) {
         const rem = chaptersRef.current.filter(c=>c._id!==chapterId);
-        if (rem.length>0) { setActiveChapterId(rem[0]._id); setActivePageId(rem[0].pages[0].id); }
-        else { setActiveChapterId(null); setActivePageId(null); }
+        if (rem.length>0) { setActiveChapterId(rem[0]._id); }
+        else { setActiveChapterId(null); }
       }
     } catch(err) { alert("Silinemedi: "+(err.message||"")); }
+    finally { dispatch({ type: "DELETING", id: chapterId, value: false }); }
   };
-
-  function handleDragStart(e,idx){ setDragFromIdx(idx); e.dataTransfer.effectAllowed="move"; }
-  function handleDragOver(idx){ if(idx!==dragOverIdx)setDragOverIdx(idx); }
-  async function handleDrop(toIdx){
-    if(dragFromIdx===null||dragFromIdx===toIdx){setDragFromIdx(null);setDragOverIdx(null);return;}
-    const r=[...chaptersRef.current];const[m]=r.splice(dragFromIdx,1);r.splice(toIdx,0,m);
-    dispatch({type:"REORDER",chapters:r});setDragFromIdx(null);setDragOverIdx(null);
-  }
 
   const handlePublish = async () => {
-    const ch = chaptersRef.current.find(c=>c._id===activeChapterId);
-    if (!ch) return;
-    if (ch.status==="published"||ch.status==="pending_review") {
-      if (!window.confirm("Bölümü taslağa almak istediğinden emin misin?")) return;
-      try { setSaveStatus("saving"); await apiPatch(`/chapters/${activeChapterId}/status`,{workId,status:"draft"}); dispatch({type:"UPDATE_STATUS",id:activeChapterId,status:"draft"}); setSaveStatus("saved"); }
-      catch(err) { setSaveStatus("error"); alert("İşlem başarısız: "+(err.message||"")); }
-      return;
-    }
-    const merged = mergePages(ch.pages);
-    if (!merged.trim()) { alert("Bölüm içeriği boş."); return; }
-    if (!window.confirm(ch.status==="rejected"?"Yeniden incelemeye göndermek istiyor musun?":"Bu bölümü yayınlamak istediğinden emin misin?")) return;
-    setPublishing(true); setSaveStatus("saving");
+    const ch = chaptersRef.current.find(c => c._id === activeChapterId);
+    if (!ch || ch._deleting || publishingIds.current.has(ch._id)) return;
+    const toDraft = ch.status === "published" || ch.status === "pending_review";
+    if (!toDraft && !ch.content) { alert("Bölüm içeriği boş."); return; }
+    if (!window.confirm(toDraft ? "Bölümü taslağa almak istediğinden emin misin?"
+      : ch.status === "rejected" ? "Yeniden incelemeye göndermek istiyor musun?"
+      : "Bu bölümü yayınlamak istediğinden emin misin?")) return;
+    setPublishing(true);
+    let acquired = false;
     try {
-      await apiPut(`/chapters/${activeChapterId}`,{title:ch.title,content:merged,order:ch.order});
-      const result = await apiPatch(`/chapters/${activeChapterId}/status`,{workId,status:"published"});
-      if (result.pending) { dispatch({type:"UPDATE_STATUS",id:activeChapterId,status:"pending_review",reviewNote:""}); setReviewPending(true); setTimeout(()=>setReviewPending(false),8000); }
-      else if (result.rejected) { dispatch({type:"UPDATE_STATUS",id:activeChapterId,status:"rejected",reviewNote:ch.reviewNote||""}); alert(result.message||"İçerik politikasına aykırı."); }
-      else { dispatch({type:"UPDATE_STATUS",id:activeChapterId,status:"published"}); setAnnounceModal({title:ch.title}); }
-      setSaveStatus("saved");
-    } catch(err) { setSaveStatus("error"); alert(err.message||"Yayınlama başarısız oldu."); }
-    finally { setPublishing(false); }
+      if (!await saveChapter(ch._id)) return;
+      // Do not publish an older snapshot when typing continued during its save.
+      const current = chaptersRef.current.find(c => c._id === ch._id);
+      if (!current || current._deleting || current._dirty || current._edit !== ch._edit || publishingIds.current.has(ch._id)) return;
+      publishingIds.current.add(ch._id);
+      acquired = true;
+      clearTimeout(autoSaveTimers.current[ch._id]);
+      let result;
+      try {
+        result = await apiPatch(`/chapters/${ch._id}/status`, { workId, expectedRevision: chaptersRef.current.find(c => c._id === ch._id)?.revision ?? 0, status: toDraft ? "draft" : "published" });
+      } catch (err) {
+        if (err.status !== 422 || err.data?.item?._id !== ch._id || err.data.item.status !== "rejected") throw err;
+        result = err.data;
+      }
+      if (result.item?._id !== ch._id || !result.item.status) throw new Error("Geçersiz durum yanıtı.");
+      dispatch({ type: "UPDATE_STATUS", id: ch._id, status: result.item.status, reviewNote: result.item.reviewNote ?? "" });
+      if (result.item.status === "pending_review") {
+        setReviewPending(true); setTimeout(() => setReviewPending(false), 8000);
+      } else if (result.item.status === "rejected") {
+        alert(result.message || "İçerik politikasına aykırı.");
+      } else if (result.item.status === "published") {
+        setAnnounceModal({ title: ch.title });
+      }
+    } catch (err) {
+      if (err.status === 409 && err.data?.current) dispatch({ type: "CONFLICT_REFRESH", id: ch._id, current: err.data.current });
+      alert(err.message || "Yayınlama başarısız oldu.");
+    }
+    finally { if (acquired) publishingIds.current.delete(ch._id); setPublishing(false); }
   };
 
-  const handleAIReview = async () => {
-    const ch = chaptersRef.current.find(c=>c._id===activeChapterId);
-    if (!ch) return;
-    setAiOpen(true); setAiLoading(true); setAiReview("");
+  const restoreVersion = async (selected) => {
+    const ch = chaptersRef.current.find(c => c._id === historyId);
+    if (!ch || ch._deleting || publishingIds.current.has(ch._id) || ch._conflict || ch._recovery) return false;
+    if (!await saveChapter(ch._id)) throw new Error("Önce mevcut metnin sunucuya kaydedilmesi gerekiyor.");
+    const current = chaptersRef.current.find(c => c._id === ch._id);
+    if (!current || current._deleting || publishingIds.current.has(ch._id) || current._edit !== ch._edit || current._dirty) throw new Error("Kayıt sırasında metin değişti. Önizlemeyi kontrol edip tekrar deneyin.");
+    publishingIds.current.add(ch._id);
+    clearTimeout(autoSaveTimers.current[ch._id]);
     try {
-      const tmp=document.createElement("div"); tmp.innerHTML=mergePages(ch.pages);
-      const res=await apiPost("/ai/review",{workId,chapterId:activeChapterId,title:ch.title,text:tmp.innerText,context:"chapter"});
-      setAiReview(res.analysis||res.item?.analysis||res.text||"Yorum alındı.");
-    } catch { setAiReview("AI yorum alınamadı."); }
-    finally { setAiLoading(false); }
+      const result = await apiPost(`/chapters/${ch._id}/versions/${selected.revision}/restore`, { expectedRevision: current.revision });
+      if (!isChapterSaveReceipt(result, ch._id, current.revision)) throw new Error("Geri yükleme yanıtı doğrulanamadı.");
+      dispatch({ type: "RESTORED", id: ch._id, edit: current._edit, chapter: normalizeChapter(result.item) });
+      setRestoreMessage("Seçtiğin metinden devam ediyorsun. Önceki taslağın Geçmiş'te saklandı.");
+      return true;
+    } catch (err) {
+      dispatch({ type: "SAVE_ERROR", id: ch._id, request: current._request, current: err.status === 409 ? err.data?.current : null });
+      throw err;
+    } finally { publishingIds.current.delete(ch._id); }
+  };
+
+  const saveCheckpoint = async (label) => {
+    const ch = chaptersRef.current.find(c => c._id === historyId);
+    if (!ch || ch._deleting || ch._conflict || ch._recovery || publishingIds.current.has(ch._id)) throw new Error("Önce bölümün kayıt durumunu çözün.");
+    if (!await saveChapter(ch._id)) throw new Error("Metin sunucuya kaydedilemedi. Yerel taslağınız korunuyor.");
+    const current = chaptersRef.current.find(c => c._id === ch._id);
+    if (!current || current._dirty || current._edit !== ch._edit) throw new Error("Kayıt sırasında metin değişti. Tekrar deneyin.");
+    try {
+      const result = await apiPost(`/chapters/${ch._id}/checkpoint`, { expectedRevision: current.revision, label });
+      if (!result.item || result.item.revision !== current.revision || !result.item.isCheckpoint) throw new Error("Kaydın saklandığı doğrulanamadı.");
+      return result.item;
+    } catch (err) {
+      if (err.status === 409 && err.data?.current) dispatch({ type: "CONFLICT_REFRESH", id: ch._id, current: err.data.current });
+      throw err;
+    }
+  };
+
+  const resolveLocal = async (chapter, draft) => {
+    try {
+      const { item } = await apiGet(`/chapters/${chapter._id}`);
+      if (!mounted.current) return;
+      if ((item.revision ?? 0) !== (chapter._conflict?.revision ?? chapter.revision)) {
+        dispatch({ type: "CONFLICT_REFRESH", id: chapter._id, current: item });
+        return;
+      }
+      const current = chaptersRef.current.find(c => c._id === chapter._id);
+      if (current._edit !== chapter._edit) { setError("Karşılaştırma sırasında metin değişti. Tekrar kontrol edin."); return; }
+      dispatch({ type: "RESOLVE", id: chapter._id, revision: item.revision ?? 0,
+        draftKey: draft?.key,
+        title: draft?.title ?? current.title, content: DOMPurify.sanitize(draft?.content ?? current.content) });
+    } catch (err) { setError(err.message); }
   };
 
   const jumpToChapter = useCallback((chapterId) => {
-    setActiveChapterId(chapterId);
-    setSidebarOpen(false); 
-    const ch=chaptersRef.current.find(c=>c._id===chapterId);
-    if (ch?.pages?.[0]) { setActivePageId(ch.pages[0].id); setTimeout(()=>leafRefsMap.current[ch.pages[0].id]?.scrollIntoView({behavior:"smooth",block:"start"}),30); }
+    setActiveChapterId(chapterId); setSidebarOpen(false);
   }, []);
-  const jumpToPage = useCallback((pageId) => {
-    setActivePageId(pageId);
-    setTimeout(()=>leafRefsMap.current[pageId]?.scrollIntoView({behavior:"smooth",block:"start"}),30);
-  }, []);
+  useEffect(() => { deskRef.current?.scrollTo({ top: 0 }); }, [activeChapterId]);
 
   useEffect(() => {
     const down=(e)=>{
+      if (pageTab !== PAGE_TABS.BOLUMLER && !focusMode) return;
       const mod=e.ctrlKey||e.metaKey;
+      if (developmentOpen) return;
+      if (historyId && (e.key === "F11" || (mod && ["ArrowDown", "ArrowUp"].includes(e.key)))) { e.preventDefault(); return; }
       if(mod&&e.key==="s"){e.preventDefault();if(activeChapterId)saveChapter(activeChapterId);}
       if(e.key==="F11"){e.preventDefault();setFocusMode(v=>!v);}
-      if(e.key==="Escape"){setFocusMode(false);setEditingGoal(false);}
+      if(e.key==="Escape"){setFocusMode(false);}
       if(mod&&e.key==="ArrowDown"){e.preventDefault();const cur=chaptersRef.current,idx=cur.findIndex(c=>c._id===activeChapterId);if(idx<cur.length-1)jumpToChapter(cur[idx+1]._id);}
       if(mod&&e.key==="ArrowUp"){e.preventDefault();const cur=chaptersRef.current,idx=cur.findIndex(c=>c._id===activeChapterId);if(idx>0)jumpToChapter(cur[idx-1]._id);}
       if(mod&&!e.shiftKey&&e.key==="z"){
         const a=document.activeElement;
-        if(a?.contentEditable!=="true"&&a?.tagName!=="TEXTAREA"&&a?.tagName!=="INPUT"&&activeChapterId){
-          e.preventDefault();const prev=popUndoSnapshot(activeChapterId);
-          if(prev!==null)dispatch({type:"UNDO_CONTENT",chapterId:activeChapterId,content:prev});
+        if(a?.tagName!=="TEXTAREA"&&a?.tagName!=="INPUT"&&activeChapterId){
+          const chapterId = a?.closest("[data-chapter-id]")?.dataset.chapterId || activeChapterId;
+          if (e.isComposing || chaptersRef.current.find(c => c._id === chapterId)?._deleting) return;
+          e.preventDefault();const prev=popUndoSnapshot(chapterId, undoStacksRef);
+          if(prev!==null)dispatch({type:"UNDO_CONTENT",chapterId,content:prev});
         }
       }
     };
     window.addEventListener("keydown",down);
     return()=>window.removeEventListener("keydown",down);
-  },[activeChapterId,saveChapter,jumpToChapter]);
+  },[activeChapterId,saveChapter,jumpToChapter,dispatch,pageTab,focusMode,historyId,developmentOpen]);
 
   const activeChapter=chapters.find(c=>c._id===activeChapterId);
-  let gCounter=0; const gMap={};
-  chapters.forEach(ch=>ch.pages.forEach(pg=>{gCounter++;gMap[pg.id]=gCounter;}));
-  const totalPages=gCounter, currentPage=gMap[activePageId]||1;
-  const totalWc=useMemo(()=>chapters.reduce((s,ch)=>s+ch.pages.reduce((ss,p)=>ss+wcFromHtml(p.content),0),0),[chapters]);
-
-  // Günlük hedef "bugün yazılan kelime" üzerinden hesaplanır — gün başındaki
-  // toplam kelime sayısı bu esere özel referans alınır, geçmiş günlerin
-  // veya başka eserlerin yazısı hedefi otomatik "tamam" göstermesin diye.
-  useEffect(() => {
-    if (loading) return;
-    const todayKey = new Date().toISOString().slice(0,10);
-    const key = `acb_word_goal_baseline_${workId}`;
-    let baseline;
-    try {
-      const raw = localStorage.getItem(key);
-      baseline = raw ? JSON.parse(raw) : null;
-    } catch { baseline = null; }
-
-    if (!baseline || baseline.date !== todayKey) {
-      baseline = { date: todayKey, wc: totalWc };
-      localStorage.setItem(key, JSON.stringify(baseline));
-    }
-
-    setGoalBaseline(prev =>
-      prev && prev.date === baseline.date && prev.wc === baseline.wc ? prev : baseline
-    );
-  }, [loading, totalWc, workId]);
-
-  const todayWc = useMemo(() => {
-    if (!goalBaseline) return 0;
-    return Math.max(0, totalWc - goalBaseline.wc);
-  }, [totalWc, goalBaseline]);
-
-  const goalPct=wordGoal>0?Math.min(100,Math.round((todayWc/wordGoal)*100)):0;
-  const goalDone=wordGoal>0&&todayWc>=wordGoal;
-  function saveGoal(){const v=parseInt(goalInput)||0;setWordGoal(v);localStorage.setItem("acb_word_goal",String(v));setEditingGoal(false);}
-
-  useEffect(() => {
-    if (!goalDone) return;
-    const todayKey = new Date().toISOString().slice(0,10);
-    if (localStorage.getItem("acb_streak_checkin_date") === todayKey) return;
-    apiPost("/user/streak/checkin").then(res => {
-      setStreak(res);
-      localStorage.setItem("acb_streak_checkin_date", todayKey);
-    }).catch(() => {});
-  }, [goalDone]);
+  const totalWc = useMemo(() => chapters.reduce((sum, ch) => sum + wcFromHtml(ch.content), 0), [chapters]);
 
   const publishBtnLabel=()=>{
     if(publishing)return"inceleniyor…";
@@ -868,17 +898,19 @@ useEffect(() => {
 
   return (
     <>
-    <div className="cp-root">
+    <DevelopmentCoachPreference initialOnly onChange={setCoachPreference} />
+    <div className="cp-root" inert={focusMode && !!activeChapter || !!historyId || developmentOpen || coachPreference === "undecided"}>
+      {sidebarOpen && <button className="cp-sidebar-backdrop" aria-label="Bölüm menüsünü kapat" onClick={() => setSidebarOpen(false)} />}
       {/* ── SIDEBAR ── */}
       <aside className={`cp-sidebar ${sidebarOpen ? "cp-sidebar--open" : ""}`}>
         <div className="cp-sidebar-top">
-          <button className="cp-back-btn" onClick={()=>navigate(`/work/${workId}`)}>
+          <button className="cp-back-btn" onClick={()=>{ if (!chaptersRef.current.some(c=>c._dirty) || window.confirm("Kaydedilmemiş değişiklikler var. Ayrılmak istiyor musun?")) navigate(`/work/${workId}`); }}>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
             stüdyo
           </button>
           <div className="cp-side-tabs">
-            <button className={`cp-side-tab ${pageTab===PAGE_TABS.BOLUMLER?"active":""}`} onClick={()=>setPageTab(PAGE_TABS.BOLUMLER)}>📖 Bölümler</button>
-            <button className={`cp-side-tab ${pageTab===PAGE_TABS.ATOLYE?"active":""}`}   onClick={()=>setPageTab(PAGE_TABS.ATOLYE)}
+            <button data-tour="write-chapters" className={`cp-side-tab ${pageTab===PAGE_TABS.BOLUMLER?"active":""}`} onClick={()=>setPageTab(PAGE_TABS.BOLUMLER)}>📖 Bölümler</button>
+            <button className={`cp-side-tab ${pageTab===PAGE_TABS.ATOLYE?"active":""}`}   onClick={()=>{setPageTab(PAGE_TABS.ATOLYE);setSidebarOpen(false);}}
             data-tour = "write-atolye-tab"  >✍️ Atölye</button>
           </div>
         </div>
@@ -888,113 +920,64 @@ useEffect(() => {
             <>
               {error&&<div className="cp-err-box">{error}</div>}
               <div className="cp-sec-label">bölümler</div>
-              <div className="cp-chapter-nav" onDragLeave={()=>setDragOverIdx(null)}>
+              <div className="cp-chapter-nav">
                 {chapters.length===0&&<p className="cp-empty-hint">Henüz bölüm yok.</p>}
                 {chapters.map((ch,idx)=>(
                   <ChapterItem key={ch._id} chapter={ch} index={idx} isActive={ch._id===activeChapterId}
-                    onJump={jumpToChapter} onDelete={handleDeleteChapter}
-                    onDragStart={handleDragStart} onDragOver={handleDragOver} onDrop={handleDrop}
-                    isDragging={dragFromIdx===idx} isDragOver={dragOverIdx===idx}/>
+                    onJump={jumpToChapter} onDelete={handleDeleteChapter}/>
                 ))}
               </div>
               <button className="cp-new-ch-btn" onClick={handleCreateChapter}
                data-tour="write-yeni-bolum">+ yeni bölüm</button>
 
-              {activeChapter&&(
-                <><div className="cp-sec-label" style={{marginTop:14}}>sayfalar</div>
-                <div className="cp-thumbs">
-                  {activeChapter.pages.map((pg,pi)=>{
-                    const pgWc=wcFromHtml(pg.content);
-                    const pct=Math.min(100,Math.round((pgWc/WORDS_PER_PAGE)*100));
-                    return (
-                      <button key={pg.id} className={`cp-thumb-btn ${pg.id===activePageId?"active":""}`} onClick={()=>jumpToPage(pg.id)}>
-                        <span className="cp-thumb-num">{pi+1}</span>
-                        <div className="cp-thumb-track"><div className="cp-thumb-fill" style={{width:`${pct}%`}}/></div>
-                        <span className="cp-thumb-wc">{pgWc}</span>
-                      </button>
-                    );
-                  })}
-                </div></>
-              )}
 
-              {streak.currentStreak>0&&(
-                <div className="cp-streak" title={`En uzun seri: ${streak.longestStreak} gün`}>
-                  <span className="cp-streak-icon">🔥</span>
-                  <span className="cp-streak-text">{streak.currentStreak} günlük seri</span>
-                </div>
-              )}
-
-              <div className="cp-goal">
-                {editingGoal?(
-                  <div className="cp-goal-edit">
-                    <input className="cp-goal-input" type="number" value={goalInput} onChange={e=>setGoalInput(e.target.value)}
-                      onKeyDown={e=>{if(e.key==="Enter")saveGoal();if(e.key==="Escape")setEditingGoal(false);}} onBlur={saveGoal} autoFocus placeholder="500"/>
-                    <span className="cp-goal-unit">kelime</span>
-                  </div>
-                ):wordGoal>0?(
-                  <div className="cp-goal-display" onClick={()=>{setEditingGoal(true);setGoalInput(String(wordGoal));}} title="Hedefi düzenle">
-                    <div className="cp-goal-track"><div className={`cp-goal-fill ${goalDone?"done":""}`} style={{width:`${goalPct}%`}}/></div>
-                    <span className="cp-goal-text">{goalDone?"🎉 hedef tamam":`%${goalPct} · ${wordGoal.toLocaleString("tr-TR")} hedef`}</span>
-                  </div>
-                ):(
-                  <button className="cp-goal-set-btn" onClick={()=>{setEditingGoal(true);setGoalInput("");}}>+ günlük kelime hedefi</button>
-                )}
-              </div>
             </>
           )}
           {pageTab===PAGE_TABS.ATOLYE&&(
             <div className="cp-atelier-hint"><p>Egzersizlerin notlara kaydedilir ve esere bağlanır.</p><p>Yazma rutinini sağ panelden başlat.</p></div>
           )}
         </div>
+        {DEVELOPMENT_COACH_LAUNCH_ENABLED && coachPreference === "enabled" && <DevelopmentCoachArchive key={workId} workId={workId} refresh={archiveRefresh} onOpen={item => { setDevelopmentState(item); setDevelopmentOpen(true); }} />}
       </aside>
 
       {/* ── MAIN ── */}
       <div className="cp-main">
         <header className="cp-topbar">
           <div className="cp-tb-left">
-            <button className="cp-mobile-menu-btn" onClick={()=>setSidebarOpen(v=>!v)}>☰</button>
-            <span className={`cp-save-dot cp-save-dot--${saveStatus}`}/>
-            <span className="cp-save-text">
-              {saveStatus==="saved"&&"kaydedildi"}{saveStatus==="unsaved"&&"kaydedilmemiş"}
-              {saveStatus==="saving"&&"kaydediliyor…"}{saveStatus==="error"&&"kaydedilemedi!"}
-            </span>
-            {activeChapter&&<span className="cp-tb-chapname">{activeChapter.title||"Başlıksız"}</span>}
-          </div>
-
-          <div className="cp-tb-center">
-            {pageTab===PAGE_TABS.BOLUMLER&&(
-              <div className="cp-view-toggle">
-                <button className={`cp-view-btn ${viewMode==="single"?"active":""}`} onClick={()=>setViewMode("single")} title="Tek sayfa">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="1" width="10" height="14" rx="1"/></svg>
-                </button>
-                <button className={`cp-view-btn ${viewMode==="double"?"active":""}`} onClick={()=>setViewMode("double")} title="Yan yana">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><rect x="0" y="1" width="7" height="14" rx="1"/><rect x="9" y="1" width="7" height="14" rx="1"/></svg>
-                </button>
-                {viewMode==="single"&&(
-                  <button className={`cp-view-btn ${softFocus?"active":""}`} onClick={()=>setSoftFocus(v=>!v)} title="Odak görünümü" style={{marginLeft:4}}>
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" strokeWidth="1"/></svg>
-                  </button>
-                )}
+            <button className="cp-mobile-menu-btn" aria-label="Bölüm menüsü" aria-expanded={sidebarOpen} onClick={()=>setSidebarOpen(v=>!v)}>☰</button>
+            {pageTab === PAGE_TABS.BOLUMLER && <details className="cp-save-details" data-tour="write-save-status">
+              <summary>{saveLabel(saveStatus)}</summary>
+              <div className="cp-save-popover">
+                <strong>{activeChapter?.title || "Bölüm kaydı"}</strong>
+                <p>Son sunucu kaydı: {activeChapter?.savedAt ? new Date(activeChapter.savedAt).toLocaleString("tr-TR") : "Henüz yok"}</p>
+                <p>{activeChapter?._dirty ? "Yerel değişiklik var" : "Yerel değişiklik yok"}</p>
+                <p>{activeChapter?._saving ? "Kayıt sunucuya gönderiliyor." : activeChapter?._dirty ? "Kayıt bekliyor." : "Bekleyen kayıt yok."}</p>
+                {activeChapter?._saveError && <p role="alert">Son kayıt tamamlanamadı. Metnin korunuyor; tekrar deneyebilirsin.</p>}
+                <button className="cp-tb-btn" onClick={() => activeChapterId && saveChapter(activeChapterId)} disabled={!activeChapterId || saveStatus === "saving"}>Şimdi kaydet</button>
+                <p>{localError || (activeChapter?._dirty || activeChapter?._recovery ? "Yerel taslak bu tarayıcıda saklanıyor; sunucu kaydı değildir." : "Bu durum sunucunun kayıt yanıtına dayanır.")}</p>
               </div>
-            )}
+            </details>}
+            {pageTab === PAGE_TABS.ATOLYE && <span className="cp-tb-chapname">Atölye · Egzersiz alanı</span>}
+            {pageTab === PAGE_TABS.BOLUMLER && activeChapter&&<span className="cp-tb-chapname">{activeChapter.title||"Başlıksız"}</span>}
           </div>
 
           <div className="cp-tb-right">
-            <button className="cp-theme-btn" onClick={()=>setTheme(t=>t==="light"?"dark":"light")} title="Tema değiştir">
-              {theme==="light"?"🌙":"☀️"}
-            </button>
+            {pageTab === PAGE_TABS.BOLUMLER && <>
+              {DEVELOPMENT_COACH_LAUNCH_ENABLED && coachPreference === "enabled" && (development || chapters.some(ch => ch._developmentEligible)) && <>
+                <button className="cp-tb-btn cp-development-btn" disabled={developmentQuota?.remaining === 0} onClick={openDevelopment}>✦ Gelişimimi takip et</button>
+                {developmentQuota && <span className="cp-development-quota" role="status">Kalan analiz: {developmentQuota.remaining}/{developmentQuota.dailyLimit} (24 saat)</span>}
+              </>}
+              {CHAPTER_HISTORY_ENABLED && <button className="cp-tb-btn cp-compact-tool" aria-label="Geçmiş" title="Geçmiş" disabled={!activeChapterId} onClick={() => setHistoryId(activeChapterId)}><span className="cp-tb-btn-icon" aria-hidden="true">◷</span><span className="cp-tool-label">Geçmiş</span></button>}
+              <button className="cp-tb-btn cp-compact-tool" aria-label="Odak" title="Odak (F11)" disabled={!activeChapterId} onClick={() => setFocusMode(true)} data-tour="write-odak-btn"><span className="cp-tb-btn-icon" aria-hidden="true">⛶</span><span className="cp-tool-label">Odak</span></button>
+            </>}
+            <button className="cp-tb-btn cp-theme-btn" onClick={() => setTheme(t => t === "light" ? "dark" : "light")} aria-label={theme === "light" ? "Karanlık moda geç" : "Aydınlık moda geç"} title={theme === "light" ? "Karanlık moda geç" : "Aydınlık moda geç"}>{theme === "light" ? "☾" : "☀"}</button>
+            <details className="cp-tools-menu"><summary>Araçlar</summary><div className="cp-tools-popover">
+              {!DEVELOPMENT_COACH_LAUNCH_ENABLED && <button className="cp-tb-btn" disabled>Gelişim Koçu · Beta · Çok yakında</button>}
+              {DEVELOPMENT_COACH_LAUNCH_ENABLED && coachPreference === "enabled" && hasDevelopmentAnalysis && <button className="cp-tb-btn" onClick={openLatestDevelopment}>Son gelişim değerlendirmesi</button>}
+              <BookDownload workId={workId} buttonClass="cp-tb-btn" dirty={chapters.some(ch => ch._dirty || ch._saving || ch._saveError || ch._conflict || ch._recovery)} disabled={loading || !!error || publishing} beforeSave={() => saveBeforeBookDownload(() => chaptersRef.current, saveChapter)} />
+            </div></details>
             {pageTab===PAGE_TABS.BOLUMLER&&(
               <>
-                <button className="cp-tb-btn" onClick={()=>setFocusMode(true)} 
-                data-tour="write-odak-btn"
-                title="F11">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-                  odak
-                </button>
-                <button className="cp-tb-btn" onClick={()=>setAiOpen(v=>!v)} disabled={!activeChapterId}
-                data-tour="write-ai-btn"
-                >AI yorumla</button>
-                <button className="cp-tb-btn" onClick={()=>activeChapterId&&saveChapter(activeChapterId)} disabled={saveStatus==="saving"}>kaydet</button>
                 {activeChapter&&(
                   <button className={publishBtnClass()} onClick={handlePublish}
                   data-tour="write-yayinla-btn"
@@ -1008,9 +991,30 @@ useEffect(() => {
           </div>
         </header>
 
+        {localError && <p role="alert">{localError}</p>}
+        {error && <p role="alert">{error}</p>}
+        {chapters.filter(c => c._conflict || c._recovery).map(ch => <section className="chapter-conflict" key={ch._id}>
+          <h2>{ch.title}: {ch._conflict ? "Başka bir cihazda değişiklik var" : "Kurtarılabilir yerel taslak var"}</h2>
+          <p>Otomatik kayıt durduruldu. Metinleri karşılaştırın; düzenleyicideki metni değiştirebilir, gerekli parçaları kopyalayabilirsiniz.</p>
+          <div className="chapter-comparison">
+            <ChapterPreview title="Düzenleyicideki metin" content={ch.content} />
+            {ch._conflict && <ChapterPreview title={"Sunucudaki metin: " + ch._conflict.title} content={ch._conflict.content} />}
+            {ch._recovery?.map(draft => <section key={draft.key}>
+              <p>Yerel: {new Date(draft.localAt).toLocaleString("tr-TR")}</p>
+              <ChapterPreview title={draft.title} content={draft.content} />
+              <button onClick={() => resolveLocal(ch, draft)}>Bu yerel metinle devam et</button>
+              <button onClick={() => {
+                if (!window.confirm("Bu yerel kopya silinecek. Sunucu metni ve diğer taslaklar korunur. Devam edilsin mi?")) return;
+                try { localStorage.removeItem(draft.key); dispatch({ type: "DISMISS_DRAFT", id: ch._id, key: draft.key }); }
+                catch { setLocalError("Yerel kopya silinemedi."); }
+              }}>Bu yerel kopyayı sil</button>
+            </section>)}
+          </div>
+          <button onClick={() => resolveLocal(ch)}>Karşılaştırdım; düzenleyicideki metni kaydet</button>
+        </section>)}
         <div className="cp-content-area">
           {pageTab===PAGE_TABS.BOLUMLER&&(
-            <div className={`cp-desk cp-desk--${viewMode}`} ref={deskRef}
+            <div className="cp-desk" ref={deskRef}
             data-tour="write-editor">
               {chapters.length===0?(
                 <div className="cp-desk-empty">
@@ -1018,36 +1022,32 @@ useEffect(() => {
                   <p>Henüz bölüm yok.</p>
                   <button onClick={handleCreateChapter}>İlk bölümü oluştur</button>
                 </div>
-              ):(
-                <div className={`cp-leaves ${viewMode==="double"?"cp-leaves--double":""}`}>
-                  {chapters.map((ch,chIdx)=>ch.pages.map((pg,pi)=>(
-                    <PageLeaf key={pg.id} page={pg} chapter={ch} chapterIndex={chIdx} isFirstPage={pi===0}
-                      globalNum={gMap[pg.id]||0} onContentChange={handleContentChange}
-                      onTitleChange={handleTitleChange} onFocus={handlePageFocus}
-                      leafRef={el=>{leafRefsMap.current[pg.id]=el;}}
-                      isFocused={!softFocus||ch._id===activeChapterId?undefined:false}/>
-                  )))}
-                </div>
-              )}
+              ):activeChapter ? (
+                <ChapterDocument key={activeChapter._id} chapter={activeChapter}
+                  chapterIndex={chapters.findIndex(ch => ch._id === activeChapterId)}
+                  onContentChange={handleContentChange} onTitleChange={handleTitleChange} />
+              ):null}
+
             </div>
           )}
-          {pageTab===PAGE_TABS.ATOLYE&&<AtelierTab workId={workId}/>}
+          <div className="cp-atelier-container" hidden={pageTab!==PAGE_TABS.ATOLYE}><AtelierTab key={userId + ":" + workId} userId={userId} workId={workId}/></div>
         </div>
 
         <div className="cp-statusbar">
           <span className="cp-sb-item"><strong>{totalWc.toLocaleString("tr-TR")}</strong> kelime</span>
           <span className="cp-sb-sep"/><span className="cp-sb-item">⏱ {readTime(totalWc)}</span>
-          <span className="cp-sb-sep"/><span className="cp-sb-item">sayfa <strong>{currentPage}</strong> / <strong>{totalPages}</strong></span>
           <span className="cp-sb-sep"/><span className="cp-sb-item">bölüm <strong>{chapters.findIndex(c=>c._id===activeChapterId)+1}</strong> / <strong>{chapters.length}</strong></span>
           <span className="cp-sb-spacer"/>
           <span className="cp-sb-hint">ctrl+s · ctrl+z · F11 odak · ctrl+↑↓ bölüm</span>
         </div>
       </div>
 
-      <AIDrawer open={aiOpen} onClose={()=>setAiOpen(false)} chapterId={activeChapterId} chapter={activeChapter} workId={workId} onReview={handleAIReview} loading={aiLoading} review={aiReview} onClear={()=>setAiReview("")}/>
     </div>
     {/* Portals — cp-root dışında, viewport'a göre fixed */}
-    {focusMode&&activeChapter&&<FocusOverlay chapter={activeChapter} onClose={()=>setFocusMode(false)} onContentChange={handleContentChange} onTitleChange={handleTitleChange}/>}
+    {focusMode&&activeChapter&&<FocusOverlay key={activeChapter._id} chapter={activeChapter} onClose={()=>setFocusMode(false)} onContentChange={handleContentChange} onTitleChange={handleTitleChange} saveStatus={saveStatus} onSave={()=>saveChapter(activeChapterId)}/>}
+    {CHAPTER_HISTORY_ENABLED && historyId && chapters.find(c => c._id === historyId) && <ChapterHistory key={historyId} chapter={chapters.find(c => c._id === historyId)} onClose={() => setHistoryId(null)} onRestore={restoreVersion} onCheckpoint={saveCheckpoint} renderCurrent={({ readOnly }) => <section data-chapter-id={historyId}><h3>Şu anki metin</h3><RichEditor readOnly={readOnly} value={chapters.find(c => c._id === historyId)?.content} onChange={(html, eligible) => handleContentChange(historyId, html, eligible)} /></section>} />}
+    {restoreMessage && <div className="cp-restore-toast" role="status">{restoreMessage}</div>}
+    {developmentOpen && <DevelopmentCoachDialog state={developmentState} onClose={() => setDevelopmentOpen(false)} />}
     {announceModal&&<AnnounceModal chapterTitle={announceModal.title} workId={workId} onClose={()=>setAnnounceModal(null)}/>}
     {reviewPending&&<ReviewPendingBanner onClose={()=>setReviewPending(false)}/>}
     </>

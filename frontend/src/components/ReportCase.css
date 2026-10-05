@@ -1,0 +1,7 @@
+﻿.report-case { padding: 1rem; border: 1px solid #8886; border-radius: 8px; margin: 1rem 0; overflow-wrap: anywhere; }
+.report-case label { display: block; margin: .8rem 0; }
+.report-case textarea, .report-case select { display: block; width: 100%; color: inherit; background: transparent; padding: .5rem; border: 1px solid #888; border-radius: 4px; }
+.report-case textarea { min-height: 90px; }
+.report-case button { padding: .5rem .8rem; margin: .25rem; cursor: pointer; }
+.report-case pre { white-space: pre-wrap; max-height: 320px; overflow: auto; }
+.report-case [role=alert] { color: #bc3939; }

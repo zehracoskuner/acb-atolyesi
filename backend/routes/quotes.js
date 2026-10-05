@@ -1,9 +1,12 @@
+import readerAccess from "../middlewares/readerAccess.js";
 // routes/quotes.js
 import express from "express";
 import Quote   from "../models/Quote.js";
+import Work from "../models/Work.js";
 import ensureAuth from "../middlewares/ensureAuth.js";
 
 const router = express.Router();
+router.use(readerAccess);
 
 /* ────────────────────────────────────────
    POST /api/quotes
@@ -12,6 +15,7 @@ const router = express.Router();
 router.post("/", ensureAuth, async (req, res) => {
   try {
     const { workId, text, workTitle, authorName, genre, tags } = req.body;
+    if (!await Work.exists({ _id: workId, status: "published" })) return res.status(404).json({ error: "Eser bulunamadı." });
 
     if (!workId || !text?.trim()) {
       return res.status(400).json({ error: "workId ve text zorunludur." });

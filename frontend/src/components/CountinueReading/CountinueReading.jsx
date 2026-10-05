@@ -11,7 +11,7 @@ const ContinueReading = () => {
     const fetchProgress = async () => {
       try {
         const data = await getMyReadingProgress();
-        setProgressList(data.slice(0, 5)); // Son 5 okuma
+        setProgressList((data.items || []).filter(item => item.story && item.chapter).slice(0, 5)); // Son 5 okuma
       } catch (error) {
         console.error(error);
       } finally {
@@ -31,7 +31,7 @@ const ContinueReading = () => {
         {progressList.map(({ story, chapter, updatedAt }) => (
           <Link
             key={story._id}
-            to={`/story/${story.slug}/chapter/${chapter._id}`}
+            to={`/read/${story._id}?chapter=${chapter._id}`}
             className={styles.card}
           >
             <img
@@ -42,7 +42,7 @@ const ContinueReading = () => {
             <div className={styles.info}>
               <p className={styles.storyTitle}>{story.title}</p>
               <p className={styles.chapterLabel}>
-                Bölüm {chapter.chapterNumber}: {chapter.title}
+                Bölüm {chapter.order}: {chapter.title}
               </p>
               <p className={styles.date}>
                 {new Date(updatedAt).toLocaleDateString('tr-TR')}

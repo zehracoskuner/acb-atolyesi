@@ -1,19 +1,23 @@
+import readerAccess from "../middlewares/readerAccess.js";
 // backend/routes/logs.js
 import { Router }     from "express";
 import Log            from "../models/Log.js";
 import LogComment     from "../models/LogComment.js";
 import User           from "../models/User.js";
-import ensureAuth     from "../middlewares/ensureAuth.js";
+import ensureAuth, { optionalAuth } from "../middlewares/ensureAuth.js";
 import { notifyLogLike, notifyLogComment } from "../services/notificationService.js";
 
+import { canReadLog } from "../services/logAccess.js";
+
 const router = Router();
+router.use(readerAccess);
 
 /* ═══════════════════════════════════════════
    GET /api/logs/:userId
    — Bir yazarın günlük girdilerini getir
    — Gizlilik: public → herkes, followers → sadece takipçiler
 ═══════════════════════════════════════════ */
-router.get("/:userId", async (req, res) => {
+router.get("/:userId", optionalAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const page  = Math.max(1, parseInt(req.query.page)  || 1);
@@ -21,15 +25,7 @@ router.get("/:userId", async (req, res) => {
     const skip  = (page - 1) * limit;
 
     // Görüntüleyen kim?
-    let viewerId = null;
-    try {
-      const header = req.headers.authorization;
-      if (header?.startsWith("Bearer ")) {
-        const jwt     = (await import("jsonwebtoken")).default;
-        const decoded = jwt.verify(header.split(" ")[1], process.env.JWT_SECRET || "atolye-secret-key");
-        viewerId = decoded.id;
-      }
-    } catch { /* token yoksa önemseme */ }
+    const viewerId = req.user?.id ?? null;
 
     const isOwner = viewerId && String(viewerId) === String(userId);
 
@@ -182,13 +178,8 @@ router.post("/:id/like", ensureAuth, async (req, res) => {
     const log = await Log.findById(req.params.id);
     if (!log) return res.status(404).json({ message: "Girdi bulunamadı." });
 
-    // Gizlilik kontrolü
-    if (log.visibility === "followers") {
-      const viewer = await User.findById(req.user.id).select("following").lean();
-      const isFollowing = viewer?.following?.some(id => id.toString() === log.author.toString());
-      if (!isFollowing && log.author.toString() !== String(req.user.id))
-        return res.status(403).json({ message: "Bu içeriği görüntüleme yetkiniz yok." });
-    }
+    if (!await canReadLog(log, req.user.id))
+      return res.status(403).json({ message: "Bu içeriği görüntüleme yetkiniz yok." });
 
     const alreadyLiked = log.likes.some(id => id.toString() === String(req.user.id));
 
@@ -223,8 +214,10 @@ export default router;
 /* ═══════════════════════════════════════════
    GET /api/logs/:id/comments
 ═══════════════════════════════════════════ */
-router.get("/:id/comments", async (req, res) => {
+router.get("/:id/comments", optionalAuth, async (req, res) => {
   try {
+    const log = await Log.findById(req.params.id);
+    if (!await canReadLog(log, req.user?.id)) return res.status(404).json({ message: "Girdi bulunamadı." });
     const comments = await LogComment.find({ log: req.params.id })
       .populate("author", "_id kullaniciAdi avatarUrl")
       .sort({ createdAt: 1 })
@@ -250,6 +243,7 @@ router.post("/:id/comments", ensureAuth, async (req, res) => {
 
     const log = await Log.findById(req.params.id);
     if (!log) return res.status(404).json({ message: "Girdi bulunamadı." });
+    if (!await canReadLog(log, req.user.id)) return res.status(403).json({ message: "Bu içeriği görüntüleme yetkiniz yok." });
     const comment = await LogComment.create({ log: req.params.id, author: req.user.id, content: content.trim() });
     const populated = await comment.populate("author", "_id kullaniciAdi avatarUrl");
 
@@ -273,7 +267,7 @@ router.post("/:id/comments", ensureAuth, async (req, res) => {
 router.delete("/:id/comments/:commentId", ensureAuth, async (req, res) => {
   try {
     const comment = await LogComment.findById(req.params.commentId);
-    if (!comment) return res.status(404).json({ message: "Yorum bulunamadı." });
+    if (!comment || String(comment.log) !== req.params.id) return res.status(404).json({ message: "Yorum bulunamadı." });
     const log = await Log.findById(req.params.id);
     const isCommentOwner = comment.author.toString() === String(req.user.id);
     const isLogOwner     = log?.author?.toString() === String(req.user.id);

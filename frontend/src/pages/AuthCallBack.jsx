@@ -1,44 +1,34 @@
 // src/pages/AuthCallback.jsx
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { setToken } from "../lib/auth";
+import { consumeLoginReturn } from "../lib/loginReturn";
+import { completeWebLogin } from "../lib/auth";
 import { apiGet }   from "../lib/api";
-import ProfilTamamla from "./ProfilTamamla";
+import { membershipStep } from "../lib/terms";
 
 export default function AuthCallback() {
   const navigate       = useNavigate();
   const [searchParams] = useSearchParams();
+  const handled = useRef(false);
 
   useEffect(() => {
+    if (handled.current) return;
+    handled.current = true;
     async function handle() {
-      // Token URL fragment'inde gelir (#token=...) — query'de değil.
-      const hash  = window.location.hash.replace(/^#/, "");
-      const token = new URLSearchParams(hash).get("token");
-      const setup = searchParams.get("setup"); // "1" → kullanıcı adı seçilmeli
-
-      if (!token) { navigate("/login?error=no_token"); return; }
-
-      // Token'ı kaydet (+ reading progress sync tetikler)
-      setToken(token);
-
-      // Fragment'i adres çubuğundan ve geçmişten temizle
-      window.history.replaceState({}, document.title,
-        window.location.pathname + window.location.search);
-
-      // Kullanıcı bilgisini çek ve localStorage'a yaz
+      window.history.replaceState({}, document.title, window.location.pathname);
       try {
+        await completeWebLogin();
         const data = await apiGet("/auth/me");
         const user = data.user ?? data;
         if (user?._id) localStorage.setItem("user", JSON.stringify(user));
+        navigate(membershipStep(user) || consumeLoginReturn(), { replace: true });
       } catch {
-        // /auth/me başarısız olsa bile devam et
+        navigate("/login?error=session", { replace: true });
       }
-
-      navigate(setup === "1" ? "/profili-tamamla" : "/keşfet", { replace: true });
     }
 
     handle();
-  }, []);
+  }, [navigate, searchParams]);
 
   return (
     <div style={{

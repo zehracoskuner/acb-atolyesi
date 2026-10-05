@@ -1,112 +1,47 @@
+import readerAccess from "../middlewares/readerAccess.js";
 // backend/routes/feed.js
 import { Router } from "express";
 import User       from "../models/User.js";
 import Work       from "../models/Work.js";
-import Chapter    from "../models/Chapter.js";
 import Log        from "../models/Log.js";
 import ensureAuth from "../middlewares/ensureAuth.js";
+import { serializeWorkAuthor } from "../services/publicWork.js";
+import { readSpotlight } from "../services/spotlight.js";
+import { parseFeedQuery, readFeed, readLatestWork } from "../services/feed.js";
 
 const router = Router();
+router.use(readerAccess);
+
+router.get("/spotlight", async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  try { return res.json(await readSpotlight()); }
+  catch (error) {
+    console.error("Spotlight:", error.message);
+    return res.status(503).json({ message: "Keşif sırası şu an yüklenemedi." });
+  }
+});
 
 /* ═══════════════════════════════════════════
    GET /api/feed
 ═══════════════════════════════════════════ */
 router.get("/", ensureAuth, async (req, res) => {
   try {
-    const page  = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = 15;
-    const skip  = (page - 1) * limit;
-
-    const me = await User.findById(req.user.id).select("following").lean();
-    const followingIds = me?.following || [];
-
-    const logQuery = followingIds.length > 0
-      ? { $or: [
-          { visibility: "public" },
-          { author: { $in: followingIds }, visibility: { $in: ["public", "followers"] } },
-        ] }
-      : { visibility: "public" };
-
-    const logsPromise = Log.find(logQuery)
-      .populate("author",      "_id kullaniciAdi avatarUrl")
-      .populate("relatedWork", "_id title coverImage")
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
-
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-    const followedWorks = await Work.find({
-      user:   { $in: followingIds },
-      status: "published",
-    }).select("_id user").lean();
-
-    const followedWorkIds = followedWorks.map(w => w._id);
-    const workUserMap = Object.fromEntries(followedWorks.map(w => [String(w._id), String(w.user)]));
-
-    const chaptersPromise = Chapter.find({
-      work:      { $in: followedWorkIds },
-      status:    "published",
-      createdAt: { $gt: thirtyDaysAgo },
-    })
-      .populate("work", "_id title coverImage user")
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
-
-    const [logs, chapters] = await Promise.all([logsPromise, chaptersPromise]);
-
-    const uniqueAuthorIds = [...new Set(
-      chapters.filter(c => c.work?.user).map(c => String(c.work.user))
-    )];
-    const chapterAuthors = await User.find({ _id: { $in: uniqueAuthorIds } })
-      .select("_id kullaniciAdi avatarUrl").lean();
-    const authorMap = Object.fromEntries(chapterAuthors.map(a => [String(a._id), a]));
-
-    const chapterItems = chapters
-      .filter(c => c.work)
-      .map(c => {
-        const authorData = authorMap[String(c.work.user)] || {};
-        return {
-          _id:       c._id,
-          type:      "chapter",
-          createdAt: c.createdAt,
-          author: {
-            _id:          c.work.user,
-            kullaniciAdi: authorData.kullaniciAdi || null,
-            avatarUrl:    authorData.avatarUrl    || null,
-          },
-          chapter: { _id: c._id, title: c.title, order: c.order },
-          work:    { _id: c.work._id, title: c.work.title, coverImage: c.work.coverImage },
-        };
-      });
-
-    const logItems = logs.map(l => ({
-      _id:         l._id,
-      type:        "log",
-      createdAt:   l.createdAt,
-      author:      l.author,
-      content:     l.content,
-      visibility:  l.visibility,
-      relatedWork: l.relatedWork,
-      likeCount:   l.likes?.length ?? 0,
-      likedByMe:   l.likes?.some(id => id.toString() === String(req.user.id)) ?? false,
-    }));
-
-    const merged    = [...logItems, ...chapterItems].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    const paginated = merged.slice(skip, skip + limit);
-
-    return res.json({
-      items:   paginated,
-      hasMore: skip + paginated.length < merged.length,
-      total:   merged.length,
-      isEmpty: merged.length === 0,
-    });
+    return res.json(await readFeed({ ...parseFeedQuery(req.query), viewerId: req.user.id }));
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ message: err.message });
     console.error("GET /feed hatası:", err);
-    return res.status(500).json({ message: "Feed yüklenemedi." });
+    return res.status(500).json({ message: "Akış yüklenemedi." });
   }
 });
+
+router.get("/atelier", ensureAuth, async (req, res) => {
+  try { return res.json({ work: await readLatestWork(req.user.id) }); }
+  catch (err) {
+    console.error("GET /feed/atelier hatası:", err);
+    return res.status(500).json({ message: "Son çalışman yüklenemedi." });
+  }
+});
+
 
 /* ═══════════════════════════════════════════
    GET /api/feed/discover
@@ -158,15 +93,13 @@ router.get("/discover", async (req, res) => {
         return {
           _id:          w._id,
           title:        w.title,
+          description:  w.description ?? "",
+          preface:      w.preface ?? "",
           coverImage:   w.coverImage ?? null,
           chapterCount: w.publishedChapterIds?.length ?? 0,
           universe:     { genres: w.universe?.genres ?? [] },  // ← array olarak gönder
           isAnonymous:  anon,
-          author: anon ? null : (w.user ? {
-            _id:          w.user._id,
-            kullaniciAdi: w.user.kullaniciAdi,
-            avatarUrl:    w.user.avatarUrl,
-          } : null),
+          author: serializeWorkAuthor(w),
           updatedAt: w.updatedAt,
         };
       }),
@@ -287,11 +220,7 @@ router.get("/needs-review", async (req, res) => {
         commentCount: commentMap[w._id.toString()] ?? 0,
         updatedAt:    w.updatedAt,
         isAnonymous:  anon,
-        author: anon ? null : (w.user ? {
-          _id:          w.user._id,
-          kullaniciAdi: w.user.kullaniciAdi,
-          avatarUrl:    w.user.avatarUrl,
-        } : null),
+        author: serializeWorkAuthor(w),
       };
     };
 

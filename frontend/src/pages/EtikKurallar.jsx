@@ -1,5 +1,7 @@
 import { useState } from "react";
 import "../styles/LegalPages.css";
+import LegalDraftNotice from "../components/LegalDraftNotice";
+import { Link } from "react-router-dom";
 
 const PLEDGES = [
   "Bir yazarın emeğine saygı göstereceğim.",
@@ -104,6 +106,15 @@ Kör Atölye'de ek kurallar geçerlidir:
 
 Kör Atölye, samimiyet güvenliğine dayalıdır. Bu güveni koruyun.`,
     },
+    {
+      icon: "©",
+      id: "eser-sahipligi",
+      title: "Taslak Ek: Eser Sahipliği ve İzinsiz Kullanım",
+      color: "var(--legal-accent-warm)",
+      content: `Yazarın emeğine ve hak sahiplerinin izinlerine saygı gösterin. Başkasının metnini kendi eseriniz gibi sunmayın; kanuni istisnalar dışında gerekli izin olmadan kopyalamayın, değiştirmeyin veya yeniden paylaşmayın. Kaynak göstermek tek başına izin yerine geçmez.
+
+Eser sahipliği, hizmet amaçlı kullanım ve ihlal bildiriminin kapsamı Kullanıcı Sözleşmesi'nin IX. taslak ekinde açıklanmıştır. Bu ek hukuk incelemesi beklemektedir. Aşağıdaki topluluk taahhüdü, üyelik sözleşmesinin kaydedilen açık kabulünden ayrıdır.`,
+    },
   ];
 
   return (
@@ -112,6 +123,8 @@ Kör Atölye, samimiyet güvenliğine dayalıdır. Bu güveni koruyun.`,
         <div className="legal-header-ornament">⚖</div>
         <p className="legal-label">ACB Atölyesi</p>
         <h1 className="legal-title">Etik Kurallar</h1>
+        <LegalDraftNotice />
+        <p><Link to="/kullanim-sartlari#eser-sahipligi-ek">Eser sahipliği ve izinsiz kullanım taslağını okuyun</Link></p>
         <p className="legal-subtitle">
           Atölyemizin ruhu kurallarda değil, birbirimize karşı taşıdığımız özen ve saygıda yaşar.
         </p>

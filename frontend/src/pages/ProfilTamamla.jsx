@@ -1,25 +1,43 @@
+import { refreshSession } from "../lib/session";
+import { consumeLoginReturn } from "../lib/loginReturn";
 // src/pages/ProfilTamamla.jsx
 
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import TermsAcceptance from "../components/TermsAcceptance";
+import { TERMS_VERSION, membershipStep } from "../lib/terms";
+import { apiGet } from "../lib/api";
 
-const API = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+const API = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function ProfilTamamla() {
   const navigate = useNavigate();
 
+  const [birthYear, setBirthYear] = useState("");
+  const [existingUsername, setExistingUsername] = useState(false);
   const [username, setUsername] = useState("");
   const [status,   setStatus]   = useState(null);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [ready, setReady] = useState(false);
   const debounceRef = useRef(null);
 
   useEffect(() => {
     document.title = "Profili Tamamla · ACB Atölyesi";
-    if (!localStorage.getItem("token")) navigate("/login");
+
+    let active = true;
+    apiGet("/auth/me").then(({ user }) => {
+      if (!active) return;
+      if (user.profileComplete !== false && Number.isInteger(user.birthYear)) {
+        navigate(membershipStep(user) || consumeLoginReturn(), { replace: true });
+      } else { setReady(true); if (user.kullaniciAdi) { setUsername(user.kullaniciAdi); setExistingUsername(true); setStatus("ok"); } }
+    }).catch(() => { if (active) setError("Hesap bilgileri alınamadı. Sayfayı yenileyerek tekrar deneyin."); });
+    return () => { active = false; };
   }, [navigate]);
 
   useEffect(() => {
+    if (existingUsername) { setStatus("ok"); return; }
     clearTimeout(debounceRef.current);
     if (username.length < 3) {
       setStatus(username.length > 0 ? "invalid" : null);
@@ -39,26 +57,38 @@ export default function ProfilTamamla() {
         setStatus(null);
       }
     }, 500);
-  }, [username]);
+  }, [username, existingUsername]);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (status !== "ok") return;
+    if (!ready || status !== "ok") return;
+    if (!termsAccepted) { setError("Devam etmek için sözleşmeyi kabul etmelisiniz."); return; }
     setSaving(true);
     setError("");
     try {
       const token = localStorage.getItem("token");
       const res   = await fetch(`${API}/auth/complete-profile`, {
         method:  "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ kullaniciAdi: username }),
+        body:    JSON.stringify({ kullaniciAdi: username, birthYear: Number(birthYear), termsAccepted, termsVersion: TERMS_VERSION }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.message || "Bir hata oluştu."); return; }
+      if (!res.ok) {
+        if (data.code === "BIRTH_YEAR_ALREADY_SET") {
+          await refreshSession({ force: true });
+          const { user } = await apiGet("/auth/me");
+          const step = membershipStep(user);
+          if (step !== "/profili-tamamla") { navigate(step || consumeLoginReturn(), { replace: true }); return; }
+        }
+        if (data.code === "TERMS_VERSION_MISMATCH") setTermsAccepted(false);
+        setError(data.message || "Bir hata oluştu."); return;
+      }
 
-      localStorage.setItem("token", data.token);
+      if (data.token) localStorage.setItem("token", data.token);
       localStorage.setItem("user",  JSON.stringify(data.user));
-      navigate("/keşfet", { replace: true });
+      await refreshSession({ force: true });
+      navigate(consumeLoginReturn(), { replace: true });
     } catch {
       setError("Sunucu bağlantısı kurulamadı.");
     } finally {
@@ -87,15 +117,19 @@ export default function ProfilTamamla() {
           <span style={s.logoText}>ACB Atölyesi</span>
         </div>
 
-        <h1 style={s.title}>Bir kullanıcı adı <em style={s.em}>seç.</em></h1>
+        <h1 style={s.title}>Profilini <em style={s.em}>tamamla.</em></h1>
         <p style={s.sub}>
-          Google hesabınla giriş yaptın. Seni nasıl çağıralım?
-          Şifre ve diğer ayarları daha sonra Ayarlar sayfasından düzenleyebilirsin.
+          Doğum yılını paylaş. Gün ve ay bilgisi istemiyoruz.
+          Kullanıcı adın yoksa burada seçebilirsin.
         </p>
 
         {error && <div style={s.errBox}>{error}</div>}
 
         <form onSubmit={handleSubmit}>
+          <div style={s.group}>
+            <label style={s.label} htmlFor="birth-year">Doğum yılı</label>
+            <input id="birth-year" style={s.input} type="number" min="1900" max={new Date().getFullYear()} required value={birthYear} onChange={e => setBirthYear(e.target.value)} autoComplete="bday-year" />
+          </div>
           <div style={s.group}>
             <label style={s.label}>Kullanıcı Adı</label>
             <div style={{ position: "relative" }}>
@@ -107,6 +141,7 @@ export default function ProfilTamamla() {
                     : "#e2ddd6",
                   paddingRight: "2.2rem",
                 }}
+                disabled={existingUsername}
                 type="text"
                 placeholder="ornek_yazar_123"
                 value={username}
@@ -129,10 +164,11 @@ export default function ProfilTamamla() {
             <p style={s.hint}>3–30 karakter · harf, rakam ve _ kullanılabilir</p>
           </div>
 
+          <TermsAcceptance checked={termsAccepted} onChange={setTermsAccepted} disabled={saving || !ready} />
           <button
             type="submit"
             style={{ ...s.btn, opacity: status === "ok" && !saving ? 1 : .45, cursor: status === "ok" && !saving ? "pointer" : "not-allowed" }}
-            disabled={status !== "ok" || saving}
+            disabled={status !== "ok" || saving || !termsAccepted || !ready}
           >
             {saving ? "Kaydediliyor…" : "Başla →"}
           </button>
@@ -149,8 +185,8 @@ export default function ProfilTamamla() {
 }
 
 const s = {
-  wrap:     { minHeight: "100vh", background: "#f0ebe2", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", fontFamily: "'DM Sans', sans-serif" },
-  card:     { background: "#faf8f4", border: "1px solid #e2ddd6", borderRadius: 10, padding: "2.5rem 2.25rem", width: "100%", maxWidth: 400 },
+  wrap:     { minHeight: "100vh", background: "#f0ebe2", display: "flex", alignItems: "center", justifyContent: "center", padding: "clamp(16px, 4vw, 32px)", fontFamily: "'DM Sans', sans-serif" },
+  card:     { background: "#faf8f4", border: "1px solid #e2ddd6", borderRadius: 10, padding: "clamp(20px, 5vw, 40px) clamp(18px, 4vw, 36px)", width: "100%", maxWidth: 400 },
   logoRow:  { display: "flex", alignItems: "center", gap: 6, marginBottom: "1.5rem" },
   dot:      { display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#8b2500" },
   logoText: { fontFamily: "'Playfair Display', serif", fontSize: "1rem", fontWeight: 700, color: "#1a1209" },
@@ -160,7 +196,7 @@ const s = {
   errBox:   { padding: ".5rem .75rem", background: "#fdf0f0", borderLeft: "2.5px solid #a32d2d", borderRadius: 4, fontSize: ".78rem", color: "#a32d2d", marginBottom: ".9rem" },
   group:    { marginBottom: "1.1rem" },
   label:    { display: "block", fontSize: ".7rem", fontWeight: 500, color: "#9a8e80", letterSpacing: ".07em", textTransform: "uppercase", marginBottom: ".4rem" },
-  input:    { width: "100%", padding: ".62rem .85rem", border: "1.5px solid #e2ddd6", borderRadius: 6, fontFamily: "'DM Sans', sans-serif", fontSize: ".9rem", color: "#1a1209", background: "#fff", transition: "border .18s" },
+  input:    { width: "100%", padding: ".62rem .85rem", border: "1.5px solid #e2ddd6", borderRadius: 6, fontFamily: "'DM Sans', sans-serif", fontSize: "1rem", color: "#1a1209", background: "#fff", transition: "border .18s" },
   hint:     { fontSize: ".68rem", color: "#b0a898", marginTop: ".3rem" },
   btn:      { width: "100%", padding: ".72rem", background: "#1a1209", color: "#f5f0e8", border: "none", borderRadius: 6, fontFamily: "'DM Sans', sans-serif", fontSize: ".82rem", fontWeight: 500, letterSpacing: ".05em", cursor: "pointer", transition: "background .18s" },
 };

@@ -1,6 +1,9 @@
+import { useSession } from "../lib/session";
 // src/pages/Ayarlar.jsx
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
+import FeedbackForm from "../components/FeedbackForm";
+import DevelopmentCoachPreference from "../components/DevelopmentCoachPreference";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import { apiPatch, apiDelete } from "../lib/api";
@@ -69,7 +72,7 @@ function PasswordSection({ s }) {
         try {
           const stored = JSON.parse(localStorage.getItem("user") || "{}");
           localStorage.setItem("user", JSON.stringify({ ...stored, authProvider: "both" }));
-        } catch {}
+        } catch { /* The server remains authoritative if the optional local cache is unavailable. */ }
       }
     } catch (e) { setMsg({ ok: false, text: e.message }); }
     finally { setSaving(false); setTimeout(() => setMsg(null), 5000); }
@@ -140,7 +143,7 @@ function EmailSection({ s }) {
   })();
 
   useEffect(() => {
-    try { const u = JSON.parse(localStorage.getItem("user")); if (u?.email) setEmail(u.email); } catch {}
+    try { const u = JSON.parse(localStorage.getItem("user")); if (u?.email) setEmail(u.email); } catch { /* The server remains authoritative if the optional local cache is unavailable. */ }
   }, []);
 
   async function handle() {
@@ -196,7 +199,7 @@ function DangerSection({ s }) {
     setDeleting(true);
     try {
       await apiDelete("/user/account");
-      clearAuth();
+      await clearAuth();
       navigate("/login");
     } catch (e) { alert("Hesap silinemedi: " + e.message); }
     finally { setDeleting(false); }
@@ -254,14 +257,17 @@ function DangerSection({ s }) {
 
 /* ══ Ana Sayfa ══ */
 export default function Ayarlar() {
+  const { status: sessionStatus } = useSession();
+  const { hash } = useLocation();
+  useEffect(() => { if (hash === '#geri-bildirim') document.getElementById('geri-bildirim')?.scrollIntoView({ block: 'start' }); }, [hash]);
   const bp       = useBreakpoint();
   const navigate = useNavigate();
   const { isMobile, isSm } = bp;
 
   useEffect(() => {
     document.title = "Ayarlar · ACB Atölyesi";
-    if (!localStorage.getItem("token")) navigate("/login");
-  }, [navigate]);
+    if (sessionStatus === "guest") navigate("/login");
+  }, [navigate, sessionStatus]);
 
   const s = {
     page:    { minHeight: "100vh", background: "#f7f5f0", fontFamily: "'DM Sans',sans-serif" },
@@ -294,8 +300,11 @@ export default function Ayarlar() {
         </Link>
         <h1 style={s.heading}>Ayarlar</h1>
         <p style={s.subhead}>Hesap güvenliği ve tercihlerini buradan yönet.</p>
+        <div style={s.section}><DevelopmentCoachPreference /></div>
         <PasswordSection s={s} />
         <EmailSection    s={s} />
+        <section className="support-card"><h2>Başvurularım</h2><p>Eser ve görsel bildirimlerinin durumunu takip et.</p><Link to="/basvurular">Başvurularımı görüntüle →</Link></section>
+        <FeedbackForm />
         <DangerSection   s={s} />
       </main>
       <Footer />

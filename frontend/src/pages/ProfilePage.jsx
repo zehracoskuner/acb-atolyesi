@@ -1,10 +1,12 @@
+import ImageReportButton from "../components/ImageReportButton";
+import { useMembership } from "../lib/membershipContext";
+import { logoutSession } from "../lib/session";
 // src/pages/ProfilePage.jsx
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../lib/api";
-import { clearAuth } from "../lib/auth";
 import "../styles/ProfilePage.css";
 import LogTab from "../components/LogTab";
 import "../styles/LogTab.css";
@@ -31,12 +33,6 @@ function timeAgo(iso) {
   if (diff < 86400)  return `${Math.floor(diff / 3600)} sa önce`;
   if (diff < 604800) return `${Math.floor(diff / 86400)} gün önce`;
   return new Date(iso).toLocaleDateString("tr-TR");
-}
-function getCurrentUser() {
-  try {
-    const raw = localStorage.getItem("user");
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
 }
 function getUsername(obj) {
   return obj?.kullaniciAdi || obj?.username || "";
@@ -275,7 +271,7 @@ function LibraryCard({ work, index }) {
       </div>
       <h3 className="pf-work-title">{work.title}</h3>
       <div className="pf-work-meta">
-        <span>{getUsername(work.author) || "Yazar"}</span>
+        <span>{work.isAnonymous ? "Anonim Yazar" : (getUsername(work.author) || "Yazar")}</span>
         {work.chapterCount > 0 && (
           <>
             <span className="pf-stat-sep">·</span>
@@ -866,7 +862,7 @@ export default function ProfilePage() {
   const navigate        = useNavigate();
   const [searchParams]  = useSearchParams();
 
-  const currentUser = getCurrentUser();
+  const { user: currentUser, requireMember } = useMembership();
   const myId        = currentUser?._id || currentUser?.id;
   const viewingOwn  = !routeId || routeId === "me" || String(routeId) === String(myId);
   const targetId    = viewingOwn ? myId : routeId;
@@ -960,12 +956,12 @@ export default function ProfilePage() {
     setEditWebsite(profile.website   ?? "");
   }, [profile]);
 
-  function handleLogout() {
-    clearAuth();
-    window.location.href = "/login";
+  async function handleLogout() {
+    try { await logoutSession(); navigate("/keşfet"); } catch (error) { alert(error.message); }
   }
 
   async function handleFollow() {
+    if (!requireMember()) return;
     if (followLoading) return;
     setFollowLoading(true);
     try {
@@ -1056,7 +1052,8 @@ export default function ProfilePage() {
       formData.append("avatar", file);
       const res = await fetch(`${API_BASE}/user/avatar`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        headers: localStorage.getItem("token") ? { Authorization: `Bearer ${localStorage.getItem("token")}` } : {},
+        credentials: "include",
         body: formData,
       });
       if (!res.ok) throw new Error("Yükleme başarısız.");
@@ -1078,14 +1075,15 @@ export default function ProfilePage() {
   async function handleBannerUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { alert("Banner 10 MB'dan küçük olmalı."); return; }
+    if (file.size > 5 * 1024 * 1024) { alert("Banner 5 MB'dan küçük olmalı."); return; }
     setBannerUploading(true);
     try {
       const formData = new FormData();
       formData.append("banner", file);
       const res = await fetch(`${API_BASE}/user/banner`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        headers: localStorage.getItem("token") ? { Authorization: `Bearer ${localStorage.getItem("token")}` } : {},
+        credentials: "include",
         body: formData,
       });
       if (!res.ok) throw new Error("Yükleme başarısız.");
@@ -1307,6 +1305,8 @@ export default function ProfilePage() {
                 </svg>
                 Şikayet Et
               </button>
+              <ImageReportButton kind="avatar" targetId={profile._id || profile.id} url={profile.avatarUrl} label="Profil görselini şikâyet et" />
+              <ImageReportButton kind="banner" targetId={profile._id || profile.id} url={profile.bannerImage} label="Banner görselini şikâyet et" />
             </>
           )}
         </div>

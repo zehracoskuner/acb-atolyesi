@@ -1,9 +1,11 @@
+import ReportActions from "../components/ReportActions";
+import { useMembership } from "../lib/membershipContext";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import "../styles/StoryDetailsPage.css";
-import { apiGet, apiPost, apiDelete } from "../lib/api";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../lib/api";
 import { getProgressForStory, clearProgressForStory } from "../services/readingProgressService";
 
 // clearProgressForStory serviste tanımlı değilse güvenli fallback
@@ -13,19 +15,11 @@ const safeClearProgress = typeof clearProgressForStory === "function"
 import "../styles/StoryDetailPageComments.css";
 import ReportModal from "../components/ReportModal";
 
-const API_BASE = import.meta.env?.VITE_API_URL ?? "/api";
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 /* ════════════════════════════
    HELPERS
 ════════════════════════════ */
-function getCurrentUser() {
-  try {
-    const raw = localStorage.getItem("user");
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
 
 function timeAgo(iso) {
   if (!iso) return "";
@@ -99,6 +93,7 @@ function Avatar({ user, size = "md" }) {
    COMMENT ITEM
 ════════════════════════════ */
 function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdded, onDeleted }) {
+  const { requireMember } = useMembership();
   const [liked, setLiked] = useState(comment.isLiked ?? false);
   const [likeCount,  setLikeCount]  = useState(comment.likeCount ?? 0);
   const [replyOpen,  setReplyOpen]  = useState(false);
@@ -141,7 +136,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
 
   /* ── Beğeni ── */
   async function handleLike() {
-    if (!isLoggedIn) return;
+    if (!requireMember()) return;
     const wasLiked = liked;
     setLiked(!wasLiked);
     setLikeCount(c => c + (wasLiked ? -1 : 1));
@@ -179,14 +174,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
     if (editText.trim() === displayContent) { setEditOpen(false); return; }
     setEditError(""); setEditSaving(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/comments/${comment._id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content: editText.trim() }),
-      });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
+      const data = await apiPatch(`/comments/${comment._id}`, { content: editText.trim() });
       setDisplayContent(data.item?.content ?? editText.trim());
       setEditOpen(false);
     } catch {
@@ -201,12 +189,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
     if (deleting) return;
     setDeleting(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/comments/${comment._id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error();
+      await apiDelete(`/comments/${comment._id}`);
       setDeleted(true);
       onDeleted?.(comment._id);
     } catch { setDeleteConfirm(false); } finally { setDeleting(false); }
@@ -313,6 +296,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
                     </button>
                   </>
                 )}
+                {!isOwner && <button className="sdp-menu-item" onClick={() => setReportOpen("copyright")}>Eserim izinsiz paylaşılmış</button>}
                 {!isOwner && (
                   <button className="sdp-menu-item sdp-menu-item--warn"
                     onClick={() => setReportOpen(true)}>
@@ -373,7 +357,8 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
         {/* ── Şikayet formu ── */}
         {reportOpen && (
           <ReportModal
-            isOpen={reportOpen}
+            isOpen={!!reportOpen}
+            initialReason={reportOpen === "copyright" ? "telif_ihlali" : ""}
             targetType="comment"
             targetId={comment._id}
             targetLabel={displayContent.slice(0, 60)}
@@ -386,7 +371,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
           <div className="sdp-comment-actions">
             <button
               className={`sdp-action-btn sdp-like-btn ${liked ? "sdp-like-btn--active" : ""}`}
-              onClick={handleLike} disabled={!isLoggedIn}
+              onClick={handleLike}
               aria-label={liked ? "Beğeniyi geri al" : "Beğen"}
             >
               <svg width="14" height="14" viewBox="0 0 24 24"
@@ -396,8 +381,8 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
               <span>{likeCount > 0 ? likeCount : "Beğen"}</span>
             </button>
 
-            {!isReply && isLoggedIn && (
-              <button className="sdp-action-btn" onClick={() => setReplyOpen(v => !v)}>
+            {!isReply && (
+              <button className="sdp-action-btn" onClick={() => { if (requireMember()) setReplyOpen(v => !v); }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
@@ -466,6 +451,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
    COMMENT SECTION
 ════════════════════════════ */
 function CommentSection({ workId, currentUser }) {
+  const { requireMember } = useMembership();
   const isLoggedIn                  = !!currentUser;
   const [comments,   setComments]   = useState([]);
   const [total,      setTotal]      = useState(0);
@@ -572,7 +558,7 @@ function CommentSection({ workId, currentUser }) {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
-          <span>Yorum yapmak için <Link to="/login" className="sdp-login-link">giriş yap</Link></span>
+          <span>Yorum yapmak için <button onClick={() => requireMember()} className="sdp-login-link">aramıza katıl</button></span>
         </div>
       )}
 
@@ -644,7 +630,7 @@ function CoverPlaceholder({ title }) {
 /* ════════════════════════════
    CHAPTER ITEM
 ════════════════════════════ */
-function ChapterItem({ chapter, index, workId, isCurrent, onClick }) {
+function ChapterItem({ chapter, index, isCurrent, onClick }) {
   return (
     <div
       className={`sdp-chapter-item ${isCurrent ? "sdp-chapter-item--current" : ""}`}
@@ -676,9 +662,9 @@ function ChapterItem({ chapter, index, workId, isCurrent, onClick }) {
 export default function StoryDetailsPage() {
   const { workId }  = useParams();
   const navigate    = useNavigate();
-  const currentUser = getCurrentUser();
+  const { user: currentUser, status, requireMember } = useMembership();
   const userId      = currentUser?.id || currentUser?._id;
-  const token       = localStorage.getItem("token");
+  const token = status === "authenticated";
 
   const [work,            setWork]            = useState(null);
   const [chapters,        setChapters]        = useState([]);
@@ -693,37 +679,51 @@ export default function StoryDetailsPage() {
   const [progressLoading, setProgressLoading] = useState(true);
   const [heroImgLoaded,   setHeroImgLoaded]   = useState(false);
 
+  const openReader = async path => {
+    if (!requireMember(path)) return;
+    try { await apiGet(`/public/works/${workId}/reading-access`); navigate(path); }
+    catch { /* Cancellation keeps the reader on the details page. */ }
+  };
+
   // Eser + bölümler
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setWork(null);
+    setChapters([]);
     const fetchData = async () => {
       try {
         const [wRes, cRes] = await Promise.all([
-          fetch(`${API_BASE}/public/works/${workId}`),
-          fetch(`${API_BASE}/public/works/${workId}/chapters`),
+          apiGet(`/public/works/${workId}`),
+          apiGet(`/public/works/${workId}/chapters`),
         ]);
-        if (!wRes.ok) throw new Error("Eser bulunamadı");
-        const [wData, cData] = await Promise.all([wRes.json(), cRes.json()]);
+        const [wData, cData] = [wRes, cRes];
+        if (cancelled) return;
         setWork(wData.item);
         setChapters(cData.items || []);
         setLikeCount(wData.item?.likeCount ?? 0);
       } catch {
         // hata: loading false
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     fetchData();
+    return () => { cancelled = true; };
   }, [workId]);
 
   // Okuma ilerlemesi
   useEffect(() => {
     if (!workId) return;
+    let cancelled = false;
+    setReadingProgress(null);
     setProgressLoading(true);
     getProgressForStory(workId, currentUser)
       .then(prog => {
+        if (cancelled) return;
         if (!prog) { setReadingProgress(null); return; }
         const chapterId = prog.chapterId || prog.chapter?._id || prog.chapter;
-        if (chapterId) {
+        if (chapterId && chapters.some(ch => String(ch._id) === String(chapterId))) {
           setReadingProgress({
             chapterId:     String(chapterId),
             chapterTitle:  prog.chapterTitle  || prog.chapter?.title || null,
@@ -734,9 +734,10 @@ export default function StoryDetailsPage() {
           setReadingProgress(null);
         }
       })
-      .catch(() => setReadingProgress(null))
-      .finally(() => setProgressLoading(false));
-  }, [workId]);
+      .catch(() => { if (!cancelled) setReadingProgress(null); })
+      .finally(() => { if (!cancelled) setProgressLoading(false); });
+    return () => { cancelled = true; };
+  }, [workId, currentUser, chapters]);
 
   // Kütüphane kontrolü
   useEffect(() => {
@@ -769,7 +770,7 @@ export default function StoryDetailsPage() {
   }, [workId, token]);
 
   const handleToggleLibrary = async () => {
-    if (!token) { navigate("/login"); return; }
+    if (!requireMember()) return;
     if (libraryStatus === "loading") return;
     setLibraryStatus("loading");
     try {
@@ -788,7 +789,7 @@ export default function StoryDetailsPage() {
   };
 
   const handleToggleLike = async () => {
-    if (!token) { navigate("/login"); return; }
+    if (!requireMember()) return;
     if (likeStatus === "loading") return;
     setLikeStatus("loading");
     const wasLiked = liked;
@@ -810,23 +811,18 @@ export default function StoryDetailsPage() {
 
   // — Baştan başla —
   const handleRestart = async () => {
+    if (!requireMember()) return;
     try {
-      // Önce localStorage'dan sil (guest + giriş yapmış)
-      const lsKey = `reading_progress_${workId}`;
-      localStorage.removeItem(lsKey);
-      // Backend'den de sil (giriş yapmışsa)
-      if (token) {
-        await safeClearProgress(workId, currentUser).catch(() => {});
-      }
+      await safeClearProgress(workId, currentUser);
     } catch {
-      // sessiz — navigate'i engelleme
+      return;
     }
     // İlk bölüme git
     const firstChapterId = chapters[0]?._id;
     if (firstChapterId) {
-      navigate(`/read/${workId}?chapter=${firstChapterId}`);
+      openReader(`/read/${workId}?chapter=${firstChapterId}&restart=true`);
     } else {
-      navigate(`/read/${workId}`);
+      openReader(`/read/${workId}?restart=true`);
     }
     setReadingProgress(null);
   };
@@ -848,7 +844,7 @@ export default function StoryDetailsPage() {
         <TopBar />
         <div className="sh-error-state">
           <p>Eser bulunamadı.</p>
-          <button className="sdp-btn sdp-btn--primary" onClick={() => navigate(-1)}>
+          <button className="sdp-btn sdp-btn--primary" onClick={() => navigate("/kesfet")}>
             Geri Dön
           </button>
         </div>
@@ -859,7 +855,7 @@ export default function StoryDetailsPage() {
 
   const isOwner = !!(
     userId && (
-      myWorkIds.has(String(work._id || workId)) ||
+      work.isOwner || myWorkIds.has(String(work._id || workId)) ||
       (work.author?._id && String(work.author._id) === String(userId))
     )
   );
@@ -925,6 +921,7 @@ export default function StoryDetailsPage() {
             </div>
 
             <h1 className="sh-title">{work.title}</h1>
+            <ReportActions isOwner={isOwner} targetOwner={work.author || work.user} targetId={work._id} targetLabel={work.title} image={{ kind: "cover", url: work.coverImage }} />
 
             <div className="sh-meta-row">
               {work.isAnonymous ? (
@@ -982,7 +979,7 @@ export default function StoryDetailsPage() {
                 <div className="sh-continue-group">
                   <button
                     className="sh-btn-primary"
-                    onClick={() => navigate(`/read/${workId}`)}
+                    onClick={() => openReader(`/read/${workId}`)}
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path d="M8 5v14l11-7z"/>
@@ -1007,7 +1004,7 @@ export default function StoryDetailsPage() {
               ) : (
                 <button
                   className="sh-btn-primary"
-                  onClick={() => navigate(`/read/${workId}`)}
+                  onClick={() => openReader(`/read/${workId}`)}
                 >
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                     <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
@@ -1124,7 +1121,7 @@ export default function StoryDetailsPage() {
                       index={idx}
                       workId={workId}
                       isCurrent={readingProgress?.chapterId === String(ch._id)}
-                      onClick={() => navigate(`/read/${workId}?chapter=${ch._id}`)}
+                      onClick={() => openReader(`/read/${workId}?chapter=${ch._id}`)}
                     />
                   ))}
                 </div>

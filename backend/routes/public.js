@@ -1,3 +1,4 @@
+import readerAccess from "../middlewares/readerAccess.js";
 import express from "express";
 import mongoose from "mongoose";
 import Work from "../models/Work.js";
@@ -5,8 +6,35 @@ import Chapter from "../models/Chapter.js";
 import User from "../models/User.js";
 import Log from "../models/Log.js";
 import { notifyFollow } from "../services/notificationService.js";
+import { getPublishedChapterIdsByWork } from "../services/publishedChapters.js";
+import { PUBLIC_WORK_FIELDS, serializePublicWork, serializePublicWorkCard } from "../services/publicWork.js";
+import ensureAuth, { optionalAuth } from "../middlewares/ensureAuth.js";
 
 const router = express.Router();
+router.use(readerAccess);
+
+// The viewer identity comes from authentication, never from the request body.
+router.post("/works/:id/mature-acknowledgement", ensureAuth, async (req, res, next) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ message: "Geçersiz eser ID." });
+    const work = await Work.findOne({ _id: req.params.id, status: "published" }).select("contentWarning");
+    if (!work) return res.status(404).json({ message: "Eser bulunamadı." });
+    if (work.contentWarning) await User.updateOne({ _id: req.user.id }, { $addToSet: { matureAcknowledgements: work._id } });
+    return res.json({ acknowledged: true });
+  } catch (err) { next(err); }
+});
+
+router.get("/works/:id/reading-access", ensureAuth, async (req, res, next) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ message: "Geçersiz eser ID." });
+    const work = await Work.findOne({ _id: req.params.id, status: "published" }).select("contentWarning");
+    if (!work) return res.status(404).json({ message: "Eser bulunamadı." });
+    if (work.contentWarning && !req.user.matureAcknowledgements.some(id => String(id) === String(work._id))) {
+      return res.status(428).json({ code: "MATURE_ACKNOWLEDGEMENT_REQUIRED", workId: String(work._id) });
+    }
+    return res.json({ allowed: true });
+  } catch (err) { next(err); }
+});
 
 function isValidId(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -21,26 +49,13 @@ router.get("/explore", async (req, res) => {
       status: "published",
       publishedChapterIds: { $exists: true, $not: { $size: 0 } },
     })
+      .select(PUBLIC_WORK_FIELDS)
       .populate("user", "_id kullaniciAdi avatarUrl")
       .sort({ updatedAt: -1 })
       .limit(50);
 
-    const items = works.map((work) => {
-      const safeUser = work.user ?? null;
-      return {
-        _id:          work._id,
-        title:        work.title,
-        description:  work.description,
-        coverImage:   work.coverImage ?? null,
-        isAnonymous:  work.isAnonymous ?? false,
-        author: (work.isAnonymous || !safeUser)
-          ? { _id: null, username: "Anonim" }
-          : { _id: safeUser._id, username: safeUser.kullaniciAdi, avatarUrl: safeUser.avatarUrl },
-        chapterCount: work.publishedChapterIds?.length ?? 0,
-        genre:        work.universe?.genre ?? "Diğer",
-        updatedAt:    work.updatedAt,
-      };
-    });
+    const publishedIdsByWork = await getPublishedChapterIdsByWork(works);
+    const items = works.map(work => serializePublicWorkCard(work, publishedIdsByWork.get(String(work._id))));
 
     return res.json({ items });
   } catch (err) {
@@ -58,31 +73,16 @@ router.get("/works/:id", async (req, res) => {
       return res.status(400).json({ message: "Geçersiz eser ID." });
 
     const work = await Work.findOne({ _id: req.params.id, status: "published" })
+      .select(PUBLIC_WORK_FIELDS)
       .populate("user", "_id kullaniciAdi avatarUrl");
 
     if (!work) return res.status(404).json({ message: "Eser bulunamadı." });
 
-    const safeUser = work.user ?? null;
-    let customTitles = work.customChapterTitles;
-    if (customTitles instanceof Map) customTitles = Object.fromEntries(customTitles);
-
-    return res.json({
-      item: {
-        _id:                 work._id,
-        title:               work.title,
-        description:         work.description,
-        preface:             work.preface ?? "",
-        coverImage:          work.coverImage ?? null,
-        isAnonymous:         work.isAnonymous ?? false,
-        author: (work.isAnonymous || !safeUser)
-          ? { _id: null, username: "Anonim" }
-          : { _id: safeUser._id, username: safeUser.kullaniciAdi, avatarUrl: safeUser.avatarUrl },
-        universe:            work.universe ?? {},
-        publishedChapterIds: work.publishedChapterIds ?? [],
-        customChapterTitles: customTitles ?? {},
-        updatedAt:           work.updatedAt,
-      },
-    });
+    const publishedIdsByWork = await getPublishedChapterIdsByWork([work]);
+    return res.json({ item: {
+      ...serializePublicWork(work, publishedIdsByWork.get(String(work._id))),
+      isOwner: !!req.user && String(work.user?._id || work.user) === String(req.user.id),
+    } });
   } catch (err) {
     console.error("GET /works/:id hatası:", err);
     return res.status(500).json({ message: "Eser detayları alınamadı." });
@@ -97,7 +97,7 @@ router.get("/works/:id/chapters", async (req, res) => {
     if (!isValidId(req.params.id))
       return res.status(400).json({ message: "Geçersiz eser ID." });
 
-    const work = await Work.findById(req.params.id);
+    const work = await Work.findById(req.params.id).select("_id status publishedChapterIds");
     if (!work) return res.status(404).json({ message: "Eser bulunamadı." });
 
     // Sadece yayında eserler okunabilir
@@ -106,23 +106,45 @@ router.get("/works/:id/chapters", async (req, res) => {
     const publishedIds = work.publishedChapterIds ?? [];
     if (publishedIds.length === 0) return res.json({ items: [] });
 
-    // publishedChapterIds'e güvenme — chapter.status da "published" olmalı.
+    // Liste tek başına yeterli değil: bölüm bu esere ait ve yayında olmalı.
     // Sıra: narrative order (chapter.order), publish sırası değil.
     const chapters = await Chapter.find({
-      _id: { $in: publishedIds }, status: "published",
-    }).sort({ order: 1 });
+      _id: { $in: publishedIds }, work: work._id, status: "published",
+    }).select("_id title order").sort({ order: 1 });
 
-    return res.json({ items: chapters });
+    return res.json({ items: chapters.map(ch => ({ _id: ch._id, title: ch.title, order: ch.order })) });
   } catch (err) {
     console.error("GET /works/:id/chapters hatası:", err);
     return res.status(500).json({ message: "Bölümler yüklenemedi." });
   }
 });
 
+// Full text is fetched one chapter at a time after authentication.
+router.get("/works/:id/chapters/:chapterId", ensureAuth, async (req, res) => {
+  try {
+    const { id, chapterId } = req.params;
+    if (!isValidId(id) || !isValidId(chapterId))
+      return res.status(400).json({ message: "Geçersiz eser veya bölüm ID." });
+    const work = await Work.findOne({ _id: id, status: "published" })
+      .select("_id publishedChapterIds contentWarning");
+    if (!work || !work.publishedChapterIds?.some(value => String(value) === chapterId.toLowerCase()))
+      return res.status(404).json({ message: "Bölüm bulunamadı." });
+    if (work.contentWarning && !req.user.matureAcknowledgements.some(id => String(id) === String(work._id))) {
+      return res.status(428).json({ code: "MATURE_ACKNOWLEDGEMENT_REQUIRED", workId: String(work._id) });
+    }
+    const chapter = await Chapter.findOne({ _id: chapterId, work: work._id, status: "published" })
+      .select("_id title order content");
+    if (!chapter) return res.status(404).json({ message: "Bölüm bulunamadı." });
+    return res.json({ item: { _id: chapter._id, title: chapter.title, order: chapter.order, content: chapter.content } });
+  } catch {
+    return res.status(500).json({ message: "Bölüm yüklenemedi." });
+  }
+});
+
 /* ═══════════════════════════════════════════
    GET /api/public/profile/:id
 ═══════════════════════════════════════════ */
-router.get("/profile/:id", async (req, res) => {
+router.get("/profile/:id", optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const query = isValidId(id)
@@ -135,23 +157,9 @@ router.get("/profile/:id", async (req, res) => {
 
     if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
 
-    let isFollowedByMe = false;
-    try {
-      const authHeader = req.headers.authorization;
-      if (authHeader?.startsWith("Bearer ")) {
-        const token = authHeader.split(" ")[1];
-        const { default: jwt } = await import("jsonwebtoken");
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "atolye-secret-key");
-        const requesterId = decoded.id;
-        if (requesterId) {
-          isFollowedByMe = user.followers?.some(
-            (fId) => fId.toString() === String(requesterId)
-          ) ?? false;
-        }
-      }
-    } catch (err) {
-      console.error("Token decode hatası:", err.message);
-    }
+    const isFollowedByMe = !!req.user && (user.followers?.some(
+      (id) => String(id) === req.user.id
+    ) ?? false);
 
     return res.json({
       user: {
@@ -190,20 +198,14 @@ router.get("/profile/:id/works", async (req, res) => {
     const user = await User.findOne(query).select("_id");
     if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
 
-    const works = await Work.find({ user: user._id, status: "published" })
-      .select("_id title coverImage status publishedChapterIds universe updatedAt totalWords stats")
+    // Anonim eseri yazarın profilinde listelemek bile kimliğini açığa çıkarır.
+    const works = await Work.find({ user: user._id, status: "published", isAnonymous: { $ne: true } })
+      .select(PUBLIC_WORK_FIELDS)
+      .populate("user", "_id kullaniciAdi avatarUrl")
       .sort({ updatedAt: -1 });
 
-    const items = works.map((w) => ({
-      _id:          w._id,
-      title:        w.title,
-      coverImage:   w.coverImage ?? null,
-      status:       w.status,
-      chapterCount: w.publishedChapterIds?.length ?? 0,
-      totalWords:   w.totalWords || w.stats?.totalWords || 0,
-      genre:        w.universe?.genre ?? "",
-      updatedAt:    w.updatedAt,
-    }));
+    const publishedIdsByWork = await getPublishedChapterIdsByWork(works);
+    const items = works.map(work => serializePublicWorkCard(work, publishedIdsByWork.get(String(work._id))));
 
     return res.json({ items });
   } catch (err) {
@@ -215,16 +217,9 @@ router.get("/profile/:id/works", async (req, res) => {
 /* ═══════════════════════════════════════════
    POST /api/public/profile/:id/follow
 ═══════════════════════════════════════════ */
-router.post("/profile/:id/follow", async (req, res) => {
+router.post("/profile/:id/follow", ensureAuth, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer "))
-      return res.status(401).json({ message: "Giriş yapmalısın." });
-
-    const token = authHeader.split(" ")[1];
-    const { default: jwt } = await import("jsonwebtoken");
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "atolye-secret-key");
-    const requesterId = decoded.id;
+    const requesterId = req.user.id;
 
     const targetUser = await User.findById(req.params.id);
     if (!targetUser) return res.status(404).json({ message: "Kullanıcı bulunamadı." });

@@ -1,13 +1,14 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { apiPost, apiPut } from "../lib/api";
-import { useAICoach } from "../hooks/useAICoach";
+import { saveAtelierNote } from "../lib/atelierNotes";
+import { useWritingHints } from "../hooks/useWritingHints";
 import { CONSTRAINT_CATEGORIES, ALL_CONSTRAINTS, constraintForSkill } from "../data/writingConstraints";
 import { getSkillScores, getTrajectory, skillLabel } from "../lib/pusula";
 import { analyzeWords, analyzePhrases, setPref, getPref } from "../lib/kelimeCantasi";
 import "../styles/AtelierTab.css";
+import { atelierDraftKey, readAtelierDraft, writeAtelierDraft, acknowledgeAtelierDraft } from "../lib/atelierDraft";
 
 /* ── SABİTLER ── */
-const ATELIER_TABS = { ILHAM: "ilham", SOHBET: "sohbet", YORUM: "yorum", KOC: "koc" };
+const ATELIER_TABS = { ILHAM: "ilham", SOHBET: "sohbet", KOC: "koc" };
 
 const ILHAM_NOTES = [
   "Sadece Başla: 300 kelime kötü yazmak, hiç yazmamaktan iyidir.",
@@ -16,45 +17,51 @@ const ILHAM_NOTES = [
 ];
 
 
-const REVIEW_FOCUS_OPTIONS = [
-  { id: "genel",     label: "Genel" },
-  { id: "karakter",  label: "Karakter" },
-  { id: "diyalog",   label: "Diyalog" },
-  { id: "duygu",     label: "Duygu" },
-  { id: "ritim",     label: "Ritim" },
-  { id: "betimleme", label: "Betimleme" },
-  { id: "tekrar",    label: "Tekrar" },
-];
+export default function AtelierTab({ workId, userId }) {
+  if (!workId || !userId) return <p role="status">Atölye için oturum ve eser bilgisi gerekiyor.</p>;
+  return <AtelierWorkspace key={atelierDraftKey(userId, workId)} workId={workId} userId={userId} />;
+}
 
-/* ── ANA BİLEŞEN ── */
-export default function AtelierTab({ workId }) {
-  const {
-    text, setText,
-    title, setTitle,
-    tab, setTab,
-    loadingAI,
-    msg,
-    tone, setTone,
-    style, setStyle,
-    review, handleReview,
-    reviewFocus, setReviewFocus,
-    liveAlert,
-    coachNotes, setCoachNotes,
-    coachEnabled, setCoachEnabled,
-  } = useAICoach();
-
+function AtelierWorkspace({ workId, userId }) {
+  const key = atelierDraftKey(userId, workId);
+  const [initial] = useState(() => { try { return readAtelierDraft(localStorage, key); } catch { return { title: "", text: "", noteId: null, error: "Yerel taslak okunamadı. Tarayıcı depolamasını kontrol edin." }; } });
+  const [draft, setDraft] = useState(initial);
+  const draftRef = useRef(initial);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const [draftError, setDraftError] = useState(initial.error || "");
+  const [saveMsg, setSaveMsg] = useState("");
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const { title, text } = draft;
+  const updateDraft = patch => {
+    const next = { ...draftRef.current, ...patch };
+    draftRef.current = next; setDraft(next);
+    try { writeAtelierDraft(localStorage, key, next); setDraftError(""); }
+    catch { setDraftError("Yerel taslak saklanamadı. Sekmeyi kapatmadan metninizi nota kaydedin veya kopyalayın."); }
+  };
+  const setTitle = title => { updateDraft({ title }); setSaveMsg(""); setSaveFailed(false); };
+  const setText = text => { updateDraft({ text }); setSaveMsg(""); setSaveFailed(false); };
+  const { tab, setTab, liveAlert, coachNotes, setCoachNotes, coachEnabled, setCoachEnabled } = useWritingHints(text);
+  useEffect(() => {
+    window.__acbTourTrigger = window.__acbTourTrigger || {};
+    const prepare = target => { setTab(target === "atelier-bag" ? ATELIER_TABS.SOHBET : target === "atelier-compass" ? ATELIER_TABS.KOC : ATELIER_TABS.ILHAM); };
+    window.__acbTourTrigger.prepareAtelierTool = prepare;
+    return () => { if (window.__acbTourTrigger.prepareAtelierTool === prepare) delete window.__acbTourTrigger.prepareAtelierTool; };
+  }, [setTab]);
   /* Rutin zamanlayıcı */
   const [routine, setRoutine] = useState({
     mode: "sprint",
     durationMin: 10,
     goalWords: 150,
     running: false,
+    paused: false,
     secondsLeft: 600,
     startedAtWordCount: 0,
   });
 
   const editorRef = useRef(null);
-  const editorCardRef = useRef(null);
 
   useEffect(() => {
     if (!routine.running) return;
@@ -86,6 +93,7 @@ export default function AtelierTab({ workId }) {
       durationMin: cfg[0],
       goalWords: cfg[1],
       running: true,
+      paused: false,
       secondsLeft: cfg[0] * 60,
       startedAtWordCount: wordCount,
     });
@@ -125,8 +133,8 @@ export default function AtelierTab({ workId }) {
   /* Pusula — sinyal değiştikçe yeniden hesapla */
   const [pusulaScores, setPusulaScores] = useState([]);
   useEffect(() => {
-    setPusulaScores(getSkillScores());
-  }, [review, coachNotes, tab]);
+    setPusulaScores(getSkillScores({ source: ["rule", "wordbag"] }));
+  }, [coachNotes, liveAlert, tab, text]);
   const weakest = pusulaScores[0] || null;
 
   const practiceWeakSkill = () => {
@@ -138,83 +146,67 @@ export default function AtelierTab({ workId }) {
   };
 
   /* Kelime Çantası */
-  const [bagTick, setBagTick] = useState(0);
-  const bagWords = useMemo(
-    () => (tab === ATELIER_TABS.SOHBET ? analyzeWords(text) : []),
-    [text, bagTick, tab]
-  );
-  const bagPhrases = useMemo(
-    () => (tab === ATELIER_TABS.SOHBET ? analyzePhrases(text) : []),
-    [text, bagTick, tab]
-  );
+  const [, setBagTick] = useState(0);
+  // Preferences live outside React; recompute after tagTerm triggers a render.
+  const bagWords = tab === ATELIER_TABS.SOHBET ? analyzeWords(text) : [];
+  const bagPhrases = tab === ATELIER_TABS.SOHBET ? analyzePhrases(text) : [];
   const tagTerm = (term, pref) => {
     const current = getPref(term);
     setPref(term, current === pref ? null : pref);
     setBagTick((t) => t + 1);
   };
 
-  /* Not kaydet */
-  const [saveMsg, setSaveMsg] = useState("");
-  const [noteId, setNoteId] = useState(null);
-
   const saveNote = async () => {
-    if (!title.trim() && !text.trim()) return;
+    if (savingRef.current || (!title.trim() && !text.trim())) return;
+    savingRef.current = true; setSaving(true); setSaveMsg(""); setSaveFailed(false);
+    const snapshot = { ...draftRef.current };
     try {
-      if (!noteId) {
-        const res = await apiPost("/notes", {
-          title: title || "Egzersiz notu",
-          content: text,
-          workId,
-        });
-        setNoteId(res.item?.id || res.item?._id);
-        setSaveMsg("Notlara kaydedildi ✓");
-      } else {
-        await apiPut(`/notes/${noteId}`, {
-          title: title || "Egzersiz notu",
-          content: text,
-        });
-        setSaveMsg("Güncellendi ✓");
-      }
-      setTimeout(() => setSaveMsg(""), 2000);
+      const item = await saveAtelierNote(snapshot, { workId });
+      if (!mounted.current) return;
+      const current = { ...draftRef.current, noteId: String(item._id) };
+      draftRef.current = current; setDraft(current);
+      try {
+        acknowledgeAtelierDraft(localStorage, key, { ...snapshot, noteId: current.noteId }, current);
+        setDraftError("");
+      } catch { setDraftError("Not sunucuya kaydedildi; bu tarayıcıdaki kopya güncellenemedi. Metni kapatmadan kopyalayabilirsin."); }
+      setSaveMsg(draftRef.current.text === snapshot.text && draftRef.current.title === snapshot.title ? "Eserine bağlı nota kaydedildi" : "Önceki metin kaydedildi; yeni değişiklikleri de kaydet.");
+    } catch (err) { setSaveFailed(true); setSaveMsg(err.message || "Nota kaydedilemedi. Taslağınız korunuyor."); }
+    finally { savingRef.current = false; setSaving(false); }
+  };
+  /* Yerel yazım ipuçlarını aynı esere bağlı notlara kaydet. */
+  const [hintNoteSaveState, setHintNoteSaveState] = useState({});
+
+  const hintSaves = useRef(new Set());
+  const saveHintToNotes = async (key, noteTitle, content) => {
+    if (hintSaves.current.has(key)) return;
+    hintSaves.current.add(key);
+    setHintNoteSaveState(p => ({ ...p, [key]: "saving" }));
+    try {
+      await saveAtelierNote({ title: noteTitle, text: content }, { workId });
+      setHintNoteSaveState((p) => ({ ...p, [key]: "ok" }));
     } catch {
-      setSaveMsg("Kaydedilemedi.");
-      setTimeout(() => setSaveMsg(""), 2000);
+      setHintNoteSaveState((p) => ({ ...p, [key]: "err" }));
     }
+    finally { hintSaves.current.delete(key); }
   };
 
-  /* AI notlarını genel Notlarım'a kaydet */
-  const [aiNoteSaveState, setAiNoteSaveState] = useState({});
-
-  const saveAiNoteToNotes = async (key, noteTitle, content) => {
-    try {
-      await apiPost("/notes", { title: noteTitle, content });
-      setAiNoteSaveState((p) => ({ ...p, [key]: "ok" }));
-    } catch {
-      setAiNoteSaveState((p) => ({ ...p, [key]: "err" }));
-    }
-    setTimeout(() => {
-      setAiNoteSaveState((p) => {
-        const next = { ...p };
-        delete next[key];
-        return next;
-      });
-    }, 2000);
-  };
-
-  const aiNoteSaveLabel = (key) =>
-    aiNoteSaveState[key] === "ok"
+  const hintNoteSaveLabel = (key) =>
+    hintNoteSaveState[key] === "saving" ? "Kaydediliyor…"
+      : hintNoteSaveState[key] === "ok"
       ? "Notlarına kaydedildi ✓"
-      : aiNoteSaveState[key] === "err"
+      : hintNoteSaveState[key] === "err"
       ? "Kaydedilemedi."
       : "📌 Notlarıma kaydet";
 
   return (
-    <div className="atelier-layout">
-      {/* Sol: Editör */}
-      <div className="atelier-editor-wrap" ref={editorCardRef}>
+    <div className="atelier-layout" data-tour="atelier-intro">
+      {/* Sol: bağımsız egzersiz taslağı */}
+      <div className="atelier-editor-wrap">
+        <p className="atelier-muted">Bölüm metninden ayrı bir egzersiz alanı. Taslağın bu tarayıcıda korunur.</p>
         <div className="atelier-editor-top">
           <input
             className="atelier-title-input"
+            aria-label="Egzersiz başlığı"
             placeholder="Egzersiz başlığı (isteğe bağlı)"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -222,9 +214,10 @@ export default function AtelierTab({ workId }) {
           <button
             className={`coach-toggle ${coachEnabled ? "active" : ""}`}
             onClick={() => setCoachEnabled((v) => !v)}
-            title={coachEnabled ? "Koç modunu kapat" : "Koç modunu aç"}
+            aria-pressed={coachEnabled}
+            title="Yerel yazım ipuçları"
           >
-            {coachEnabled ? "🧠 Koç: Açık" : "🧠 Koç: Kapalı"}
+            {coachEnabled ? "İpuçları: Açık" : "İpuçları: Kapalı"}
           </button>
         </div>
 
@@ -248,6 +241,7 @@ export default function AtelierTab({ workId }) {
         <textarea
           ref={editorRef}
           className="atelier-textarea"
+          aria-label="Egzersiz metni"
           placeholder="Bir beyaz kağıda her şey yazılabilir…"
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -255,22 +249,9 @@ export default function AtelierTab({ workId }) {
 
         <div className="atelier-editor-footer">
           <span className="atelier-wordcount">{wordCount} kelime</span>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {saveMsg && <span className="atelier-save-msg">{saveMsg}</span>}
-            {msg && <span className="atelier-save-msg">{msg}</span>}
-            {!msg && wordCount < 50 && (
-              <span className="atelier-save-msg">AI yorum için en az 50 kelime</span>
-            )}
-            <button className="btn-atelier-save" onClick={saveNote}>
-              💾 Nota Kaydet
-            </button>
-            <button
-              className="btn-atelier-ai"
-              onClick={handleReview}
-              disabled={loadingAI || wordCount < 50}
-            >
-              {loadingAI ? "…" : "AI Yorumla"}
-            </button>
+          <div className="atelier-save-actions">
+            <span className="atelier-save-msg" role={saveFailed ? "alert" : "status"}>{saving ? "Nota kaydediliyor…" : saveMsg || "Egzersiz taslağı bu tarayıcıda"}{draftError && <span role="alert">{draftError}</span>}</span>
+            <button className="btn-atelier-save" data-tour="atelier-save" onClick={saveNote} disabled={saving}>Nota Kaydet</button>
           </div>
         </div>
 
@@ -284,7 +265,7 @@ export default function AtelierTab({ workId }) {
       {/* Sağ: Araçlar */}
       <div className="atelier-tools">
         {/* Rutin Kartı */}
-        <div className="routine-card">
+        <div className="routine-card" data-tour="atelier-routine">
           <div className="routine-card-top">
             <div>
               <div className="routine-label">🔥 Bugünün Rutini</div>
@@ -316,7 +297,10 @@ export default function AtelierTab({ workId }) {
           )}
 
           <div className="routine-actions">
-            {!routine.running ? (
+            {routine.paused ? <>
+              <button className="btn-routine primary" onClick={() => setRoutine(p => ({ ...p, running: true, paused: false }))}>▶ Devam et</button>
+              <button className="btn-routine" onClick={() => setRoutine(p => ({ ...p, paused: false, running: false, secondsLeft: p.durationMin * 60, startedAtWordCount: wordCount }))}>↺ Sıfırla</button>
+            </> : !routine.running ? (
               <>
                 <button
                   className="btn-routine primary"
@@ -335,7 +319,7 @@ export default function AtelierTab({ workId }) {
               <>
                 <button
                   className="btn-routine"
-                  onClick={() => setRoutine((p) => ({ ...p, running: false }))}
+                  onClick={() => setRoutine((p) => ({ ...p, running: false, paused: true }))}
                 >
                   ❚❚ Duraklat
                 </button>
@@ -367,37 +351,10 @@ export default function AtelierTab({ workId }) {
           </div>
         </div>
 
-        {/* AI Ayarları */}
-        {coachEnabled && (
-          <div className="coach-settings">
-            <select
-              className="coach-select"
-              value={tone}
-              onChange={(e) => setTone(e.target.value)}
-            >
-              <option value="">— Ton yok —</option>
-              <option value="lirik">Lirik</option>
-              <option value="sert">Sert &amp; Gerçekçi</option>
-              <option value="fantastik">Fantastik</option>
-              <option value="noir">Noir</option>
-            </select>
-            <select
-              className="coach-select"
-              value={style}
-              onChange={(e) => setStyle(e.target.value)}
-            >
-              <option value="coach">Yazar Koçu (dengeli)</option>
-              <option value="harsh">Sert Eleştirmen</option>
-              <option value="friendly">Destekleyici</option>
-            </select>
-          </div>
-        )}
-
         {/* Sekmeler */}
         <div className="atelier-tabs" role="tablist">
             {[
               { id: ATELIER_TABS.ILHAM, label: "🏋️ Antrenman" },
-              { id: ATELIER_TABS.YORUM, label: "📋 Yorum" },
               { id: ATELIER_TABS.SOHBET, label: "🎒 Kelime Çantası" },
               { id: ATELIER_TABS.KOC, label: "🧭 Pusula" },
             ].map((t) => (
@@ -415,7 +372,7 @@ export default function AtelierTab({ workId }) {
 
         {/* Antrenman */}
         {tab === ATELIER_TABS.ILHAM && (
-          <div className="atelier-panel">
+          <div className="atelier-panel" data-tour="atelier-training">
             {weakest && (
               <div className="antrenman-suggestion">
                 🧭 Pusula'nın önerisi: <strong>{skillLabel(weakest.skill)}</strong>
@@ -463,63 +420,9 @@ export default function AtelierTab({ workId }) {
           </div>
         )}
 
-        {/* AI Yorum */}
-        {tab === ATELIER_TABS.YORUM && (
-          <div className="atelier-panel">
-            <div className="review-focus-row">
-              {REVIEW_FOCUS_OPTIONS.map((o) => (
-                <button
-                  key={o.id}
-                  className={`review-focus-chip ${reviewFocus === o.id ? "active" : ""}`}
-                  onClick={() => setReviewFocus(o.id)}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-
-            {!review ? (
-              <p className="atelier-muted">
-                Bir odak seç, sonra editör altındaki <strong>AI Yorumla</strong> butonuna bas.
-              </p>
-            ) : (
-              <>
-                <div className="atelier-muted" style={{ marginBottom: 8 }}>
-                  🤖 {review.focusLabel || "AI Değerlendirme"}
-                </div>
-                <p className="atelier-review-text">{review.analysis}</p>
-                {review.closingNote && (
-                  <p className="atelier-muted" style={{ marginTop: 10 }}>
-                    — {review.closingNote}
-                  </p>
-                )}
-                <p className="atelier-review-disclaimer">
-                  Not: Buradaki AI bir editör gibi çalışır; işi seni övmek değil, geliştirebileceğin
-                  noktaları göstermektir. Bu yüzden her zaman söyleyecek bir şey bulabilir. Bu, metnin
-                  kötü olduğu anlamına gelmez. Eserin sana yeterince tamam geliyorsa son onayı AI'dan
-                  bekleme; karar senin, yayınla gitsin.
-                </p>
-                <button
-                  className="btn-ai-save-note"
-                  onClick={() =>
-                    saveAiNoteToNotes(
-                      "review",
-                      review.focusLabel || "AI Yorum",
-                      review.analysis + (review.closingNote ? `\n\n— ${review.closingNote}` : "")
-                    )
-                  }
-                  disabled={aiNoteSaveState.review === "ok"}
-                >
-                  {aiNoteSaveLabel("review")}
-                </button>
-              </>
-            )}
-          </div>
-        )}
-
         {/* Kelime Çantası (eski Sohbet slotu) */}
         {tab === ATELIER_TABS.SOHBET && (
-          <div className="atelier-panel">
+          <div className="atelier-panel" data-tour="atelier-bag">
             {bagWords.length === 0 && bagPhrases.length === 0 ? (
               <p className="atelier-muted">
                 Editöre yazdıkça sık kullandığın kelimeler burada belirir (en az 2 kez geçenler).
@@ -568,20 +471,20 @@ export default function AtelierTab({ workId }) {
           </div>
         )}
 
-        {/* Gelişim Pusulası */}
+        {/* Pusula */}
         {tab === ATELIER_TABS.KOC && (
-          <div className="atelier-panel">
+          <div className="atelier-panel" data-tour="atelier-compass">
             <div className="pusula-box">
-              <div className="pusula-title">🧭 Gelişim Pusulası</div>
+              <div className="pusula-title">🧭 Pusula</div>
 
               {pusulaScores.length === 0 ? (
                 <p className="atelier-muted">
-                  Henüz yeterli sinyal yok. Yazdıkça ve AI yorumlattıkça pusula şekillenecek.
+                  Henüz yeterli gözlem yok. Pusula, yazarken oluşan yerel egzersiz ipuçlarını toplar; bir başarı notu değildir.
                 </p>
               ) : (
                 <>
                   {weakest && (() => {
-                    const traj = getTrajectory(weakest.skill);
+                    const traj = getTrajectory(weakest.skill, { source: ["rule", "wordbag"] });
                     const trajLabel = {
                       iyilesiyor: "↗ ilerliyorsun",
                       kotulesiyor: "↘ dikkat",
@@ -626,7 +529,7 @@ export default function AtelierTab({ workId }) {
             </div>
 
             <div className="koc-header" style={{ marginTop: 16 }}>
-              <span className="atelier-muted">Canlı koç notları</span>
+              <span className="atelier-muted">Yerel yazım ipuçları</span>
               <button
                 className="btn-koc-clear"
                 onClick={() => setCoachNotes([])}
@@ -638,12 +541,12 @@ export default function AtelierTab({ workId }) {
 
             {!coachEnabled && (
               <p className="atelier-muted" style={{ marginBottom: 10 }}>
-                Koç modu kapalı — notlar gelmez. Üstteki toggle'dan aç.
+                Yazım ipuçları kapalı. Üstteki İpuçları düğmesinden açabilirsin.
               </p>
             )}
 
             {coachNotes.length === 0 ? (
-              <p className="atelier-muted">Yazdıkça koç buraya sessizce not düşecek.</p>
+              <p className="atelier-muted">Yazdıkça yerel kurallardan gelen ipuçları burada görünür. AI değerlendirmesi yapılmaz.</p>
             ) : (
               <div className="koc-notes-list">
                 {coachNotes.map((n) => (
@@ -661,11 +564,11 @@ export default function AtelierTab({ workId }) {
                     </div>
                     <p className="koc-note-msg">{n.message}</p>
                     <button
-                      className="btn-ai-save-note"
-                      onClick={() => saveAiNoteToNotes(n.key, n.title || "Koç Notu", n.message)}
-                      disabled={aiNoteSaveState[n.key] === "ok"}
+                      className="btn-hint-save-note"
+                      onClick={() => saveHintToNotes(n.key, n.title || "Yazım ipucu", n.message)}
+                      disabled={["saving", "ok"].includes(hintNoteSaveState[n.key])}
                     >
-                      {aiNoteSaveLabel(n.key)}
+                      {hintNoteSaveLabel(n.key)}
                     </button>
                   </div>
                 ))}

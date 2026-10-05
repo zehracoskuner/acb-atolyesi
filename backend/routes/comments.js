@@ -1,3 +1,4 @@
+import readerAccess from "../middlewares/readerAccess.js";
 // backend/routes/comments.js
 import express     from "express";
 import {
@@ -14,6 +15,7 @@ import ensureAuth  from "../middlewares/ensureAuth.js";
 import requireRole from "../middlewares/requireRole.js";
 
 const router = express.Router();
+router.use(readerAccess);
 
 /* ═══════════════════════════════════════════
    PUBLIC — Yorumları getir

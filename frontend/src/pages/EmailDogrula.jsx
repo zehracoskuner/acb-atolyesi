@@ -33,7 +33,7 @@ export default function EmailDogrula() {
     } else {
       setDurum("hata");
     }
-  }, [searchParams]);
+  }, [searchParams, navigate]);
 
   async function handleResend() {
     const email = prompt("Kayıtlı e-posta adresinizi girin:");

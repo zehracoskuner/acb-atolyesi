@@ -1,7 +1,10 @@
 import express from "express";
 import WorkNote from "../models/WorkNote.js";
+import ensureAuth from "../middlewares/ensureAuth.js";
+import ensureWorkOwner from "../middlewares/ensureWorkOwner.js";
 
 const router = express.Router({ mergeParams: true });
+router.use(ensureAuth, ensureWorkOwner(req => req.params.workId));
 
 router.get("/", async (req, res) => {
   const { workId } = req.params;
@@ -18,9 +21,11 @@ router.post("/", async (req, res) => {
 
 router.put("/:noteId", async (req, res) => {
   const { workId, noteId } = req.params;
+  const patch = Object.fromEntries(["title", "body", "source", "meta"]
+    .filter(key => req.body[key] !== undefined).map(key => [key, req.body[key]]));
   const item = await WorkNote.findOneAndUpdate(
     { _id: noteId, workId },
-    req.body,
+    { $set: patch },
     { new: true }
   );
   if (!item) return res.status(404).json({ message: "Not bulunamadı" });

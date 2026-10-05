@@ -1,5 +1,6 @@
 // backend/models/ReadingProgress.js
 import mongoose from "mongoose";
+import { protectWorkReferences } from "../services/matureAccess.js";
 
 const schema = new mongoose.Schema(
   {
@@ -14,5 +15,6 @@ const schema = new mongoose.Schema(
 );
 
 schema.index({ user: 1, story: 1 }, { unique: true });
+protectWorkReferences(schema, "story");
 
 export default mongoose.model("ReadingProgress", schema);

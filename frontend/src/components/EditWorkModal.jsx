@@ -243,7 +243,7 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
   const [color,       setColor]       = useState("purple");
 
   // Yayın ayarları
-  const [isAnonymous,    setIsAnonymous]    = useState(false);
+  const [confirmAuthorDisclosure, setConfirmAuthorDisclosure] = useState(false);
   const [contentWarning, setContentWarning] = useState(false);
   const [preface,        setPreface]        = useState("");
 
@@ -292,7 +292,7 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
         : (work.tags ?? work.universe?.tags?.join(", ") ?? "")
     );
     setColor(work.color ?? work.universe?.color ?? "purple");
-    setIsAnonymous(work.isAnonymous ?? false);
+    setConfirmAuthorDisclosure(false);
     setContentWarning(work.contentWarning ?? false);
     setPreface(work.preface ?? "");
     setCustomTitles(work.customChapterTitles ?? {});
@@ -411,7 +411,8 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
       language,
       tags:                tags.split(",").map(t => t.trim()).filter(Boolean),
       color,
-      isAnonymous,
+      ...(work.isAnonymous && confirmAuthorDisclosure
+        ? { isAnonymous: false, confirmAuthorDisclosure: true } : {}),
       contentWarning,
       preface:             preface.trim(),
       customChapterTitles: customTitles,
@@ -571,18 +572,25 @@ export default function EditWorkModal({ isOpen, onClose, work, onSuccess }) {
           {tab === "publish" && (
             <div className="ewm-section">
 
-              <div className="ewm-toggle-row">
-                <div className="ewm-toggle-info">
-                  <span className="ewm-toggle-label">Anonim yayınla</span>
-                  <span className="ewm-toggle-sub">Kullanıcı adın okuyucuya gösterilmez</span>
-                </div>
-                <button type="button" className={`ewm-toggle-sw ${isAnonymous ? "ewm-toggle-sw--on" : ""}`} onClick={() => setIsAnonymous(v => !v)} aria-pressed={isAnonymous} />
-              </div>
+              {work.isAnonymous ? <div className="ewm-field">
+                <p className="ewm-hint" id="author-disclosure-info">
+                  Bu eser daha önce anonim yayınlandı. Kaydetmek veya yeniden yayınlamak anonimliği kaldırmaz.
+                  İstersen kullanıcı adınla yayına geçebilirsin. Onaylayıp kaydettiğinde kullanıcı adın
+                  keşfet, arama ve eser detayında görünür; eser profilinde listelenir.
+                  Anonim yayına geri dönemezsin.
+                </p>
+                <label className="ewm-label">
+                  <input type="checkbox" checked={confirmAuthorDisclosure}
+                    onChange={(e) => setConfirmAuthorDisclosure(e.target.checked)}
+                    aria-describedby="author-disclosure-info" disabled={saving} />
+                  Kullanıcı adımın bu eserin yazarı olarak görünmesini onaylıyorum.
+                </label>
+              </div> : <p className="ewm-hint">Eser yayınlandığında yazar olarak kullanıcı adın gösterilir.</p>}
 
               <div className="ewm-toggle-row">
                 <div className="ewm-toggle-info">
                   <span className="ewm-toggle-label">İçerik uyarısı</span>
-                  <span className="ewm-toggle-sub">18+ veya hassas içerik etiketi ekle</span>
+                  <span className="ewm-toggle-sub">Yetişkin içerik erişim kuralını uygula</span>
                 </div>
                 <button type="button" className={`ewm-toggle-sw ${contentWarning ? "ewm-toggle-sw--on" : ""}`} onClick={() => setContentWarning(v => !v)} aria-pressed={contentWarning} />
               </div>

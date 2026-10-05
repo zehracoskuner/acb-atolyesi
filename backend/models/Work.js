@@ -1,8 +1,13 @@
 // backend/models/Work.js
 import mongoose from "mongoose";
+import { protectWorkReads } from "../services/matureAccess.js";
 
 const WorkSchema = new mongoose.Schema(
   {
+    contentWarning: { type: Boolean, default: false, index: true },
+    firstPublishedAt: Date,
+    lastPublishedChapterAt: Date,
+    removedCoverCase: { type: String, default: "" },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -46,14 +51,25 @@ const WorkSchema = new mongoose.Schema(
       type: String, 
       default: "" 
     },
+    // Eski anonim eserlerin gizliliği korunur; yeni eserler anonim olamaz.
     isAnonymous: { 
-      type: Boolean, 
-      default: false 
+      type: Boolean,
+      default: false,
+      validate: {
+        validator(value) { return !this.isNew || value !== true; },
+        message: "Yeni eserler anonim oluşturulamaz.",
+      },
     },
     publishedChapterIds: [{ 
       type: mongoose.Schema.Types.ObjectId, 
       ref: 'Chapter'
     }],
+    lastDevelopmentAnalysisAt: { type: Date, default: null },
+    lastDevelopmentWordCheckpoint: { type: Number, default: 0, min: 0 },
+    developmentAnalysisCount: { type: Number, default: 0, min: 0 },
+    developmentNewWords: { type: Number, default: 0, min: 0 },
+    developmentInitializedAt: { type: Date, default: null },
+    eligibleForDevelopmentReview: { type: Boolean, default: false },
     customChapterTitles: {
       type: Map,
       of: String,
@@ -67,8 +83,15 @@ const WorkSchema = new mongoose.Schema(
     }
     
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
+
+// New works start at zero; only pre-existing works need a lazy text baseline.
+WorkSchema.pre("save", function () {
+  if (this.isNew && !this.developmentInitializedAt) this.developmentInitializedAt = new Date();
+});
+
+protectWorkReads(WorkSchema);
 
 const Work = mongoose.model("Work", WorkSchema);
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import "../styles/LegalPages.css";
+import LegalDraftNotice from "../components/LegalDraftNotice";
 
 export default function KullaniciSozlesmesi() {
   const [activeSection, setActiveSection] = useState(null);
@@ -98,6 +99,26 @@ Değişiklikten sonra platforma girişiniz, güncellenmiş Sözleşme'yi kabul e
 
 Bu Sözleşme Türkiye Cumhuriyeti kanunlarına tabidir.`,
     },
+    {
+      id: "eser-sahipligi-ek",
+      number: "IX",
+      title: "Taslak Ek: Eser Sahipliği ve İzinsiz Kullanım",
+      content: `5846 sayılı Fikir ve Sanat Eserleri Kanunu kapsamında korunan bir eserin sahibi, onu meydana getiren kişidir. Birden fazla kişinin ve diğer hak sahiplerinin hakları saklıdır. Platforma yükleme veya burada paylaşma, tek başına eser sahipliğini Platforma ya da diğer kullanıcılara geçirmez; telif korumasının doğması için Platforma kayıt gerekmez.
+
+Kullanıcı, paylaştığı içerik üzerinde gerekli hak veya izinlere sahip olmalıdır. Kanuni istisnalar saklı kalmak üzere, hak sahibinin gerekli izni olmadan başkasının eserini kopyalamak, işlemek, değiştirmek, dağıtmak veya internet dâhil kamuya iletmek yasaktır. Başkasının eserini kendi eseri gibi sunmak ve kaynağı yanıltıcı biçimde göstermek de yasaktır. Yalnızca yazarın adını belirtmek, izin gerektiren bir kullanımı kendiliğinden hukuka uygun kılmaz. Alıntı ve diğer kanuni istisnalar, kendi şartları ve sınırları içinde uygulanır.
+
+IV. maddede belirtilen hizmet amaçlı kullanım, eserin mülkiyetinin devri veya reklam, satış, üçüncü kişilere lisanslama ya da yapay zekâ modeli eğitimi için genel izin olarak yorumlanamaz. Manevi haklar saklıdır. Mali haklara ilişkin işlemlerde yazılı şekil ve hakların ayrı ayrı belirtilmesi şartları ayrıca değerlendirilmelidir; bu kabul kutusunun tek başına söz konusu şartları karşıladığı ileri sürülmez.
+
+İhlal iddiasını eser ve ilgili içerik bağlantısı, hak sahipliği veya temsil açıklaması ve iletişim bilgileriyle acbatolyesi@gmail.com adresine iletebilirsiniz. Platform bildirimi inceleyerek taraflardan açıklama isteyebilir ve mevcut moderasyon kuralları kapsamında işlem yapabilir. Bildirim tek başına kesin ihlal kararı sayılmaz; hak sahiplerinin kanuni başvuru yolları saklıdır.`,
+    },
+    {
+      id: "acik-kabul-ek",
+      number: "X",
+      title: "Taslak Ek: Açık Kabul ve Sürüm",
+      content: `I. ve VIII. maddelerdeki kayıt, kullanım veya girişin kabul sayılacağı yönündeki ifadeler mevcut metnin parçası olarak korunmuştur. Bu sürümün kabul sürecinde ise bu ek esas alınır: yalnızca kayıt olmak, Google ile giriş yapmak ya da hizmeti kullanmak güncel sözleşmenin açık kabulü yerine geçmez. Önceden işaretlenmemiş zorunlu kutu aracılığıyla kabul alınır; sözleşme sürümü ve sunucunun belirlediği kabul zamanı kullanıcı hesabıyla kaydedilir. Güncel sürümü kabul etmemiş üyelerden yeniden kabul istenir.
+
+Bu işlem pazarlama veya ticari elektronik ileti izni içermez. Gizlilik Politikası bilgilendirme amacıyla ayrıca erişilebilirdir; sözleşme kabulü kişisel veriler için sınırsız açık rıza olarak yorumlanamaz.`,
+    },
   ];
 
   return (
@@ -114,6 +135,7 @@ Bu Sözleşme Türkiye Cumhuriyeti kanunlarına tabidir.`,
           Atölyemize hoş geldiniz. Birlikte üretmede önce lütfen bu koşulları okuyunuz.
         </p>
         <p className="legal-date">Son güncelleme: Mayıs 2026</p>
+        <LegalDraftNotice />
       </header>
 
       <div className="legal-container">

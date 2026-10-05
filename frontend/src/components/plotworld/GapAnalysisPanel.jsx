@@ -15,7 +15,6 @@ export default function GapAnalysisPanel({
   actOrder,
   actMeta,
   characters,
-  workId,
   onAddScene,
   onClose,
   embedded = false,

@@ -1,23 +1,51 @@
+import readerAccess from "../middlewares/readerAccess.js";
 // routes/user.js
 import express from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import Work from "../models/Work.js";
+import { serializeWorkAuthor } from "../services/publicWork.js";
 import ReadingList from "../models/ReadingList.js";
 import ensureAuth from "../middlewares/ensureAuth.js";
+import uploadOrigin from "../middlewares/uploadOrigin.js";
+import { uploadLimiter } from "../middlewares/rateLimiter.js";
 import upload from "../config/cloudinary.js";
+import { withImageChange } from "../services/imageAssets.js";
 import { updateWritingStreak } from "../utils/streak.js";
+import { readCoachPreference } from "../services/developmentConsent.js";
+import { DEVELOPMENT_COACH_LAUNCH_ENABLED } from "../../shared/features.js";
 
 const router = express.Router();
+router.use(readerAccess);
+
+// Match cover uploads: IP attempts, source verification, auth, account attempts.
+router.post(["/avatar", "/banner"], uploadLimiter, uploadOrigin);
 
 // Tüm rotalar giriş gerektirir
 router.use(ensureAuth);
+
+router.get("/development-coach", async (req, res) => {
+  try { res.json({ preference: await readCoachPreference(req.user.id) }); }
+  catch (error) { res.status(error.status || 503).json({ message: "Tercihin yüklenemedi." }); }
+});
+router.patch("/development-coach", async (req, res) => {
+  const preference = req.body?.preference;
+  if (!DEVELOPMENT_COACH_LAUNCH_ENABLED && preference === "enabled") return res.status(503).json({ code: "DEVELOPMENT_COMING_SOON", message: "Gelişim Koçu beta aşamasında. Çok yakında." });
+  if (!["enabled", "disabled"].includes(preference)) return res.status(400).json({ message: "Geçersiz tercih." });
+  try {
+    const updated = await User.updateOne({ _id: req.user.id }, { $set: { "settings.developmentCoach": preference } });
+    if (!updated.matchedCount) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+    res.json({ preference, message: preference === "enabled"
+      ? "Gelişim Koçu açıldı."
+      : "Gelişim Koçu kapatıldı. Önceki notların korunur." });
+  } catch { res.status(503).json({ message: "Tercihin kaydedilemedi. Tekrar dene." }); }
+});
 
 /* ─── 1. Profil Bilgilerini Getir ─── */
 // GET /api/user/profile
 router.get("/profile", async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-sifreHash -password");
+    const user = await User.findById(req.user.id).select("-sifreHash -password -emailVerifyToken -emailVerifyExpires -emailVerifyOtp -emailVerifyOtpExpires -passwordResetToken -passwordResetExpires -passwordResetOtp -passwordResetOtpExpires");
     if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
 
     const works = await Work.find({ user: req.user.id });
@@ -97,7 +125,7 @@ router.patch("/profile", async (req, res) => {
       req.user.id,
       { $set: updates },
       { new: true, runValidators: true }
-    ).select("-sifreHash -password");
+    ).select("-sifreHash -password -emailVerifyToken -emailVerifyExpires -emailVerifyOtp -emailVerifyOtpExpires -passwordResetToken -passwordResetExpires -passwordResetOtp -passwordResetOtpExpires");
 
     if (!updatedUser) {
       return res.status(404).json({ message: "Kullanıcı bulunamadı." });
@@ -191,7 +219,7 @@ router.patch("/change-email", async (req, res) => {
       req.user.id,
       { $set: { email: newEmail.trim().toLowerCase() } },
       { new: true, runValidators: true }
-    ).select("-sifreHash -password");
+    ).select("-sifreHash -password -emailVerifyToken -emailVerifyExpires -emailVerifyOtp -emailVerifyOtpExpires -passwordResetToken -passwordResetExpires -passwordResetOtp -passwordResetOtpExpires");
 
     res.json({ user: updatedUser, message: "E-posta adresi güncellendi." });
   } catch (err) {
@@ -231,7 +259,7 @@ router.patch("/set-password", async (req, res) => {
     res.json({ message: "Şifre belirlendi." });
   } catch (err) {
     console.error("set-password hatası:", err);
-    res.status(500).json({ message: "Sunucu hatası.", detail: err.message });
+    res.status(500).json({ message: "Sunucu hatası." });
   }
 });
 
@@ -262,13 +290,16 @@ router.get("/reading-lists", async (req, res) => {
 //      bu Work modelindeki gerçek status field'ını yok sayıyordu.
 router.get("/works", async (req, res) => {
   try {
-    const works = await Work.find({ user: req.user.id }).sort({ updatedAt: -1 });
+    const works = await Work.find({ user: req.user.id })
+      .populate("user", "_id kullaniciAdi avatarUrl").sort({ updatedAt: -1 });
 
     const cleanWorks = works.map(w => ({
       _id:         w._id,
       id:          w._id,           // frontend w.id || w._id kullanıyor
       title:       w.title,
       description: w.description,
+      isAnonymous: w.isAnonymous ?? false,
+      author: serializeWorkAuthor(w),
       coverImage:  w.coverImage,
       color:       w.color,
       genres:      w.genres,
@@ -297,16 +328,12 @@ router.post("/avatar", upload.single("avatar"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "Dosya seçilmedi." });
 
-    const updatedUser = await User.findByIdAndUpdate(
-      req.user.id,
-      { avatarUrl: req.file.path },
-      { new: true }
-    ).select("-sifreHash -password");
+    const updatedUser = await withImageChange(req.user.id, req.file.path, '', session => User.findByIdAndUpdate(req.user.id, { avatarUrl: req.file.path, removedAvatarCase: '' }, { new: true, session }).select('-sifreHash -password'));
 
     res.json({ message: "Avatar güncellendi.", avatarUrl: updatedUser.avatarUrl });
   } catch (err) {
     console.error("Avatar Upload Hatası:", err);
-    res.status(500).json({ message: "Avatar yüklenirken hata oluştu." });
+    res.status(err.status || 500).json({ message: err.status ? err.message : "Avatar yüklenirken hata oluştu." });
   }
 });
 
@@ -316,16 +343,12 @@ router.post("/banner", upload.single("banner"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "Dosya seçilmedi." });
 
-    const updatedUser = await User.findByIdAndUpdate(
-      req.user.id,
-      { bannerImage: req.file.path },
-      { new: true }
-    ).select("-sifreHash -password");
+    const updatedUser = await withImageChange(req.user.id, req.file.path, '', session => User.findByIdAndUpdate(req.user.id, { bannerImage: req.file.path, removedBannerCase: '' }, { new: true, session }).select('-sifreHash -password'));
 
     res.json({ message: "Banner güncellendi.", bannerImage: updatedUser.bannerImage });
   } catch (err) {
     console.error("Banner Upload Hatası:", err);
-    res.status(500).json({ message: "Banner yüklenirken hata oluştu." });
+    res.status(err.status || 500).json({ message: err.status ? err.message : "Banner yüklenirken hata oluştu." });
   }
 });
 
@@ -333,7 +356,7 @@ router.post("/banner", upload.single("banner"), async (req, res) => {
 // DELETE /api/user/avatar
 router.delete("/avatar", async (req, res) => {
   try {
-    await User.findByIdAndUpdate(req.user.id, { $set: { avatarUrl: "" } });
+    await User.findByIdAndUpdate(req.user.id, { $set: { avatarUrl: "", removedAvatarCase: "" } });
     res.json({ message: "Profil resmi kaldırıldı." });
   } catch (err) {
     console.error("Avatar silme hatası:", err);
@@ -345,7 +368,7 @@ router.delete("/avatar", async (req, res) => {
 // DELETE /api/user/banner
 router.delete("/banner", async (req, res) => {
   try {
-    await User.findByIdAndUpdate(req.user.id, { $set: { bannerImage: "" } });
+    await User.findByIdAndUpdate(req.user.id, { $set: { bannerImage: "", removedBannerCase: "" } });
     res.json({ message: "Kapak resmi kaldırıldı." });
   } catch (err) {
     console.error("Banner silme hatası:", err);
@@ -396,8 +419,24 @@ router.post("/streak/checkin", async (req, res) => {
 // PATCH /api/user/tour-complete
 router.patch("/tour-complete", async (req, res) => {
   try {
-    await User.updateOne({ _id: req.user.id }, { $set: { tourCompleted: true } });
-    res.json({ tourCompleted: true });
+    const { tour, version, status } = req.body || {};
+    // Keep old clients compatible; all new states are account- and version-specific.
+    if (tour === undefined && version === undefined && status === undefined) {
+      await User.updateOne({ _id: req.user.id }, { $set: { tourCompleted: true } });
+      return res.json({ tourCompleted: true });
+    }
+    if (!["general", "studio", "work", "chapters", "characters", "plot"].includes(tour)
+      || typeof version !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(version)
+      || !["invited", "skipped", "started", "completed"].includes(status)) {
+      return res.status(400).json({ message: "Geçersiz tur durumu." });
+    }
+    const key = `${version}_${tour}`;
+    const field = `tourProgress.${key}`;
+    const filter = { _id: req.user.id };
+    if (status === "invited") filter[field] = { $exists: false };
+    else if (status !== "completed") filter[field] = { $ne: "completed" };
+    await User.updateOne(filter, { $set: { [field]: status } });
+    res.json({ tourProgress: { [key]: status } });
   } catch (err) {
     console.error("Tour Complete Hatası:", err);
     res.status(500).json({ message: "Sunucu hatası." });

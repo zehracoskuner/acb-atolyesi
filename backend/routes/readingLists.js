@@ -1,17 +1,31 @@
+import readerAccess from "../middlewares/readerAccess.js";
 import express from "express";
 import ensureAuth from "../middlewares/ensureAuth.js"; // JWT middleware'in (yolunu projene göre teyit et)
 import ReadingList from "../models/ReadingList.js";
 import Work from "../models/Work.js";
+import { serializeWorkAuthor } from "../services/publicWork.js";
 
 const router = express.Router();
+router.use(readerAccess);
 
 /* ─── Yardımcı: liste populate ─── */
 function populateList(query) {
   return query.populate({
     path: "works.work",
-    select: "title coverImage author status stats chapterCount",
-    populate: { path: "author", select: "kullaniciAdi username avatarUrl" },
+    match: { status: "published" },
+    select: "title coverImage user isAnonymous status publishedChapterIds",
+    populate: { path: "user", select: "kullaniciAdi avatarUrl" },
   });
+}
+
+function visibleList(list) {
+  const item = list.toObject();
+  item.works = item.works.filter(entry => entry.work).map(entry => ({ ...entry, work: {
+    _id: entry.work._id, title: entry.work.title, coverImage: entry.work.coverImage,
+    status: entry.work.status, chapterCount: entry.work.publishedChapterIds?.length || 0,
+    isAnonymous: !!entry.work.isAnonymous, author: serializeWorkAuthor(entry.work),
+  } }));
+  return item;
 }
 
 /* ════════════════════════
@@ -24,7 +38,7 @@ router.get("/", ensureAuth, async (req, res) => {
     const lists = await populateList(
       ReadingList.find({ owner: req.user.id }).sort({ updatedAt: -1 })
     );
-    res.json({ items: lists });
+    res.json({ items: lists.map(visibleList) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Listeler yüklenemedi." });
@@ -68,7 +82,7 @@ router.get("/:id", async (req, res) => {
       return res.status(403).json({ message: "Bu liste gizlidir." });
     }
 
-    res.json({ list });
+    res.json({ list: visibleList(list) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Liste yüklenemedi." });
@@ -134,7 +148,7 @@ router.post("/:id/works", ensureAuth, async (req, res) => {
     await list.save();
 
     const populated = await populateList(ReadingList.findById(list._id));
-    res.json({ list: populated });
+    res.json({ list: visibleList(populated) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Eklenemedi." });
@@ -171,7 +185,7 @@ router.get("/user/:userId", async (req, res) => {
     const lists = await populateList(
       ReadingList.find({ owner: req.params.userId, isPrivate: false }).sort({ updatedAt: -1 })
     );
-    res.json({ items: lists });
+    res.json({ items: lists.map(visibleList) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Listeler yüklenemedi." });

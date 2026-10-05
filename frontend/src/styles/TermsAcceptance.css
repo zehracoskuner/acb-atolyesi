@@ -1,0 +1,14 @@
+.terms-acceptance { margin: 1rem 0; color: #65594b; font-size: .8rem; line-height: 1.6; }
+.terms-acceptance-row { display: flex; align-items: flex-start; gap: .6rem; }
+.terms-acceptance input[type="checkbox"] { flex: 0 0 auto; width: 18px; height: 18px; margin-top: .25rem; accent-color: #8b2500; }
+.terms-acceptance label { cursor: pointer; }
+.terms-acceptance a { color: #8b2500; text-decoration: underline; }
+.terms-acceptance p { margin: .5rem 0 0; font-size: .75rem; }
+.terms-screen { min-height: 100vh; display: grid; place-items: center; padding: 2rem 1rem; background: #f0ebe2; color: #1a1209; }
+.terms-card { width: 100%; max-width: 520px; padding: 2rem; border: 1px solid #e2ddd6; border-radius: 10px; background: #faf8f4; }
+.terms-card h1 { font-size: 1.6rem; margin: 0 0 1rem; }
+.terms-card > p { line-height: 1.6; }
+.terms-card button { padding: .75rem 1rem; border: 0; border-radius: 6px; background: #1a1209; color: #faf8f4; cursor: pointer; }
+.terms-card button:disabled { opacity: .5; cursor: not-allowed; }
+.terms-card [role="alert"] { color: #a32d2d; margin: 1rem 0; }
+.legal-draft-note { max-width: 740px; margin: 1rem auto; padding: 1rem; border: 1px solid #b98a55; border-radius: 6px; color: var(--legal-text, #65594b); line-height: 1.7; }

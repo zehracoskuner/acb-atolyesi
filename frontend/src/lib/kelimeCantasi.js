@@ -29,7 +29,9 @@ function tokenize(t) {
 export function getPrefs() {
   try {
     const r = localStorage.getItem(PREF_KEY);
-    return r ? JSON.parse(r) : {};
+    const value = r ? JSON.parse(r) : {};
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value).filter(([, pref]) => ["voice", "crutch", "ignore"].includes(pref))) : {};
   } catch { return {}; }
 }
 function savePrefs(p) {

@@ -1,6 +1,5 @@
-// src/hooks/useAICoach.js
+// src/hooks/useWritingHints.js
 import { useState, useEffect, useCallback, useRef } from "react";
-import { apiPost, describeAiError } from "../lib/api";
 import { recordSignal } from "../lib/pusula";
 import { crutchSignals } from "../lib/kelimeCantasi";
 
@@ -8,7 +7,6 @@ import { crutchSignals } from "../lib/kelimeCantasi";
 export const ATELIER_TABS = {
   ILHAM:  "ilham",
   SOHBET: "sohbet",
-  YORUM:  "yorum",
   KOC:    "koc",
 };
 
@@ -20,34 +18,6 @@ function useDebounce(value, delay) {
     return () => clearTimeout(t);
   }, [value, delay]);
   return deb;
-}
-
-/* ── Prompt ── */
-function buildSystemPrompt(style, tone) {
-  const base =
-    style === "harsh"
-      ? "Kısa, net ve eleştirel yanıt ver. Kusurları açıkça söyle. Türkçe yaz."
-      : style === "friendly"
-      ? "Pozitif ve yapıcı bir dille yanıt ver. Kısa ve net ol. Türkçe yaz."
-      : "Yazar koçu gibi davran; hem öv hem geliştir. Kısa ve net ol. Türkçe yaz.";
-  return tone ? `${base} Ton tercihi: ${tone}.` : base;
-}
-
-/* ── API yardımcıları ── */
-async function aiChatReq({ input, context }) {
-  const data = await apiPost("/ai/chat", { input, context });
-  return { reply: data.answer || "" };
-}
-
-async function aiReviewReq({ text, focus }) {
-  const data = await apiPost("/ai/review", { text, focus });
-  return {
-    analysis:    data.analysis    || "",
-    closingNote: data.closingNote || "",
-    focus:       data.focus       || focus || "genel",
-    focusLabel:  data.focusLabel  || "",
-    signal:      data.signal      || null,
-  };
 }
 
 /* ══════════════════════════════════════════════
@@ -135,72 +105,23 @@ const RULE_SKILL = {
 /* ══════════════════════════════════════════════
    HOOK
 ══════════════════════════════════════════════ */
-export function useAICoach() {
-  const [title, setTitle]   = useState("");
-  const [text, setText]     = useState("");
-  const [tab, setTab]       = useState(ATELIER_TABS.ILHAM);
-  const [loadingAI, setLoadingAI] = useState(false);
-  const [msg, setMsg]       = useState("");
-
-  const [tone, setTone]     = useState("");
-  const [style, setStyle]   = useState("coach");
-
-  const [chatInput, setChatInput] = useState("");
-  const [chat, setChat]     = useState([]);
-  const [review, setReview] = useState(null);
-  const [reviewFocus, setReviewFocus] = useState("genel");
-
+export function useWritingHints(text) {
+  const [tab, setTab] = useState(ATELIER_TABS.ILHAM);
   const [liveAlert, setLiveAlert]     = useState(null);
   const [coachNotes, setCoachNotes]   = useState([]);
 
-  // ← YENİ: koç modu toggle
+  // Local rules only; no network or AI evaluation.
   const [coachEnabled, setCoachEnabled] = useState(true);
 
   const lastInputAtRef    = useRef(Date.now());
   const lastWcAtInputRef  = useRef(0);
+  const bubbleTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(bubbleTimerRef.current), []);
   const bubbleCooldownRef = useRef({ t: 0, key: "" });
   const noteCooldownRef   = useRef(new Map());
   const crutchCooldownRef = useRef(new Map());
 
   const alertText = useDebounce(text, 1500);
-
-  /* ── Handlers ── */
-  const sendChat = useCallback(async () => {
-    const content = chatInput.trim();
-    if (!content) return;
-    setChat(c => [...c, { role: "user", content }]);
-    setChatInput("");
-    try {
-      setLoadingAI(true);
-      const system = buildSystemPrompt(style, tone);
-      const { reply } = await aiChatReq({ input: content, context: system });
-      setChat(c => [...c, { role: "assistant", content: reply }]);
-      setTab(ATELIER_TABS.SOHBET);
-    } catch (err) {
-      console.error("Chat hatası:", err);
-      setChat(c => [...c, { role: "assistant", content: "⚠️ Yanıt alınamadı." }]);
-    } finally { setLoadingAI(false); }
-  }, [chatInput, style, tone]);
-
-  const handleReview = useCallback(async (focusArg) => {
-    if (!text.trim()) {
-      setMsg("⚠️ Yorum için metin gerekli.");
-      setTimeout(() => setMsg(""), 1500);
-      return;
-    }
-    const focus = typeof focusArg === "string" ? focusArg : reviewFocus;
-    try {
-      setLoadingAI(true);
-      const data = await aiReviewReq({ text, focus });
-      setReview(data);
-      if (data.signal) recordSignal({ ...data.signal, source: "review" });
-      setTab(ATELIER_TABS.YORUM);
-    } catch (err) {
-      const { message } = describeAiError(err, { fallback: "Değerlendirme alınamadı." });
-      setMsg(`⚠️ ${message}`);
-      setTimeout(() => setMsg(""), 2500);
-    } finally { setLoadingAI(false); }
-  }, [text, reviewFocus]);
 
   /* ── Input metrics ── */
   useEffect(() => {
@@ -218,7 +139,8 @@ export function useAICoach() {
     const skill = RULE_SKILL[a.id];
     if (skill) recordSignal({ skill, severity: a.severity, source: "rule" });
     setLiveAlert(a);
-    setTimeout(() => setLiveAlert(null), 4000);
+    clearTimeout(bubbleTimerRef.current);
+    bubbleTimerRef.current = setTimeout(() => setLiveAlert(null), 4000);
   }, [coachEnabled]);
 
   const upsertNote = useCallback((n) => {
@@ -361,28 +283,5 @@ export function useAICoach() {
     return () => clearInterval(tick);
   }, [text, emitBubble, upsertNote, coachEnabled]);
 
-  /* ── chat scroll ── */
-  const chatBoxRef = useRef(null);
-  useEffect(() => {
-    if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
-  }, [chat]);
-
-  return {
-    title, setTitle,
-    text, setText,
-    msg, setMsg,
-    tab, setTab,
-    loadingAI,
-    tone, setTone,
-    style, setStyle,
-    chatInput, setChatInput,
-    chat, sendChat,
-    review, handleReview,
-    reviewFocus, setReviewFocus,
-    liveAlert,
-    coachNotes, setCoachNotes,
-    chatBoxRef,
-    coachEnabled, setCoachEnabled,   // ← dışa aç
-    setEditorFocus: () => {},         // geriye dönük uyumluluk
-  };
+  return { tab, setTab, liveAlert, coachNotes, setCoachNotes, coachEnabled, setCoachEnabled };
 }

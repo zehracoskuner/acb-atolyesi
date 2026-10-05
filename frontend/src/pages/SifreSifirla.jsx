@@ -163,8 +163,8 @@ const fonts = `
 `;
 
 const pg = {
-  wrap: { minHeight: "100vh", background: "#f0ebe2", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", fontFamily: "'DM Sans', sans-serif" },
-  card: { background: "#faf8f4", border: "1px solid #e2ddd6", borderRadius: 10, padding: "2.5rem 2.25rem", width: "100%", maxWidth: 400 },
+  wrap: { minHeight: "100vh", background: "#f0ebe2", display: "flex", alignItems: "center", justifyContent: "center", padding: "clamp(16px, 4vw, 32px)", fontFamily: "'DM Sans', sans-serif" },
+  card: { background: "#faf8f4", border: "1px solid #e2ddd6", borderRadius: 10, padding: "clamp(20px, 5vw, 40px) clamp(18px, 4vw, 36px)", width: "100%", maxWidth: 400 },
   logoRow: { display: "flex", alignItems: "center", gap: 6, marginBottom: "2rem" },
   dot: { display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#8b2500" },
   logoText: { fontFamily: "'Playfair Display', serif", fontSize: "1rem", fontWeight: 700, color: "#1a1209" },
@@ -174,7 +174,7 @@ const pg = {
   errBox: { padding: ".5rem .75rem", background: "#fdf0f0", borderLeft: "2.5px solid #a32d2d", borderRadius: 4, fontSize: ".78rem", color: "#a32d2d", marginBottom: ".9rem" },
   group: { marginBottom: "1.1rem" },
   label: { display: "block", fontSize: ".7rem", fontWeight: 500, color: "#9a8e80", letterSpacing: ".07em", textTransform: "uppercase", marginBottom: ".4rem" },
-  input: { width: "100%", padding: ".62rem .85rem", border: "1.5px solid #e2ddd6", borderRadius: 6, fontFamily: "'DM Sans', sans-serif", fontSize: ".9rem", color: "#1a1209", background: "#fff", transition: "border .18s" },
+  input: { width: "100%", padding: ".62rem .85rem", border: "1.5px solid #e2ddd6", borderRadius: 6, fontFamily: "'DM Sans', sans-serif", fontSize: "1rem", color: "#1a1209", background: "#fff", transition: "border .18s" },
   btn: { width: "100%", padding: ".72rem", background: "#1a1209", color: "#f5f0e8", border: "none", borderRadius: 6, fontFamily: "'DM Sans', sans-serif", fontSize: ".82rem", fontWeight: 500, letterSpacing: ".05em", cursor: "pointer", transition: "background .18s" },
   successIcon: { width: 52, height: 52, borderRadius: "50%", border: "1.5px solid #1d9e75", background: "#e8f5f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", color: "#0f6e56", margin: "0 auto 1.25rem" },
   footer: { textAlign: "center", margin: "1rem 0 0", fontSize: ".78rem" },

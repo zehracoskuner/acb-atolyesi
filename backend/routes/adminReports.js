@@ -5,7 +5,42 @@ import Comment    from "../models/Comment.js";
 import User       from "../models/User.js";
 import { notifyWarning, notifyCommentRemoved } from "../services/notificationService.js";
 
+import { transition } from '../services/reportWorkflow.js';
+import requireRole from '../middlewares/requireRole.js';
+import { reportCategoryFilter } from '../services/reportCategories.js';
 const router = Router();
+router.use(requireRole('admin', 'moderator'));
+// Apply the same scope to every ID operation, not just the list.
+router.param('id', async (req, res, next, id) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: 'Geçersiz ID.' });
+    const r = await Report.findById(id).lean();
+    if (!r) return res.status(404).json({ message: 'Başvuru bulunamadı.' });
+    // Moderators may inspect reports, including copyright evidence. Only admins
+    // manage copyright cases; moderators may mutate non-copyright comments.
+    if (req.method !== 'GET' && req.user.role === 'moderator' && (r.targetType !== 'comment' || r.reason === 'telif_ihlali')) return res.status(403).json({ message: 'Bu dosya için yetkiniz yok.' });
+    if (r.contentCase) return res.status(409).json({ message: "G?rsel/b?l?m inceleme ekran?n? kullan?n." });
+    req.report = r;
+    next();
+  } catch { res.status(500).json({ message: 'Sunucu hatası.' }); }
+});
+router.get('/:id', async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id).select('+evidenceSnapshot').lean();
+    res.json({ report: { ...report, canManage: req.user.role === 'admin' && String(report.reporter) !== req.user.id && String(report.targetOwner) !== req.user.id } });
+  } catch { res.status(500).json({ message: 'Sunucu hatası.' }); }
+});
+router.post('/:id/workflow', async (req, res) => {
+  try {
+    if (req.report.reason !== 'telif_ihlali') return res.status(400).json({ message: 'Bu işlem telif dosyaları içindir.' });
+    const report = await transition(req.report, req.user, req.body.operation, req.body);
+    res.json({ report });
+  } catch(e) { res.status(e.status || 500).json({ message: e.status ? e.message : 'Sunucu hatası.' }); }
+});
+router.use('/:id', (req, res, next) => {
+  if (req.report?.reason === 'telif_ihlali') return res.status(409).json({ message: 'Telif dosyasında gerekçeli inceleme akışını kullanın.' });
+  next();
+});
 function isValidId(id) { return mongoose.Types.ObjectId.isValid(id); }
 function getPageQuery(req) {
   return Math.max(1, parseInt(req.query.sayfa ?? req.query.page, 10) || 1);
@@ -62,12 +97,11 @@ router.get("/", async (req, res) => {
     const limit      = Math.min(50, parseInt(req.query.limit, 10) || 15);
     const status     = req.query.status     || "pending";
     const targetType = req.query.targetType || "all";
-    const isModerator = req.user.role === "moderator";
 
-    const filtre = {};
+    const filtre = { $and: [reportCategoryFilter(req.query.category)] };
     if (status !== "all")     filtre.status     = status;
     if (targetType !== "all") filtre.targetType = targetType;
-    if (isModerator)          filtre.targetType = "comment"; // moderatör sadece yorum şikayeti
+    if (req.query.reason) filtre.reason = req.query.reason;
 
     const [raporlar, toplam] = await Promise.all([
       Report.find(filtre)
@@ -145,9 +179,9 @@ router.delete("/:id/comment", async (req, res) => {
       comment.isDeleted       = true;
       comment.deletedAt       = new Date();
       comment.deletedBy       = req.user.id;
-      comment.deletedReason   = req.body.reason?.trim() || "Şikayet sonucu kaldırıldı";
+      comment.deletedReason   = req.body?.reason?.trim() || "Şikayet sonucu kaldırıldı";
       comment.originalContent = comment.content;  // saklıyoruz
-      comment.content         = "";
+      comment.content         = "[Bu yorum kaldırıldı]";
       await comment.save();
       notifyCommentRemoved({ recipientId: comment.author, workId: comment.work })
         .catch((e) => console.error("notifyCommentRemoved:", e.message));
@@ -155,7 +189,7 @@ router.delete("/:id/comment", async (req, res) => {
 
     // Bu şikayeti ve aynı yoruma gelen diğer bekleyenleri kapat
     await Report.updateMany(
-      { targetType: "comment", targetId: rapor.targetId, status: "pending" },
+      { targetType: "comment", targetId: rapor.targetId, status: "pending", reason: { $ne: "telif_ihlali" } },
       { $set: { status: "resolved", resolvedBy: req.user.id, resolvedAt: new Date(), adminNote: "Yorum moderatör kararıyla kaldırıldı." } }
     );
 

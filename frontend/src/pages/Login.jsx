@@ -2,10 +2,12 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import { setToken } from "../lib/auth";
+import { consumeLoginReturn, rememberLoginReturn } from "../lib/loginReturn";
+import { completeWebLogin } from "../lib/auth";
+import { membershipStep } from "../lib/terms";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 
-const API = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+const API = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const Eye = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -33,10 +35,12 @@ export default function Login() {
 
   const [email, setEmail]   = useState("");
   const [sifre, setSifre]   = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [mesaj, setMesaj]   = useState(null);
   const [loading, setLoad]  = useState(false);
   const navigate = useNavigate();
+  useEffect(() => { rememberLoginReturn(new URLSearchParams(window.location.search).get("returnTo")); }, []);
 
   const [verifyHata, setVerifyHata]             = useState(false);
   const [verifyBilgi, setVerifyBilgi]           = useState(false);
@@ -55,11 +59,11 @@ export default function Login() {
     setTekrarGonderildi(false);
 
     try {
-      const { data } = await axios.post(`${API}/auth/login`, { email, sifre }, { withCredentials: true });
-      setToken(data.token);
+      const { data } = await axios.post(`${API}/auth/login`, { email, sifre, rememberMe, web: true }, { withCredentials: true });
+      await completeWebLogin();
       localStorage.setItem("user", JSON.stringify(data.user));
       setMesaj({ type: "ok", text: "Giriş başarılı, yönlendiriliyorsunuz…" });
-      setTimeout(() => navigate("/keşfet", { replace: true }), 800);
+      navigate(membershipStep(data.user) || consumeLoginReturn(), { replace: true });
     } catch (err) {
       const data   = err.response?.data;
       const status = err.response?.status;
@@ -69,7 +73,7 @@ export default function Login() {
       } else if (data?.provider === "google") {
         setMesaj({ type: "google", text: data.message });
       } else {
-        setMesaj({ type: "err", text: data?.message || "Giriş başarısız." });
+        setMesaj({ type: "err", text: data?.message || err.message || "Giriş başarısız." });
       }
     } finally {
       setLoad(false);
@@ -278,7 +282,7 @@ export default function Login() {
                   fontFamily: "'DM Sans', sans-serif",
                   fontSize:   ".78rem",
                 }}
-                onClick={() => window.location.href = `${API}/auth/google`}
+                onClick={() => window.location.href = `${API}/auth/google?rememberMe=${rememberMe}`}
               >
                 Google ile giriş yap →
               </button>
@@ -320,6 +324,13 @@ export default function Login() {
                 </button>
               </div>
             </div>
+            <label style={{ display: "flex", alignItems: "center", gap: ".5rem", fontSize: ".85rem", marginBottom: ".4rem", cursor: "pointer" }}>
+              <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} disabled={loading} aria-describedby="remember-help" />
+              Oturumu açık tut
+            </label>
+            <p id="remember-help" style={{ fontSize: ".75rem", color: "#7a6e5f", marginBottom: "1rem", lineHeight: 1.5 }}>
+              Bu cihazda 30 gün açık kalır. Ortak cihazlarda işaretleme. Google ile giriş için de geçerlidir.
+            </p>
             <button
               type="submit"
               style={{...s.btnMain, opacity: loading ? .7 : 1}}
@@ -338,7 +349,7 @@ export default function Login() {
           <button
             type="button"
             style={s.btnGoogle}
-            onClick={() => window.location.href = `${API}/auth/google`}
+            onClick={() => window.location.href = `${API}/auth/google?rememberMe=${rememberMe}`}
           >
             <GoogleIcon/> Google ile devam et
           </button>

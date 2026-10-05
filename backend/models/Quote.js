@@ -1,5 +1,6 @@
 // models/Quote.js
 import mongoose from "mongoose";
+import { protectWorkReferences } from "../services/matureAccess.js";
 
 const quoteSchema = new mongoose.Schema(
   {
@@ -58,6 +59,7 @@ const quoteSchema = new mongoose.Schema(
     timestamps: true, // createdAt, updatedAt
   }
 );
+protectWorkReferences(quoteSchema, "work");
 
 /* Aynı kullanıcı aynı metni aynı eserden iki kez kaydetmesin */
 quoteSchema.index(

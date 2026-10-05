@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "packages": {
+    "node": "22.23.2"
+  },
+  "steps": {
+    "install": {
+      "variables": {
+        "NPM_CONFIG_PRODUCTION": "true"
+      },
+      "inputs": [
+        { "step": "packages:mise" },
+        { "local": true, "include": ["backend/package.json", "backend/package-lock.json"] }
+      ],
+      "commands": [
+        "npm ci --prefix backend --omit=dev",
+        "mkdir -p node_modules"
+      ],
+      "deployOutputs": [{ "include": ["backend/node_modules"] }]
+    },
+    "prune": {
+      "commands": [],
+      "deployOutputs": [{ "include": ["backend/node_modules"] }]
+    },
+    "build": {
+      "inputs": [
+        { "step": "install" },
+        {
+          "local": true,
+          "include": ["backend", "shared", "package.json", "scripts/check-backend-release.mjs"],
+          "exclude": [
+            "backend/node_modules", "backend/tests", "backend/scripts",
+            "backend/vitest.config.js", "backend/*.md", "backend/DEVELOPMENT_PROVIDER_COMPARISON.json",
+            "backend/.env", "backend/.env.*"
+          ]
+        }
+      ],
+      "commands": ["node scripts/check-backend-release.mjs"],
+      "secrets": [],
+      "caches": []
+    }
+  },
+  "deploy": {
+    "startCommand": "node backend/server.js"
+  }
+}

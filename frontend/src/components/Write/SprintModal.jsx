@@ -1,8 +1,7 @@
 // src/components/Modals/SprintModal.jsx
 import React, { useState } from "react";
 
-// SPRINT_MODES'u export ediyoruz ki Write.jsx içindeki üst barda da kullanılabilsin.
-export const SPRINT_MODES = [
+const SPRINT_MODES = [
   { key: "sprint", icon: "⚡", label: "Sprint",    mins: 10, words: 150, hint: "İç eleştirmeni sustur. Dur, silme." },
   { key: "warmup", icon: "🔥", label: "Isınma",    mins: 2,  words: 60,  hint: "Akışı aç. Mükemmel olmasına gerek yok." },
   { key: "edit",   icon: "✂️",  label: "Düzenleme", mins: 5,  words: 0,   hint: "1 paragrafı sadeleştir. 2 kelime at, 1 güçlü fiil ekle." },

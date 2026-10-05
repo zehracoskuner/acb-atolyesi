@@ -22,7 +22,11 @@ export const skillLabel = (skill) => SKILL_LABELS[skill] || skill;
 export function getSignals() {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? JSON.parse(raw) : [];
+    const values = raw ? JSON.parse(raw) : [];
+    return Array.isArray(values) ? values.filter(s => s && Number.isFinite(s.ts)
+      && typeof s.skill === "string" && typeof s.severity === "string"
+      && Object.hasOwn(SKILL_LABELS, s.skill) && Object.hasOwn(SEVERITY_W, s.severity)
+      && ["rule", "wordbag", "review"].includes(s.source)).slice(-MAX) : [];
   } catch {
     return [];
   }
@@ -55,12 +59,12 @@ function recencyWeight(ts, now) {
 }
 
 // Beceri başına recency-ağırlıklı severity skoru, yüksekten düşüğe.
-export function getSkillScores({ sinceDays = null } = {}) {
+export function getSkillScores({ sinceDays = null, source = null } = {}) {
   const now = Date.now();
   const cutoff = sinceDays ? now - sinceDays * 86_400_000 : 0;
   const acc = {};
   for (const s of getSignals()) {
-    if (s.ts < cutoff) continue;
+    if (s.ts < cutoff || (source && !(Array.isArray(source) ? source.includes(s.source) : s.source === source))) continue;
     const w = (SEVERITY_W[s.severity] || 1) * recencyWeight(s.ts, now);
     (acc[s.skill] ||= { skill: s.skill, score: 0, count: 0 });
     acc[s.skill].score += w;
@@ -79,7 +83,7 @@ export function getWeakest(opts) {
 // Varsayılan olarak review verdict'lerine bakar (rule notları gürültülü).
 export function getTrajectory(skill, { minSamples = 4, source = "review" } = {}) {
   const list = getSignals()
-    .filter((s) => s.skill === skill && (!source || s.source === source))
+    .filter((s) => s.skill === skill && (!source || (Array.isArray(source) ? source.includes(s.source) : s.source === source)))
     .sort((a, b) => a.ts - b.ts);
 
   if (list.length < minSamples) return { direction: "yetersiz", samples: list.length };

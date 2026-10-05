@@ -6,6 +6,7 @@ const NoteSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true, required: true },
     title: { type: String, default: "(Basliksiz Not)", trim: true },
     content: { type: String, default: "" },
+    workId: { type: mongoose.Schema.Types.ObjectId, ref: "Work", default: null },
   },
   { timestamps: true }
 );

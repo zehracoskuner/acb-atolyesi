@@ -92,13 +92,13 @@ export default function StudioHub() {
     <div className="studio-root">
       <TopBar />
 
-      <main className="studio-main">
+      <main className="studio-main" data-tour="tour-page-ready">
 
         <div className="studio-tab-content">
             <div className="studio-header">
               <h2>Çalışmalarım</h2>
               <button
-                className="studio-btn-new"
+                className="studio-btn-new" data-tour="studio-create"
                 onClick={() => setIsCreateOpen(true)}
               >
                 + Yeni Eser Oluştur

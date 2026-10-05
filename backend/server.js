@@ -1,13 +1,23 @@
+import "./config/validateEnvironment.js";
 import express      from "express";
 import cors         from "cors";
 import cookieParser from "cookie-parser";
+import cookieOrigin, { allowedOrigins as getAllowedOrigins } from "./middlewares/cookieOrigin.js";
 import "dotenv/config";
 import helmet       from "helmet";
+import mongoose from "mongoose";
+import AuthSession from "./models/AuthSession.js";
+import Work from "./models/Work.js";
+import Chapter from "./models/Chapter.js";
+import { createLifecycle } from "./services/serverLifecycle.js";
 import { connectDB } from "./config/db.js";
 import passport      from "passport";
 import "./config/passport.js";
 import "./config/passport-google.js";
 import ensureAuth from "./middlewares/ensureAuth.js";
+import readerAccess from "./middlewares/readerAccess.js";
+import { prepareUploadRateLimits } from "./services/uploadRateStore.js";
+import { prepareSpotlight, startSpotlightWorker } from "./services/spotlight.js";
 
 // ── Rate limiters ──
 import {
@@ -16,7 +26,6 @@ import {
   registerLimiter,
   writeLimiter,
   aiLimiter,
-  uploadLimiter,
 } from "./middlewares/rateLimiter.js";
 
 // ── Routes ──
@@ -31,6 +40,7 @@ import charactersRoutes     from "./routes/characters.js";
 import relationshipsRoutes  from "./routes/relationships.js";
 import plotsRoutes          from "./routes/plots.js";
 import worldRouter          from "./routes/world.js";
+import { DRAWING_BODY_LIMIT } from "../shared/drawingProtocol.js";
 import drawingRouter        from "./routes/drawing.js";
 import beatsRoutes          from "./routes/beats.js";
 import notesRoutes          from "./routes/notes.js";
@@ -51,12 +61,17 @@ import inlineCommentsRouter from "./routes/inlineComments.js";
 import quotesRouter from "./routes/quotes.js";
 import readingListsRoutes   from "./routes/readingLists.js";
 import reportsRouter from "./routes/reports.js";
+import feedbackRouter from "./routes/feedback.js";
+import contentModeration from "./routes/contentModeration.js";
+import { prepareContentModeration } from './services/prepareContentModeration.js';
 import moderatorRouter from "./routes/moderator.js";
 import adminReportsRouter from "./routes/adminReports.js";
 
 // ══════════════════════════════════════════
 
 const app  = express();
+let stopWorker = async () => {};
+const lifecycle = createLifecycle({ database: mongoose, stopWorker: () => stopWorker(), exit: code => process.exit(code) });
 const PORT = process.env.PORT || 5000;
 const isProd = process.env.NODE_ENV === "production";
 const adminPath = process.env.ADMIN_SECRET_PATH;
@@ -74,18 +89,18 @@ app.use(helmet.hsts({ maxAge: 31536000, includeSubDomains: true }));
 
 // ── CORS ──
 // Üretimde localhost'a asla fallback yapılmaz; CLIENT_URL/SITE_URL prod domain'i tutmalı.
-const allowedOrigins = [process.env.CLIENT_URL, process.env.SITE_URL].filter(Boolean);
-if (!isProd) allowedOrigins.push("http://localhost:5173");
+const allowedOrigins = getAllowedOrigins();
 
 app.use(cors({
   origin(origin, callback) {
     // origin yoksa (sunucu-içi istek, curl, mobil vs.) izin ver
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error("CORS: izin verilmeyen origin"));
+    callback(Object.assign(new Error("CORS: izin verilmeyen origin"), { status: 403 }));
   },
   credentials:    true,
   methods:        ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
+  exposedHeaders: ["Content-Disposition"],
 }));
 
 
@@ -122,20 +137,20 @@ app.use((req, res, next) => {
 });
 
 
-// Upload için büyük limit
-app.use("/api/upload", express.json({ limit: "50mb" }));
-app.use("/api/upload", express.urlencoded({ limit: "50mb", extended: true }));
+// Upload's existing 50 MB parsers run after authentication inside uploadRoutes.
 
 // Drawing için — tldraw snapshot büyük olabiliyor
-app.use("/api/drawing", express.json({ limit: "50mb" })); // ← ekle
-app.use("/api/drawing", express.urlencoded({ limit: "50mb", extended: true })); // ← ekle
+app.use("/api/drawing", express.json({ limit: DRAWING_BODY_LIMIT })); // ← ekle
+app.use("/api/drawing", express.urlencoded({ limit: DRAWING_BODY_LIMIT, extended: true })); // ← ekle
 
 app.use(cookieParser());
+app.use('/api', cookieOrigin);
 
 // ── Passport ──
 app.use(passport.initialize());
 
 // ── Health ──
+app.get("/api/ready", lifecycle.ready);
 app.get("/api/health", (_, res) =>
   res.json({ ok: true, msg: "ACB Atölyesi ayakta ✅" })
 );
@@ -163,18 +178,20 @@ app.get("/.well-known/assetlinks.json", (_, res) => {
 app.use("/api/auth/login",    authLimiter);
 app.use("/api/auth/register", registerLimiter);
 
-// ── Upload (limiterli, auth gerektirmez) ──
-app.use("/api/upload", uploadLimiter);
+// Upload router authenticates and applies IP/account limits before parsing.
 app.use("/api/upload", uploadRoutes);
 
 // ── Genel API limiti — tüm /api/* için (public dahil) ──
 app.use("/api", generalLimiter);
+// All content routes share the policy, including studio and future endpoints.
+app.use("/api", (req, res, next) => req.path.startsWith("/auth/") ? next() : readerAccess(req, res, next));
 
 // ── Public (auth gerektirmez) ──
 app.use("/api/public", publicRouter);
 
 // ── Auth ──
 app.use("/api/auth", authRoutes);
+app.use("/api/admin/reports", ensureAuth, requireRole("admin", "moderator"), adminReportsRouter);
 app.use(`/api/${adminPath}`, ensureAuth, requireRole("admin"), adminRoutes);
 
 app.use("/api/moderator", ensureAuth, requireRole("admin", "moderator"), moderatorRouter);
@@ -239,7 +256,8 @@ app.use("/api/search", searchRouter);
 
 // ---Reports----
 app.use("/api/reports", ensureAuth, reportsRouter);
-app.use("/api/admin/reports", ensureAuth, requireRole("admin", "moderator"), adminReportsRouter);
+app.use("/api/feedback", ensureAuth, feedbackRouter);
+app.use("/api/moderation", ensureAuth, contentModeration);
 if (adminPath !== "admin") {
   app.use("/api/admin", ensureAuth, requireRole("admin"), adminRoutes);
 }
@@ -261,11 +279,19 @@ app.use((err, req, res, next) => {
 const startServer = async () => {
   try {
     await connectDB();
+    await Promise.all([AuthSession.init(), Work.init(), Chapter.init()]);
+    await prepareUploadRateLimits();
+    await prepareContentModeration();
+    await prepareSpotlight();
+    stopWorker = startSpotlightWorker();
     console.log("📥 Veritabanı bağlantısı başarılı.");
 
-    app.listen(PORT, "::", () => {
+    const server = app.listen(PORT, "::", () => {
       console.log(`🚀 ACB Atölyesi ${PORT} portunda çalışıyor`);
     });
+    process.once("SIGTERM", () => { void lifecycle.shutdown(server); });
+    process.once("SIGINT", () => { void lifecycle.shutdown(server); });
+    server.once("error", () => { void lifecycle.shutdown(server); });
   } catch (error) {
     console.error("💥 Sunucu başlatılırken kritik hata oluştu:", error);
     process.exit(1);

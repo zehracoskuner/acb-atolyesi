@@ -32,12 +32,9 @@ export default function Bildirimler() {
 
   useEffect(() => {
     document.title = "Bildirimler · ACB Atölyesi";
-    const token = localStorage.getItem("token");
-    if (!token) { navigate("/login"); return; }
-
     apiGet("/notifications")
       .then(res => setNotifications(res.items || []))
-      .catch(() => {})
+      .catch(error => { if (error.status === 401) navigate("/login"); })
       .finally(() => setLoading(false));
   }, [navigate]);
 
@@ -138,7 +135,7 @@ export default function Bildirimler() {
               return (
                 <div
                   key={n._id}
-                  onClick={() => !n.read && markRead(n._id)}
+                  onClick={() => { if (!n.read) markRead(n._id); if (n.type === "report_update" && n.report) navigate(`/basvurular/${n.report}`); }}
                   style={{
                     display:       "flex",
                     alignItems:    "flex-start",

@@ -1,6 +1,8 @@
 import express from "express";
 import ensureAuth from "../middlewares/ensureAuth.js";
 import Note from "../models/Note.js";
+import Work from "../models/Work.js";
+import mongoose from "mongoose";
 
 const router = express.Router();
 
@@ -16,6 +18,7 @@ router.get("/", ensureAuth, async (req, res) => {
         _id: n._id, // Frontend'de sel._id kullandığın için bunu koruyalım
         title: n.title,
         content: n.content,
+        workId: n.workId || null,
         createdAt: n.createdAt,
         updatedAt: n.updatedAt,
       })),
@@ -29,12 +32,16 @@ router.get("/", ensureAuth, async (req, res) => {
 router.post("/", ensureAuth, async (req, res) => {
   try {
     const userId = req.user?.id || req.userId;
-    const { title, content } = req.body;
+    const { title, content, workId } = req.body;
+    if (workId && (!mongoose.isValidObjectId(workId) || !await Work.exists({ _id: workId, user: userId }))) {
+      return res.status(403).json({ message: "Bu esere not bağlayamazsın." });
+    }
 
     const note = await Note.create({
       title: title || "(Başlıksız)",
       content: content || "",
       user: userId,
+      workId: workId || null,
     });
 
     res.status(201).json({ item: { ...note._doc, _id: note._id } });
@@ -47,11 +54,14 @@ router.post("/", ensureAuth, async (req, res) => {
 router.patch("/:id", ensureAuth, async (req, res) => {
   try {
     const userId = req.user?.id || req.userId;
-    const { title, content } = req.body;
+    const { title, content, workId } = req.body;
+    if (workId && (!mongoose.isValidObjectId(workId) || !await Work.exists({ _id: workId, user: userId }))) {
+      return res.status(403).json({ message: "Bu esere not bağlayamazsın." });
+    }
 
     const note = await Note.findOneAndUpdate(
       { _id: req.params.id, user: userId },
-      { $set: { ...(title !== undefined && { title }), ...(content !== undefined && { content }) } },
+      { $set: { ...(title !== undefined && { title }), ...(content !== undefined && { content }), ...(workId !== undefined && { workId: workId || null }) } },
       { new: true }
     );
 

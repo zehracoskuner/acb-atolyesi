@@ -12,7 +12,7 @@
   background-color: rgb(219, 245, 242);
   padding: 30px;
   border-radius: 12px;
-  width: min(320px, 92vw);
+  width: min(320px, 100%);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
   text-align: center;
 }

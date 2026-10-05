@@ -13,7 +13,7 @@ const reportSchema = new mongoose.Schema(
     // Ne şikayet edildi
     targetType: {
       type: String,
-      enum: ["work", "chapter", "user", "comment"],
+      enum: ["work", "chapter", "user", "comment", "cover", "avatar", "banner"],
       required: true,
     },
     targetId: {
@@ -35,12 +35,22 @@ const reportSchema = new mongoose.Schema(
       required: true,
     },
 
+    contentCase: { type: mongoose.Schema.Types.ObjectId, ref: 'ContentCase' },
+    targetVersion: String,
     description: {
       type: String,
       default: "",
       maxlength: 500,
     },
 
+    stage: { type: String, enum: ['received', 'reviewing', 'awaiting_information', 'decided', 'appeal_review'] },
+    revision: { type: Number, default: 0 },
+    originalWork: { type: String, maxlength: 4000 },
+    targetOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    evidenceSnapshot: { type: mongoose.Schema.Types.Mixed, select: false },
+    history: [{ at: Date, kind: String, text: String, audience: { type: String, enum: ['reporter', 'shared'] } }],
+    decisions: [{ at: Date, outcome: String, action: String, rationale: String, by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' } }],
+    appeals: [{ at: Date, by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, decision: Number, rationale: String }],
     // Admin işlemi
     status: {
       type: String,
@@ -65,7 +75,8 @@ const reportSchema = new mongoose.Schema(
 );
 
 // Aynı kişi aynı içeriği bir kez şikayet edebilir
-reportSchema.index({ reporter: 1, targetType: 1, targetId: 1 }, { unique: true });
+reportSchema.index({ reporter: 1, targetType: 1, targetId: 1, targetVersion: 1 },
+  { unique: true, partialFilterExpression: { status: 'pending' }, name: 'open_report_version' });
 
 // Bekleyen şikayetleri hızlı çekmek için
 reportSchema.index({ status: 1, createdAt: -1 });

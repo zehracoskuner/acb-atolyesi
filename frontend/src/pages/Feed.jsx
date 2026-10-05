@@ -1,3 +1,4 @@
+import { useSession } from "../lib/session";
 // src/pages/Feed.jsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -89,7 +90,7 @@ function LogCard({ item }) {
   const navigate = useNavigate();
   const [liked,     setLiked]     = useState(item.likedByMe);
   const [likeCount, setLikeCount] = useState(item.likeCount);
-  const isLoggedIn = !!localStorage.getItem("token");
+  const isLoggedIn = useSession().status === "authenticated";
 
   async function handleLike() {
     if (!isLoggedIn) { navigate("/login"); return; }
@@ -160,7 +161,7 @@ function ChapterCard({ item }) {
   const navigate  = useNavigate();
   const [liked,     setLiked]     = useState(item.likedByMe ?? false);
   const [likeCount, setLikeCount] = useState(item.likeCount ?? 0);
-  const isLoggedIn = !!localStorage.getItem("token");
+  const isLoggedIn = useSession().status === "authenticated";
 
   async function handleLike() {
     if (!isLoggedIn) { navigate("/login"); return; }
@@ -370,7 +371,7 @@ function Landing({ discover, discLoading }) {
 ══════════════════════════════════════════════ */
 export default function Feed() {
   const navigate   = useNavigate();
-  const isLoggedIn = !!localStorage.getItem("token");
+  const isLoggedIn = useSession().status === "authenticated";
 
   const [items,       setItems]       = useState([]);
   const [loading,     setLoading]     = useState(true);

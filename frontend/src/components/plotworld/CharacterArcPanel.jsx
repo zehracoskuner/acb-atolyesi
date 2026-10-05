@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback } from "react";
 import { STATUS_META, CHAR_PALETTE }      from "./constants";
-import { apiPost, describeAiError }        from "../../lib/api";
+import { apiGet, apiPost, describeAiError }        from "../../lib/api";
 import "./CharacterArc.css";
 
 /* ─── Duygusal ısı renkleri ─── */
@@ -87,7 +87,6 @@ export default function CharacterArcPanel({
   nodes,
   actOrder,
   actMeta,
-  workId,
   onSceneClick,
 }) {
   const [activeCharId, setActiveCharId] = useState(
@@ -140,6 +139,8 @@ export default function CharacterArcPanel({
     setArcError(prev => ({ ...prev, [arc.charId]: null }));
 
     try {
+      const { preference } = await apiGet("/user/development-coach");
+      if (preference !== "enabled") throw Object.assign(new Error("AI iznin kapalı. Ayarlar’dan açabilirsin."), { status: 403 });
       const res = await apiPost("/ai/plotworld/arc-analysis", {
         character: {
           name:  arc.char.name,
@@ -173,7 +174,7 @@ export default function CharacterArcPanel({
     } catch (e) {
       setArcError(prev => ({
         ...prev,
-        [arc.charId]: describeAiError(e),
+        [arc.charId]: e.status === 403 ? { message: "AI iznin kapalı. Ayarlar’dan açabilirsin.", retryable: false } : describeAiError(e),
       }));
     } finally {
       setLoadingArc(null);

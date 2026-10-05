@@ -1,8 +1,11 @@
+import { rememberLoginReturn } from "../lib/loginReturn";
 // src/pages/Register.jsx
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { useBreakpoint } from "../hooks/useBreakpoint";
+import TermsAcceptance from "../components/TermsAcceptance";
+import { TERMS_VERSION } from "../lib/terms";
 
 const API = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
 
@@ -33,12 +36,14 @@ const EnvelopeIcon = () => (
 );
 
 export default function Register() {
+  useEffect(() => { rememberLoginReturn(new URLSearchParams(window.location.search).get("returnTo")); }, []);
   const { isMobile, isSm } = useBreakpoint();
   const [form, setForm]     = useState({ kullaniciAdi: "", email: "", sifre: "" });
   const [showPw, setShowPw] = useState(false);
   const [mesaj, setMesaj]   = useState(null);
   const [loading, setLoad]  = useState(false);
   const [verified, setVerified] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => { document.title = "Kayıt Ol · ACB Atölyesi"; }, []);
@@ -64,12 +69,14 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!termsAccepted) { setMesaj({ type: "err", text: "Kayıt için sözleşmeyi kabul etmelisiniz." }); return; }
     if (form.sifre.length < 6) { setMesaj({ type: "err", text: "Şifre en az 6 karakter olmalı." }); return; }
     setLoad(true); setMesaj(null);
     try {
-      await axios.post(`${API}/auth/register`, form, { withCredentials: true });
+      await axios.post(`${API}/auth/register`, { ...form, termsAccepted, termsVersion: TERMS_VERSION }, { withCredentials: true });
       setVerified(true);
     } catch (err) {
+      if (err.response?.data?.code === "TERMS_VERSION_MISMATCH") setTermsAccepted(false);
       setMesaj({ type: "err", text: err.response?.data?.message || "Kayıt başarısız." });
     } finally { setLoad(false); }
   };
@@ -200,7 +207,8 @@ export default function Register() {
             <p style={s.terms}>
               Kayıt olarak{" "}<Link to="/kullanim-sartlari" style={s.termsLink}>Kullanım Şartları</Link>{" "}ve{" "}<Link to="/gizlilik" style={s.termsLink}>Gizlilik Politikası</Link>'nı kabul etmiş olursun.<Link to="/etik-kurallar" style={s.termsLink}>Etik Kuralları</Link> okumayı unutma.
             </p>
-            <button type="submit" style={{...responsive.btnMain, opacity: loading ? .7 : 1}} disabled={loading}>
+            <TermsAcceptance checked={termsAccepted} onChange={setTermsAccepted} disabled={loading} />
+            <button type="submit" style={{...responsive.btnMain, opacity: loading || !termsAccepted ? .7 : 1}} disabled={loading || !termsAccepted}>
               {loading ? "Hesap oluşturuluyor…" : "Hesap Oluştur"}
             </button>
           </form>
@@ -209,6 +217,7 @@ export default function Register() {
           <button style={responsive.btnGoogle} onClick={() => window.location.href = `${API}/auth/google`}>
             <GoogleIcon/> Google ile devam et
           </button>
+          <p style={s.terms}>Google ile yeni kayıtta sözleşme kabulü profil tamamlama adımında alınır.</p>
           <p style={s.switchTxt}>
             Zaten hesabın var mı?{" "}<Link to="/login" style={s.switchLink}>Giriş yap</Link>
           </p>

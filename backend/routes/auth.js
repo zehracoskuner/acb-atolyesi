@@ -1,32 +1,45 @@
 // backend/routes/auth.js
+import { validBirthYear } from "../services/matureAccess.js";
 import { Router }      from "express";
 import bcrypt          from "bcryptjs";
-import jwt             from "jsonwebtoken";
 import crypto          from "crypto";
 import dns             from "dns/promises";
 import passport        from "passport";
 import { OAuth2Client } from "google-auth-library";
 import User            from "../models/User.js";
-import ensureAuth      from "../middlewares/ensureAuth.js";
+import { ensureIdentity } from "../middlewares/ensureAuth.js";
+import { TERMS_VERSION, termsStatus, validateTermsAcceptance, newTermsAcceptance } from "../config/terms.js";
 import { googleUpsert } from "../utils/googleUpsert.js";
 import { sendVerificationEmail, sendPasswordResetEmail, sendEmailVerifyOtp } from "../services/emailService.js";
 import "dotenv/config";
+import { authLimiter, registerLimiter } from "../middlewares/rateLimiter.js";
+
+import { createWebSession, createNativeSession, revokeWebSession, startGoogleSession, verifyGoogleSession } from "../services/authSession.js";
 
 const router   = Router();
-const SECRET   = process.env.JWT_SECRET || "atolye-secret-key";
+router.use((req, res, next) => {
+  for (const field of ['email', 'sifre', 'otp', 'token', 'newPassword', 'kullaniciAdi']) {
+    if (req.body?.[field] !== undefined && typeof req.body[field] !== 'string') {
+      return res.status(400).json({ message: 'Geçersiz kimlik doğrulama isteği.' });
+    }
+  }
+  next();
+});
+router.use(['/verify-email-otp', '/reset-password'], authLimiter);
+router.use(['/send-verify-otp', '/forgot-password', '/resend-verification'], registerLimiter);
+router.post("/logout", async (req, res) => {
+  const header = req.headers?.authorization || "";
+  await revokeWebSession(req.cookies?.token || (header.startsWith("Bearer ") ? header.slice(7) : undefined));
+  res.clearCookie("token", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/" });
+  res.set("Cache-Control", "no-store");
+  res.json({ ok: true });
+});
+
 const gClient  = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const SITE_URL =
   process.env.SITE_URL ||
   process.env.CLIENT_URL ||
   (process.env.NODE_ENV === "production" ? "https://xn--acbatlyesi-icb.com" : "http://localhost:5173");
-
-function makeToken(user) {
-  return jwt.sign(
-    { id: user._id, email: user.email, role: user.role ?? "user" },
-    SECRET,
-    { expiresIn: "30d" }
-  );
-}
 
 passport.serializeUser((user, done) => done(null, user._id));
 passport.deserializeUser(async (id, done) => {
@@ -71,7 +84,7 @@ router.get("/check-username", async (req, res) => {
 /* ═══════════════════════════════════════════
    POST /api/auth/register
 ═══════════════════════════════════════════ */
-router.post("/register", async (req, res) => {
+router.post("/register", validateTermsAcceptance, async (req, res) => {
   try {
     const { kullaniciAdi, email, sifre } = req.body;
 
@@ -105,11 +118,12 @@ router.post("/register", async (req, res) => {
     const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await User.create({
+      ...newTermsAcceptance(),
       kullaniciAdi,
       email,
       sifreHash,
       authProvider:       "local",
-      profileComplete:    true,
+      profileComplete:    false,
       emailVerified:      false,
       emailVerifyToken:   verifyToken,
       emailVerifyExpires: verifyExpires,
@@ -132,7 +146,7 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, sifre } = req.body;
-    if (!email || !sifre)
+    if (typeof email !== 'string' || typeof sifre !== 'string' || !email || !sifre)
       return res.status(400).json({ message: "E-posta ve şifre gerekli." });
 
     const user = await User.findOne({ email });
@@ -158,13 +172,10 @@ router.post("/login", async (req, res) => {
         message: "E-posta adresiniz henüz doğrulanmadı. Lütfen gelen kutunuzu kontrol edin.",
       });
 
-    const token = makeToken(user);
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure:   process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge:   30 * 24 * 60 * 60 * 1000,
-    });
+    const web = req.body.client !== "native";
+    const token = web ? undefined : await createNativeSession(user);
+    if (web) await createWebSession(req, res, user, req.body.rememberMe);
+    res.set("Cache-Control", "no-store");
 
     return res.json({
       token,
@@ -175,7 +186,9 @@ router.post("/login", async (req, res) => {
         avatarUrl:       user.avatarUrl,
         emailVerified:   user.emailVerified,
         authProvider:    user.authProvider,
-        profileComplete: user.profileComplete,
+        birthYear: user.birthYear,
+        profileComplete: user.profileComplete && Number.isInteger(user.birthYear),
+        ...termsStatus(user),
         tourCompleted:   user.tourCompleted,
         role:            user.role,
       },
@@ -190,13 +203,22 @@ router.post("/login", async (req, res) => {
    POST /api/auth/complete-profile
    Google ile kayıt sonrası kullanıcı adı seçme
 ═══════════════════════════════════════════ */
-router.post("/complete-profile", ensureAuth, async (req, res) => {
+router.post("/complete-profile", ensureIdentity, validateTermsAcceptance, async (req, res) => {
   try {
-    const { kullaniciAdi } = req.body;
+    const { birthYear } = req.body;
+    if (!validBirthYear(birthYear)) return res.status(400).json({ message: "Geçerli bir doğum yılı girin." });
     const user = await User.findById(req.user.id);
 
     if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
-    if (user.profileComplete) return res.status(400).json({ message: "Profil zaten tamamlanmış." });
+    const completedResponse = account => res.json({ user: account.toSafeJSON() });
+    // Retried submissions must succeed without rewriting the stored year.
+    if (user.profileComplete && Number.isInteger(user.birthYear)) {
+      if (user.birthYear === birthYear) return completedResponse(user);
+      return res.status(409).json({ code: "BIRTH_YEAR_ALREADY_SET", message: "Doğum yılınız zaten kaydedilmiş. Sayfayı yenileyin." });
+    }
+    // Legacy completed accounts keep their username; only the missing year is added.
+    const kullaniciAdi = user.profileComplete && user.kullaniciAdi
+      ? user.kullaniciAdi : req.body.kullaniciAdi || user.kullaniciAdi;
 
     if (!kullaniciAdi || !/^[a-zA-Z0-9_]{3,30}$/.test(kullaniciAdi))
       return res.status(400).json({ message: "Geçerli bir kullanıcı adı gir (3-30 karakter, harf/rakam/_)." });
@@ -204,17 +226,23 @@ router.post("/complete-profile", ensureAuth, async (req, res) => {
     const taken = await User.findOne({ kullaniciAdi, _id: { $ne: user._id } });
     if (taken) return res.status(409).json({ message: "Bu kullanıcı adı alınmış." });
 
-    await User.updateOne(
-      { _id: user._id },
-      { $set: { kullaniciAdi, profileComplete: true } }
+    const acceptance = newTermsAcceptance();
+    const result = await User.updateOne(
+      { _id: user._id, $or: [{ profileComplete: false }, { birthYear: null }] },
+      { $set: { kullaniciAdi, birthYear, profileComplete: true, ...acceptance } }
     );
+    if (!result.modifiedCount) {
+      const current = await User.findById(req.user.id);
+      if (current?.profileComplete && current.birthYear === birthYear) return completedResponse(current);
+      return res.status(409).json({ code: "BIRTH_YEAR_ALREADY_SET", message: "Profil başka bir istekte güncellendi. Sayfayı yenileyin." });
+    }
 
     user.kullaniciAdi  = kullaniciAdi;
+    user.birthYear = birthYear;
     user.profileComplete = true;
+    Object.assign(user, acceptance);
 
-    const token = makeToken(user);
     return res.json({
-      token,
       user: {
         _id:             user._id,
         kullaniciAdi:    user.kullaniciAdi,
@@ -222,7 +250,9 @@ router.post("/complete-profile", ensureAuth, async (req, res) => {
         avatarUrl:       user.avatarUrl,
         emailVerified:   user.emailVerified,
         authProvider:    user.authProvider,
-        profileComplete: user.profileComplete,
+        birthYear: user.birthYear,
+        profileComplete: user.profileComplete && Number.isInteger(user.birthYear),
+        ...termsStatus(user),
         tourCompleted:   user.tourCompleted,
         role:            user.role,
       },
@@ -309,7 +339,7 @@ router.post("/send-verify-otp", async (req, res) => {
       return res.json({ message: "Kod gönderildi." });
     }
 
-    const otp        = String(Math.floor(100000 + Math.random() * 900000));
+    const otp        = String(crypto.randomInt(100000, 1000000));
     const otpExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 dakika
 
     await User.findByIdAndUpdate(
@@ -336,7 +366,7 @@ router.post("/send-verify-otp", async (req, res) => {
 router.post("/verify-email-otp", async (req, res) => {
   try {
     const { email, otp } = req.body;
-    if (!email || !otp)
+    if (typeof email !== 'string' || typeof otp !== 'string' || !/^\d{6}$/.test(otp))
       return res.status(400).json({ message: "E-posta ve kod gerekli." });
 
     const user = await User.findOne({ email });
@@ -344,8 +374,7 @@ router.post("/verify-email-otp", async (req, res) => {
       return res.status(400).json({ message: "Geçersiz veya süresi dolmuş kod." });
 
     if (user.emailVerified) {
-      const token = makeToken(user);
-      return res.json({ message: "E-posta zaten doğrulanmış.", token, user: user.toSafeJSON() });
+      return res.status(400).json({ message: "Geçersiz veya süresi dolmuş kod." });
     }
 
     if (
@@ -357,19 +386,19 @@ router.post("/verify-email-otp", async (req, res) => {
       return res.status(400).json({ message: "Geçersiz veya süresi dolmuş kod." });
     }
 
-    await User.findByIdAndUpdate(
-      user._id,
+    // Consume the code atomically: two concurrent requests must not both log in.
+    const verified = await User.findOneAndUpdate(
+      { _id: user._id, emailVerified: false, emailVerifyOtp: otp, emailVerifyOtpExpires: { $gt: new Date() } },
       {
         $set:   { emailVerified: true },
         $unset: { emailVerifyOtp: "", emailVerifyOtpExpires: "", emailVerifyToken: "", emailVerifyExpires: "" },
       },
-      { runValidators: false }
+      { runValidators: false, new: true }
     );
-
-    user.emailVerified = true;
-    const token = makeToken(user);
-
-    return res.json({ token, user: user.toSafeJSON() });
+    if (!verified) return res.status(400).json({ message: "Geçersiz veya süresi dolmuş kod." });
+    const web = req.body.client !== "native";
+    if (web) await createWebSession(req, res, verified, req.body.rememberMe);
+    return res.json({ token: web ? undefined : await createNativeSession(verified), user: verified.toSafeJSON() });
   } catch (err) {
     console.error("verify-email-otp hatası:", err);
     return res.status(500).json({ message: "Sunucu hatası." });
@@ -385,7 +414,7 @@ router.post("/forgot-password", async (req, res) => {
     const user = await User.findOne({ email });
 
     if (user) {
-      const otp        = String(Math.floor(100000 + Math.random() * 900000));
+      const otp        = String(crypto.randomInt(100000, 1000000));
       const otpExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 dakika
 
       await User.findByIdAndUpdate(
@@ -410,6 +439,11 @@ router.post("/forgot-password", async (req, res) => {
 router.post("/reset-password", async (req, res) => {
   try {
     const { token, email, otp, newPassword } = req.body;
+    if ((email !== undefined && typeof email !== 'string') ||
+        (otp !== undefined && (typeof otp !== 'string' || !/^\d{6}$/.test(otp))) ||
+        (token !== undefined && typeof token !== 'string') || typeof newPassword !== 'string') {
+      return res.status(400).json({ message: "Geçersiz sıfırlama isteği." });
+    }
 
     if (!newPassword)
       return res.status(400).json({ message: "Yeni şifre gerekli." });
@@ -453,7 +487,11 @@ router.post("/reset-password", async (req, res) => {
     if (user.authProvider === "google")
       updateData.$set.authProvider = "both";
 
-    await User.findByIdAndUpdate(user._id, updateData, { runValidators: false });
+    const credential = email && otp
+      ? { passwordResetOtp: otp, passwordResetOtpExpires: { $gt: new Date() } }
+      : { passwordResetToken: token, passwordResetExpires: { $gt: new Date() } };
+    const result = await User.updateOne({ _id: user._id, ...credential }, updateData, { runValidators: false });
+    if (!result.modifiedCount) return res.status(400).json({ message: "Geçersiz veya süresi dolmuş kod." });
 
     return res.json({ message: "Şifren başarıyla güncellendi." });
   } catch (err) {
@@ -465,36 +503,22 @@ router.post("/reset-password", async (req, res) => {
 /* ═══════════════════════════════════════════
    Google OAuth
 ═══════════════════════════════════════════ */
-router.get("/google",
-  passport.authenticate("google", { scope: ["profile", "email"], session: false })
+router.get("/google", startGoogleSession,
+  (req, res, next) => passport.authenticate("google", { scope: ["profile", "email"], session: false, state: req.googleState })(req, res, next)
 );
 
-router.get("/google/callback",
-  passport.authenticate("google", {
-    session:         false,
-    failureRedirect: `${SITE_URL}/login?error=google`,
-  }),
-  (req, res) => {
-    const user  = req.user;
-    const token = makeToken(user);
-
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure:   process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge:   30 * 24 * 60 * 60 * 1000,
-    });
-
-    // Token URL fragment'ine konur — sunucu loglarına/referrer'a/tarayıcı geçmişine sızmaz.
-    const setupQS = !user.profileComplete ? "?setup=1" : "";
-    return res.redirect(`${SITE_URL}/auth/callback${setupQS}#token=${encodeURIComponent(token)}`);
+router.get("/google/callback", verifyGoogleSession,
+  passport.authenticate("google", { session: false, failureRedirect: SITE_URL + "/login?error=google" }),
+  async (req, res) => {
+    await createWebSession(req, res, req.user, req.rememberMe);
+    return res.redirect(SITE_URL + "/auth/callback");
   }
 );
 
 /* ═══════════════════════════════════════════
    GET /api/auth/me
 ═══════════════════════════════════════════ */
-router.get("/me", ensureAuth, async (req, res) => {
+router.get("/me", ensureIdentity, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).lean();
     if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
@@ -507,13 +531,15 @@ router.get("/me", ensureAuth, async (req, res) => {
         avatarUrl:       user.avatarUrl,
         emailVerified:   user.emailVerified,
         authProvider:    user.authProvider,
-        profileComplete: user.profileComplete,
+        birthYear: user.birthYear,
+        profileComplete: user.profileComplete && Number.isInteger(user.birthYear),
+        ...termsStatus(user),
         tourCompleted:   user.tourCompleted,
         role:            user.role,
       },
     });
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: "Oturum bilgisi alınamadı." });
   }
 });
 
@@ -546,7 +572,8 @@ router.post("/google/mobile", async (req, res) => {
       return res.status(400).json({ message: "Google hesabından e-posta alınamadı." });
 
     const user  = await googleUpsert({ email, googleId, avatarUrl });
-    const token = makeToken(user);
+    const token = await createNativeSession(user);
+    res.set("Cache-Control", "no-store");
 
     return res.json({
       token,
@@ -557,7 +584,9 @@ router.post("/google/mobile", async (req, res) => {
         avatarUrl:       user.avatarUrl,
         emailVerified:   user.emailVerified,
         authProvider:    user.authProvider,
-        profileComplete: user.profileComplete,
+        birthYear: user.birthYear,
+        profileComplete: user.profileComplete && Number.isInteger(user.birthYear),
+        ...termsStatus(user),
         tourCompleted:   user.tourCompleted,
         role:            user.role,
       },
@@ -565,6 +594,26 @@ router.post("/google/mobile", async (req, res) => {
   } catch (err) {
     console.error("google/mobile hatası:", err);
     return res.status(500).json({ message: "Sunucu hatası." });
+  }
+});
+
+// Authenticated legacy/returning users explicitly accept; repeat requests keep the first time.
+router.post("/accept-terms", ensureIdentity, validateTermsAcceptance, async (req, res) => {
+  try {
+    let user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+    if (user.profileComplete === false) {
+      return res.status(403).json({ code: "PROFILE_INCOMPLETE", message: "Önce profilinizi tamamlayın." });
+    }
+    await User.updateOne(
+      { _id: user._id, $or: [{ termsVersion: { $ne: TERMS_VERSION } }, { termsAcceptedAt: null }] },
+      { $set: newTermsAcceptance() }
+    );
+    user = await User.findById(req.user.id);
+    return res.json({ user: user.toSafeJSON() });
+  } catch (err) {
+    console.error("accept-terms hatası:", err);
+    return res.status(500).json({ message: "Sözleşme kabulü kaydedilemedi. Tekrar deneyin." });
   }
 });
 

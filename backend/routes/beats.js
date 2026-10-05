@@ -1,11 +1,19 @@
 // backend/routes/beats.js
 import { Router } from "express";
 import Beat from "../models/Beat.js";
+import ensureAuth from "../middlewares/ensureAuth.js";
+import ensureWorkOwner from "../middlewares/ensureWorkOwner.js";
 
 const router = Router();
+router.use(ensureAuth);
+const ownWork = ensureWorkOwner(req => req.method === "GET" ? req.query.workId : req.body?.workId);
+const ownBeat = ensureWorkOwner(async req => {
+  const beat = await Beat.findById(req.params.beatId).select("workId");
+  return beat?.workId?.toString();
+});
 
 // GET /api/beats?workId=...&plotId=...
-router.get("/", async (req, res) => {
+router.get("/", ownWork, async (req, res) => {
   try {
     const { workId, plotId } = req.query;
     if (!workId || !plotId) {
@@ -21,7 +29,7 @@ router.get("/", async (req, res) => {
 });
 
 // POST /api/beats
-router.post("/", async (req, res) => {
+router.post("/", ownWork, async (req, res) => {
   try {
     const { workId, plotId } = req.body;
     if (!workId || !plotId) {
@@ -56,7 +64,7 @@ router.post("/", async (req, res) => {
 });
 
 // PUT /api/beats/:beatId
-router.put("/:beatId", async (req, res) => {
+router.put("/:beatId", (req, res, next) => req.params.beatId === "reorder" ? next("route") : next(), ownBeat, async (req, res) => {
   try {
     const { beatId } = req.params;
 
@@ -79,7 +87,7 @@ router.put("/:beatId", async (req, res) => {
 });
 
 // DELETE /api/beats/:beatId
-router.delete("/:beatId", async (req, res) => {
+router.delete("/:beatId", ownBeat, async (req, res) => {
   try {
     const { beatId } = req.params;
     const gone = await Beat.findByIdAndDelete(beatId);
@@ -94,7 +102,7 @@ router.delete("/:beatId", async (req, res) => {
 
 // PUT /api/beats/reorder
 // body: { workId, plotId, orderedIds: [...] }
-router.put("/reorder", async (req, res) => {
+router.put("/reorder", ownWork, async (req, res) => {
   try {
     const { workId, plotId, orderedIds } = req.body;
     if (!workId || !plotId || !Array.isArray(orderedIds)) {

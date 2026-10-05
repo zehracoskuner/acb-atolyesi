@@ -1,8 +1,11 @@
 // backend/models/User.js
 import mongoose from "mongoose";
+import { termsStatus } from "../config/terms.js";
 
 const userSchema = new mongoose.Schema(
   {
+    removedAvatarCase: { type: String, default: "" },
+    removedBannerCase: { type: String, default: "" },
     kullaniciAdi: {
       type:   String,
       required: false,
@@ -27,10 +30,17 @@ const userSchema = new mongoose.Schema(
       default: "local",
     },
 
+    birthYear: { type: Number, default: null, min: 1900, validate: v => v === null || Number.isInteger(v) },
+    matureAcknowledgements: [{ type: mongoose.Schema.Types.ObjectId, ref: "Work" }],
     profileComplete: { type: Boolean, default: true },
+
+    // No automatic/backfilled consent for existing users or pending Google accounts.
+    termsVersion: { type: String, default: null },
+    termsAcceptedAt: { type: Date, default: null },
 
     // İlk giriş karşılama/tanıtım turu kullanıcıya gösterildi mi?
     tourCompleted: { type: Boolean, default: false },
+    tourProgress: { type: Map, of: String, default: () => ({}) },
 
     googleId: { type: String, default: null, sparse: true },
 
@@ -55,6 +65,7 @@ const userSchema = new mongoose.Schema(
 
     settings: {
       theme: { type: String, enum: ["light", "dark", "sepia"], default: "light" },
+      developmentCoach: { type: String, enum: ["undecided", "enabled", "disabled"], default: "undecided" },
     },
 
     // ── Rol sistemi ──────────────────────────────────────────
@@ -124,14 +135,18 @@ const userSchema = new mongoose.Schema(
 
 userSchema.methods.toSafeJSON = function () {
   return {
+    ...termsStatus(this),
     id:              this._id,
+    _id:             this._id,
     kullaniciAdi:    this.kullaniciAdi,
     email:           this.email,
     emailVerified:   this.emailVerified,
     avatarUrl:       this.avatarUrl,
     authProvider:    this.authProvider,
-    profileComplete: this.profileComplete,
+    birthYear:       this.birthYear,
+    profileComplete: this.profileComplete && Number.isInteger(this.birthYear),
     tourCompleted:   this.tourCompleted,
+    tourProgress:    Object.fromEntries(this.tourProgress || []),
     experienceLevel: this.experienceLevel,
     settings:        this.settings,
     role:            this.role,

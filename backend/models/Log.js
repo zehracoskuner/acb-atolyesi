@@ -34,5 +34,7 @@ const logSchema = new mongoose.Schema(
 
 // Eski girdileri otomatik sil — 1 yıl
 logSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 365 });
+logSchema.index({ visibility: 1, createdAt: -1, _id: -1 });
+logSchema.index({ author: 1, visibility: 1, createdAt: -1 });
 
 export default mongoose.model("Log", logSchema);

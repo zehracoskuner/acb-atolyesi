@@ -1,4 +1,25 @@
+import { refreshSession, getSession } from "./session";
+import { rememberLoginReturn } from "./loginReturn";
+
+function handleMembershipError(data) {
+  const destination = data.code === "TERMS_ACCEPTANCE_REQUIRED" ? "/sozlesme-kabul"
+    : data.code === "PROFILE_INCOMPLETE" ? "/profili-tamamla" : null;
+  // Background sync during sign-in must not race with the sign-in redirect.
+  const exempt = ["/login", "/register", "/auth/callback", "/sozlesme-kabul", "/profili-tamamla", "/kullanim-sartlari", "/gizlilik", "/etik-kurallar"];
+  if (destination && !exempt.includes(window.location.pathname)) {
+    rememberLoginReturn(window.location.pathname + window.location.search);
+    window.location.assign(destination);
+  }
+}
 const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const pendingMaturePrompts = new Map();
+function requestMatureAcknowledgement(workId) {
+  if (!pendingMaturePrompts.has(workId)) {
+    const prompt = new Promise(resolve => window.dispatchEvent(new CustomEvent("acb-mature-acknowledgement", { detail: { workId, resolve } })));
+    pendingMaturePrompts.set(workId, prompt.finally(() => pendingMaturePrompts.delete(workId)));
+  }
+  return pendingMaturePrompts.get(workId);
+}
 
 const ADMIN_BASE = `${API_BASE}/${import.meta.env.VITE_ADMIN_SECRET_PATH || "admin"}`;
 
@@ -12,25 +33,8 @@ export const adminDelete = (path)       => apiDelete(ADMIN_PREFIX + path);
 
 // 401 alındığında — token gerçekten geçersiz mi önce kontrol et
 async function handleAuthError() {
-  try {
-    const res = await fetch(API_BASE + "/auth/me", {
-      method: "GET",
-      headers: getHeaders(false),
-      credentials: "include",
-    });
-    // Token hâlâ geçerliyse (geçici hata, ağ sorunu vs.) çıkış yapma
-    if (res.ok) return;
-  } catch {
-    // Ağ hatası — sunucuya ulaşılamıyor, çıkış yapma
-    return;
-  }
-
-  // /me de 401 döndü → token gerçekten geçersiz, temizle
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  localStorage.removeItem("acb_tour_done");
-  localStorage.removeItem("acb_tour_pending");
-  window.location.href = "/login";
+  await refreshSession();
+  if (getSession().status === "guest") window.dispatchEvent(new Event("acb-membership-required"));
 }
 
 export function describeAiError(e, { fallback = "Analiz yapılamadı. Tekrar dene.", timeoutMessage = "Analiz uzun sürdü, tekrar dene." } = {}) {
@@ -49,11 +53,13 @@ function getHeaders(includeContentType = true) {
   return headers;
 }
 
-export async function apiGet(path) {
+export async function apiGet(path, { timeoutMs, matureRetry = false } = {}) {
   const res = await fetch(API_BASE + path, {
     method: "GET",
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     headers: getHeaders(false),
     credentials: "include",
+    cache: "no-store",
   });
 
   const text = await res.text();
@@ -65,13 +71,43 @@ export async function apiGet(path) {
   }
 
   if (!res.ok) {
+    if (!matureRetry && res.status === 428 && data.code === "MATURE_ACKNOWLEDGEMENT_REQUIRED") {
+      if (await requestMatureAcknowledgement(data.workId)) return apiGet(path, { timeoutMs, matureRetry: true });
+      const err = new Error("Okuma iptal edildi."); err.status = 428; err.code = "MATURE_CANCELLED"; throw err;
+    }
+    if (res.status === 403) handleMembershipError(data);
     if (res.status === 401) handleAuthError(); // await yok — arka planda çalışsın
     const err = new Error(data.message || `HTTP ${res.status}`);
     err.status = res.status;
+    err.data = data;
     throw err;
   }
 
   return data;
+}
+
+export async function apiDownloadBook(workId, format) {
+  const res = await fetch(`${API_BASE}/works/${encodeURIComponent(workId)}/download?format=${encodeURIComponent(format)}`, {
+    headers: getHeaders(false), credentials: "include", cache: "no-store",
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 403) handleMembershipError(data);
+    if (res.status === 401) handleAuthError();
+    throw new Error(data.message || "Kitap indirilemedi.");
+  }
+  const expectedType = format === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "text/plain";
+  if (!res.headers.get("Content-Type")?.startsWith(expectedType)) throw new Error("Geçersiz dosya yanıtı; indirme durduruldu.");
+  const blob = await res.blob();
+  if (!blob.size) throw new Error("Boş dosya yanıtı; indirme durduruldu.");
+  const encodedName = (res.headers.get("Content-Disposition") || "").match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  let filename = `Kitabim.${format}`;
+  if (encodedName) { try { filename = decodeURIComponent(encodedName); } catch { /* safe fallback */ } }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = filename;
+  document.body.appendChild(link);
+  try { link.click(); } finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
 }
 
 export async function apiPost(path, body, { timeoutMs } = {}) {
@@ -84,6 +120,7 @@ export async function apiPost(path, body, { timeoutMs } = {}) {
       method: "POST",
       headers: getHeaders(),
       credentials: "include",
+      cache: "no-store",
       body: JSON.stringify(body || {}),
       ...(controller ? { signal: controller.signal } : {}),
     });
@@ -106,9 +143,11 @@ export async function apiPost(path, body, { timeoutMs } = {}) {
   }
 
   if (!res.ok) {
+    if (res.status === 403) handleMembershipError(data);
     if (res.status === 401) handleAuthError();
     const err = new Error(data.message || `HTTP ${res.status}`);
     err.status = res.status;
+    err.data = data;
     throw err;
   }
 
@@ -120,6 +159,7 @@ export async function apiPut(path, body) {
     method: "PUT",
     headers: getHeaders(),
     credentials: "include",
+    cache: "no-store",
     body: JSON.stringify(body || {}),
   });
 
@@ -127,17 +167,29 @@ export async function apiPut(path, body) {
   try {
     data = await res.json();
   } catch {
-    data = {};
+    throw new Error(`Sunucu beklenen JSON yerine başka bir şey döndürdü (status ${res.status}).`);
   }
 
   if (!res.ok) {
+    if (res.status === 403) handleMembershipError(data);
     if (res.status === 401) handleAuthError();
     const err = new Error(data.message || `HTTP ${res.status}`);
     err.status = res.status;
+    err.data = data;
     throw err;
   }
 
   return data;
+}
+
+// A 2xx alone is not a durable chapter-save receipt. The caller must also
+// associate this receipt with the exact local edit snapshot it submitted.
+export function isChapterSaveReceipt(result, chapterId, baseRevision) {
+  return result?.item?._id === chapterId && !!result.item.status
+    && Number.isSafeInteger(result.revision)
+    && result.revision >= baseRevision && result.revision <= baseRevision + 1
+    && result.item.revision === result.revision
+    && typeof result.savedAt === "string" && Number.isFinite(Date.parse(result.savedAt));
 }
 
 export async function apiDelete(path) {
@@ -145,6 +197,7 @@ export async function apiDelete(path) {
     method: "DELETE",
     headers: getHeaders(false),
     credentials: "include",
+    cache: "no-store",
   });
 
   let data = {};
@@ -155,20 +208,24 @@ export async function apiDelete(path) {
   }
 
   if (!res.ok) {
+    if (res.status === 403) handleMembershipError(data);
     if (res.status === 401) handleAuthError();
     const err = new Error(data.message || `HTTP ${res.status}`);
     err.status = res.status;
+    err.data = data;
     throw err;
   }
 
   return data;
 }
 
-export async function apiPatch(path, body) {
+export async function apiPatch(path, body, { timeoutMs, signal } = {}) {
   const res = await fetch(API_BASE + path, {
     method: "PATCH",
+    ...(signal ? { signal } : timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     headers: getHeaders(),
     credentials: "include",
+    cache: "no-store",
     body: JSON.stringify(body || {}),
   });
 
@@ -176,13 +233,15 @@ export async function apiPatch(path, body) {
   try {
     data = await res.json();
   } catch {
-    data = {};
+    throw new Error(`Sunucu beklenen JSON yerine başka bir şey döndürdü (status ${res.status}).`);
   }
 
   if (!res.ok) {
+    if (res.status === 403) handleMembershipError(data);
     if (res.status === 401) handleAuthError();
     const err = new Error(data.message || `HTTP ${res.status}`);
     err.status = res.status;
+    err.data = data;
     throw err;
   }
 

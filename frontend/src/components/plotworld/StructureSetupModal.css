@@ -12,7 +12,7 @@
 }
 
 .ssm-modal {
-  background: #fffdf9;
+  background: var(--pw-surface, #fffdf9);
   border-radius: 16px;
   width: 100%;
   max-width: 620px;
@@ -29,7 +29,7 @@
   align-items: flex-start;
   justify-content: space-between;
   padding: 24px 24px 16px;
-  border-bottom: 1px solid #f0ebe3;
+  border-bottom: 1px solid var(--pw-soft, #faf7f2);
 }
 
 .ssm-eyebrow {
@@ -37,7 +37,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #a8998a;
+  color: var(--pw-muted, #655746);
   margin-bottom: 4px;
 }
 
@@ -45,21 +45,21 @@
   font-family: "Cormorant Garamond", serif;
   font-size: 22px;
   font-weight: 700;
-  color: #1c1917;
+  color: var(--pw-ink, #30281f);
 }
 
 .ssm-close {
   background: none;
   border: none;
   font-size: 22px;
-  color: #a8998a;
+  color: var(--pw-muted, #655746);
   cursor: pointer;
   line-height: 1;
   padding: 0 2px;
   flex-shrink: 0;
 }
 
-.ssm-close:hover { color: #1c1917; }
+.ssm-close:hover { color: var(--pw-ink, #30281f); }
 
 /* Şablon kartları */
 .ssm-templates {
@@ -71,8 +71,8 @@
 
 .ssm-card {
   position: relative;
-  background: #faf7f2;
-  border: 1.5px solid #e2d9ce;
+  background: var(--pw-soft, #faf7f2);
+  border: 1.5px solid var(--pw-border, #e2d9ce);
   border-radius: 10px;
   padding: 12px 12px 10px;
   cursor: pointer;
@@ -82,12 +82,12 @@
 
 .ssm-card:hover {
   border-color: #c4b9ad;
-  background: #f5f0e8;
+  background: var(--pw-bg, #f5f0e8);
 }
 
 .ssm-card--active {
   border-color: #6d28d9;
-  background: #faf7f2;
+  background: var(--pw-soft, #faf7f2);
   box-shadow: 0 0 0 2px #ddd6fe;
 }
 
@@ -108,13 +108,13 @@
 .ssm-card-label {
   font-size: 13px;
   font-weight: 700;
-  color: #1c1917;
+  color: var(--pw-ink, #30281f);
   margin-bottom: 3px;
 }
 
 .ssm-card-desc {
   font-size: 11px;
-  color: #78716c;
+  color: var(--pw-muted, #655746);
   line-height: 1.45;
 }
 
@@ -144,7 +144,7 @@
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #a8998a;
+  color: var(--pw-muted, #655746);
   margin-bottom: 8px;
 }
 
@@ -159,7 +159,7 @@
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  background: #f0ebe3;
+  background: var(--pw-soft, #faf7f2);
   border-radius: 100px;
 }
 
@@ -173,13 +173,13 @@
 .ssm-preview-roman {
   font-size: 11px;
   font-weight: 700;
-  color: #57534e;
+  color: var(--pw-muted, #655746);
 }
 
 .ssm-preview-name {
   font-size: 12px;
   font-weight: 500;
-  color: #292524;
+  color: var(--pw-ink, #30281f);
 }
 
 /* Özel yapı editörü */
@@ -200,7 +200,7 @@
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  border: 1px solid #e2d9ce;
+  border: 1px solid var(--pw-border, #e2d9ce);
   padding: 2px;
   cursor: pointer;
   flex-shrink: 0;
@@ -210,11 +210,11 @@
 .ssm-act-input {
   flex: 1;
   padding: 7px 10px;
-  background: #faf7f2;
-  border: 1px solid #e2d9ce;
+  background: var(--pw-soft, #faf7f2);
+  border: 1px solid var(--pw-border, #e2d9ce);
   border-radius: 7px;
   font-size: 13px;
-  color: #1c1917;
+  color: var(--pw-ink, #30281f);
   font-family: "DM Sans", sans-serif;
   outline: none;
   transition: border-color 0.15s;
@@ -232,7 +232,7 @@
   background: none;
   border: none;
   font-size: 12px;
-  color: #a8998a;
+  color: var(--pw-muted, #655746);
   cursor: pointer;
   padding: 4px 6px;
   border-radius: 4px;
@@ -255,12 +255,12 @@
   border-radius: 7px;
   font-size: 12px;
   font-weight: 500;
-  color: #78716c;
+  color: var(--pw-muted, #655746);
   cursor: pointer;
   transition: background 0.12s;
 }
 
-.ssm-add-act:hover { background: #f0ebe3; }
+.ssm-add-act:hover { background: var(--pw-soft, #faf7f2); }
 
 /* Uyarı */
 .ssm-warning {
@@ -294,15 +294,15 @@
 
 .ssm-btn--ghost {
   background: none;
-  border-color: #e2d9ce;
-  color: #57534e;
+  border-color: var(--pw-border, #e2d9ce);
+  color: var(--pw-muted, #655746);
 }
 
-.ssm-btn--ghost:hover { background: #f0ebe3; }
+.ssm-btn--ghost:hover { background: var(--pw-soft, #faf7f2); }
 
 .ssm-btn--primary {
-  background: #1c1917;
-  color: #faf7f2;
+  background: var(--pw-ink, #30281f);
+  color: var(--pw-soft, #faf7f2);
 }
 
-.ssm-btn--primary:hover { background: #292524; }
+.ssm-btn--primary:hover { background: var(--pw-ink, #30281f); }

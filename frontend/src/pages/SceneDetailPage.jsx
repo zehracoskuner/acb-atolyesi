@@ -1,3 +1,4 @@
+import { PLOTWORLD_SCENE_AI_ENABLED } from "../../../shared/features.js";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiGet, apiPatch, apiPost, describeAiError } from "../lib/api";
@@ -271,7 +272,7 @@ export default function SceneDetailPage() {
   const [characters, setCharacters] = useState([]);
   const [worldData,  setWorldData]  = useState(null);
   const [actMeta,    setActMeta]    = useState({});
-  const [actOrder,   setActOrder]   = useState([]);
+  const [, setActOrder]   = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState(null);
 
@@ -431,12 +432,12 @@ export default function SceneDetailPage() {
           {saveState === "saved"   && <>✓ Kaydedildi</>}
           {saveState === "unsaved" && <>● Kaydedilmedi</>}
         </div>
-        <button
+        {PLOTWORLD_SCENE_AI_ENABLED && (<button
           className={`sd-ai-toggle ${showAI ? "sd-ai-toggle--on" : ""}`}
           onClick={() => setShowAI(v => !v)}
         >
           ✦ AI
-        </button>
+        </button>)}
       </div>
 
       <div className="sd-body">
@@ -567,7 +568,7 @@ export default function SceneDetailPage() {
                 <span>Bölüm bağlı</span>
               </>
             )}
-            {chars > 600 && (
+            {PLOTWORLD_SCENE_AI_ENABLED && chars > 600 && (
               <>
                 <span className="sd-footer-sep">·</span>
                 <span>AI analizleri taslağın yalnızca ilk ~600-900 karakterini okur</span>
@@ -578,7 +579,7 @@ export default function SceneDetailPage() {
 
         {/* ─── SAĞ PANEL ─── */}
         <aside className={`sd-right ${showAI ? "sd-right--ai" : ""}`}>
-          {showAI ? (
+          {PLOTWORLD_SCENE_AI_ENABLED && showAI ? (
             <AiPanel
               key={scene._id}
               scene={{ ...scene, draftText }}

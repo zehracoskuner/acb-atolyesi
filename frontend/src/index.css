@@ -24,6 +24,3 @@ body {
 #root {
   max-width: none;
 }
-
-/* ── Tur vurgulama ── */
-@import 'components/tour/tour.css'

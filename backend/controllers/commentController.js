@@ -4,6 +4,7 @@ import Comment  from "../models/Comment.js";
 import Chapter  from "../models/Chapter.js";
 import Work     from "../models/Work.js";
 import User     from "../models/User.js";
+import { publishedDiscussion } from '../services/discussionAccess.js';
 import {
   notifyComment,
   notifyReply,
@@ -64,6 +65,9 @@ export async function getComments(req, res) {
     }
 
     const page  = Math.max(1, parseInt(req.query.page) || 1);
+    if (!await publishedDiscussion(workId, chapterId)) {
+      return res.status(404).json({ message: "İçerik bulunamadı." });
+    }
     const limit = Math.min(50, parseInt(req.query.limit) || 20);
     const skip  = (page - 1) * limit;
 
