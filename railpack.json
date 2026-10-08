@@ -9,10 +9,11 @@
         "NPM_CONFIG_PRODUCTION": "true"
       },
       "inputs": [
-        { "step": "packages:mise" },
-        { "local": true, "include": ["backend/package.json", "backend/package-lock.json"] }
+        { "step": "packages:mise" }
       ],
       "commands": [
+        { "src": "backend/package.json", "dest": "/app/backend/package.json" },
+        { "src": "backend/package-lock.json", "dest": "/app/backend/package-lock.json" },
         "npm ci --prefix backend --omit=dev",
         "mkdir -p node_modules"
       ],
@@ -27,7 +28,7 @@
         { "step": "install" },
         {
           "local": true,
-          "include": ["backend", "shared", "package.json", "scripts/check-backend-release.mjs"],
+          "include": ["backend", "shared", "package.json"],
           "exclude": [
             "backend/node_modules", "backend/tests", "backend/scripts",
             "backend/vitest.config.js", "backend/*.md", "backend/DEVELOPMENT_PROVIDER_COMPARISON.json",
@@ -35,7 +36,10 @@
           ]
         }
       ],
-      "commands": ["node scripts/check-backend-release.mjs"],
+      "commands": [
+        { "src": "scripts/check-backend-release.mjs", "dest": "/app/scripts/check-backend-release.mjs" },
+        "node scripts/check-backend-release.mjs"
+      ],
       "secrets": [],
       "caches": []
     }
