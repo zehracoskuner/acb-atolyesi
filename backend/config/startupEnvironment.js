@@ -17,5 +17,5 @@ export function validateStartupEnvironment() {
     try { url = new URL(process.env[name]); } catch { throw new Error(`Production requires a valid ${name}.`); }
     if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || /^(localhost|127\.|\[::1\])/.test(url.hostname)) throw new Error(`${name} must use a public HTTPS URL.`);
   }
-  if (process.env.PORT && (!/^\d+$/.test(process.env.PORT) || +process.env.PORT < 1 || +process.env.PORT > 65535)) throw new Error("PORT must be between 1 and 65535.");
+  if (!/^\d+$/.test(process.env.PORT ?? "") || +process.env.PORT < 1 || +process.env.PORT > 65535) throw new Error("PORT must be between 1 and 65535.");
 }

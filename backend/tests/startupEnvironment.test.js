@@ -14,6 +14,10 @@ it.each(['short', '<placeholder-secret-with-at-least-32-bytes>', 'change-me-chan
 it.each(['http://api.example.test/api', 'https://localhost/api', 'https://user:password@api.example.test/api'])('rejects unsafe API URL %s', url => {
   vi.stubEnv('API_URL', url); expect(() => validateStartupEnvironment()).toThrow('API_URL');
 });
-it.each(['0', '65536', 'abc'])('rejects invalid production port %s', port => {
+it.each([undefined, '', ' ', '0', '65536', 'abc'])('rejects missing or invalid production port %s', port => {
   vi.stubEnv('PORT', port); expect(() => validateStartupEnvironment()).toThrow('PORT');
+});
+it('allows the local port fallback outside production', () => {
+  vi.stubEnv('NODE_ENV', 'development'); vi.stubEnv('PORT', undefined);
+  expect(() => validateStartupEnvironment()).not.toThrow();
 });

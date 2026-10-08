@@ -286,7 +286,7 @@ const startServer = async () => {
     stopWorker = startSpotlightWorker();
     console.log("📥 Veritabanı bağlantısı başarılı.");
 
-    const server = app.listen(PORT, "::", () => {
+    const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`🚀 ACB Atölyesi ${PORT} portunda çalışıyor`);
     });
     process.once("SIGTERM", () => { void lifecycle.shutdown(server); });
