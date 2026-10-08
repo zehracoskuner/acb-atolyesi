@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 
-const API = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+import { API_BASE as API } from "../lib/apiBase";
 
 export default function SifremiUnuttum() {
   const [email,   setEmail]   = useState("");

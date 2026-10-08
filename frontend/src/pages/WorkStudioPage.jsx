@@ -48,7 +48,7 @@ const S = {
   },
 };
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
+import { API_BASE } from "../lib/apiBase";
 
 async function safePatch(path, body) {
   const token = localStorage.getItem("token") || sessionStorage.getItem("token");

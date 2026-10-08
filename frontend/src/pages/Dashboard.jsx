@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import styles from '../App.module.css';
 import Footer from "../components/Footer";
 
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { API_BASE } from "../lib/apiBase";
 
 const Dashboard = () => {
   const navigate = useNavigate();

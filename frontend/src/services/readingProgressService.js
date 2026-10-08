@@ -1,6 +1,6 @@
 import { apiDelete } from "../lib/api";
 import { getSession } from "../lib/session";
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { API_BASE } from "../lib/apiBase";
 // Legacy unscoped records cannot safely be attributed to an account.
 const storageKey = user => `acb_reading_progress:${user?._id || user?.id || "guest"}`;
 function all(user) { try { return JSON.parse(localStorage.getItem(storageKey(user)) || "{}"); } catch { return {}; } }

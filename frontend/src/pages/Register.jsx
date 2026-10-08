@@ -7,7 +7,7 @@ import { useBreakpoint } from "../hooks/useBreakpoint";
 import TermsAcceptance from "../components/TermsAcceptance";
 import { TERMS_VERSION } from "../lib/terms";
 
-const API = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+import { API_BASE as API } from "../lib/apiBase";
 
 const Eye = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

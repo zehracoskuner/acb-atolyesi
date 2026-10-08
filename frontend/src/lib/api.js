@@ -11,7 +11,7 @@ function handleMembershipError(data) {
     window.location.assign(destination);
   }
 }
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { API_BASE } from "./apiBase";
 const pendingMaturePrompts = new Map();
 function requestMatureAcknowledgement(workId) {
   if (!pendingMaturePrompts.has(workId)) {

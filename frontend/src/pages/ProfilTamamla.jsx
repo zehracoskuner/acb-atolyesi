@@ -8,7 +8,7 @@ import TermsAcceptance from "../components/TermsAcceptance";
 import { TERMS_VERSION, membershipStep } from "../lib/terms";
 import { apiGet } from "../lib/api";
 
-const API = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { API_BASE as API } from "../lib/apiBase";
 
 export default function ProfilTamamla() {
   const navigate = useNavigate();

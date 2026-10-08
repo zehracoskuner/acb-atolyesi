@@ -15,7 +15,7 @@ const safeClearProgress = typeof clearProgressForStory === "function"
 import "../styles/StoryDetailPageComments.css";
 import ReportModal from "../components/ReportModal";
 
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { API_BASE } from "../lib/apiBase";
 
 /* ════════════════════════════
    HELPERS

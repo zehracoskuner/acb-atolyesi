@@ -33,3 +33,10 @@ it('requires an explicit production origin', () => {
   vi.stubEnv('CLIENT_URL', ''); vi.stubEnv('SITE_URL', '');
   expect(() => allowedOrigins()).toThrow();
 });
+it('accepts the punycode frontend origin through the proxy without allowlisting Railway', () => {
+  vi.stubEnv('CLIENT_URL', 'https://xn--acbatlyesi-icb.com');
+  vi.stubEnv('SITE_URL', 'https://acbatölyesi.com');
+  expect(allowedOrigins()).toEqual(['https://xn--acbatlyesi-icb.com', 'https://xn--acbatlyesi-icb.com']);
+  expect(check({ Origin: 'https://xn--acbatlyesi-icb.com', 'Sec-Fetch-Site': 'same-origin' }, { token: 'opaque' }).next).toHaveBeenCalledOnce();
+  expect(check({ Origin: 'https://acb-atolyesi-production.up.railway.app' }, { token: 'opaque' }).res.status).toHaveBeenCalledWith(403);
+});

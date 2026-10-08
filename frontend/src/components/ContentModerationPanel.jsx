@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import DOMPurify from 'dompurify';
 import { apiGet, apiPost } from '../lib/api';
 import './ReportCase.css';
-const API = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { API_BASE as API } from "../lib/apiBase";
 const labels = { cover: 'Eser kapağı', avatar: 'Profil fotoğrafı', banner: 'Profil bannerı', chapter: 'Bölüm' };
 export default function ContentModerationPanel({ caseId, onChanged }) {
   const [items, setItems] = useState([]), [detail, setDetail] = useState(null);

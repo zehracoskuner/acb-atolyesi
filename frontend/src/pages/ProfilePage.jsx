@@ -12,7 +12,7 @@ import LogTab from "../components/LogTab";
 import "../styles/LogTab.css";
 import AddFromLibraryModal from "../components/AddFromLibraryModal";
 
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "/api";
+import { API_BASE } from "../lib/apiBase";
 
 /* ─── Yardımcılar ─────────────────────────────────────────────────────────── */
 function fmtNum(n = 0) {

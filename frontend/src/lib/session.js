@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { API_BASE } from "./apiBase";
 let state = { status: "checking", user: null, error: null };
 const listeners = new Set();
 let generation = 0;

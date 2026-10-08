@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { apiPost } from "../lib/api";
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
+import { API_BASE } from "../lib/apiBase";
 
 // ─── Genre taxonomy ───────────────────────────────────────────────────────────
 const GENRE_GROUPS = [

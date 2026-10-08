@@ -7,7 +7,7 @@ import { completeWebLogin } from "../lib/auth";
 import { membershipStep } from "../lib/terms";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 
-const API = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { API_BASE as API } from "../lib/apiBase";
 
 const Eye = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
