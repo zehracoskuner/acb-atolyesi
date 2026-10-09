@@ -1,8 +1,16 @@
 // backend/services/emailService.js
 import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import User       from "../models/User.js";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resend;
+function getResend() {
+  if (!process.env.RESEND_API_KEY?.trim()) {
+    throw new Error("RESEND_API_KEY ayarlanmamış.");
+  }
+  resend ??= new Resend(process.env.RESEND_API_KEY);
+  return resend;
+}
 
 export const SITE_URL =
   process.env.SITE_URL ||
@@ -10,17 +18,57 @@ export const SITE_URL =
   (process.env.NODE_ENV === "production" ? "https://xn--acbatlyesi-icb.com" : "http://localhost:5173");
 
 // Doğrulama linki backend'e gider (redirect-temelli endpoint), frontend'e değil.
-const API_BASE_URL =
-  process.env.API_URL ||
-  (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/api` : null) ||
-  "http://localhost:5000/api";
+function getApiBaseUrl() {
+  const raw = process.env.API_URL ||
+    (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/api` : null) ||
+    (process.env.NODE_ENV === "production" ? null : "http://localhost:5000/api");
 
-const FROM     = process.env.EMAIL_FROM;
-const REPLY_TO = process.env.EMAIL_REPLY_TO;
+  if (!raw) throw new Error("Üretimde API_URL (veya RAILWAY_PUBLIC_DOMAIN) gerekli.");
+  const url = new URL(raw);
+  if (url.username || url.password || (process.env.NODE_ENV === "production" &&
+      (url.protocol !== "https:" || /^(localhost|127\.|\[::1\])/.test(url.hostname)))) {
+    throw new Error("Üretimde API_URL HTTPS olmalı.");
+  }
+  if (!/^\/api\/?$/.test(url.pathname) || url.search || url.hash) {
+    throw new Error("API_URL canlı API adresini /api dahil içermeli.");
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
+let gmailTransport;
+function getGmailTransport() {
+  const user = process.env.GMAIL_USER?.trim() || "acbatolyesi@gmail.com";
+  const pass = process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, "");
+  if (!pass) throw new Error("GMAIL_APP_PASSWORD ayarlanmamış.");
+  gmailTransport ??= nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
+  });
+  return gmailTransport;
+}
+
+const REPLY_TO = process.env.EMAIL_REPLY_TO || "acbatolyesi@gmail.com";
 
 /* ── Resend üzerinden gönderim (ortak) ── */
 async function send({ to, subject, html, text }) {
-  const { error } = await resend.emails.send({
+  const provider = process.env.EMAIL_PROVIDER?.trim().toLowerCase() || "resend";
+  if (provider === "gmail") {
+    const info = await getGmailTransport().sendMail({
+      from: { name: "ACB Atölyesi", address: process.env.GMAIL_USER?.trim() || "acbatolyesi@gmail.com" },
+      to, replyTo: REPLY_TO, subject, html, ...(text ? { text } : {}),
+    });
+    if (!info.messageId || !info.accepted?.length || info.rejected?.length) {
+      throw new Error("E-posta gönderimi Gmail tarafından kabul edilmedi.");
+    }
+    return info.messageId;
+  }
+  if (provider !== "resend") throw new Error("EMAIL_PROVIDER gmail veya resend olmalı.");
+  const FROM = process.env.EMAIL_FROM;
+  if (!FROM?.trim()) throw new Error("EMAIL_FROM ayarlanmamış.");
+  const { data, error } = await getResend().emails.send({
     from:    FROM,
     to,
     replyTo: REPLY_TO,
@@ -29,10 +77,11 @@ async function send({ to, subject, html, text }) {
     ...(text ? { text } : {}),
   });
 
-  if (error) {
-    console.error("Resend gönderim hatası:", error);
-    throw new Error(error.message || "E-posta gönderilemedi.");
+  if (error || !data?.id) {
+    console.error("Resend gönderim hatası:", error?.message || "Geçerli gönderim kimliği alınamadı.");
+    throw new Error(error?.message || "E-posta gönderimi Resend tarafından kabul edilmedi.");
   }
+  return data.id;
 }
 
 /* ── Generic mail ── */
@@ -92,8 +141,8 @@ export async function sendAdminMail({ subject, html }) {
 
 /* ── E-posta doğrulama ── */
 export async function sendVerificationEmail(email, token) {
-  const link = `${API_BASE_URL}/auth/verify-email?token=${token}`;
-  await send({
+  const link = `${getApiBaseUrl()}/auth/verify-email?token=${encodeURIComponent(token)}`;
+  return await send({
     to:      email,
     subject: "E-posta adresini doğrula — ACB Atölyesi",
     html: `

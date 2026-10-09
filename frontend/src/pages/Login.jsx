@@ -45,6 +45,7 @@ export default function Login() {
   const [verifyHata, setVerifyHata]             = useState(false);
   const [verifyBilgi, setVerifyBilgi]           = useState(false);
   const [tekrarGonderildi, setTekrarGonderildi] = useState(false);
+  const [tekrarBekleniyor, setTekrarBekleniyor] = useState(false);
 
   useEffect(() => {
     document.title = "Giriş Yap · ACB Atölyesi";
@@ -82,14 +83,20 @@ export default function Login() {
 
   // email state'inden okur — form submit edilmeden tıklanırsa boş gitmez
   const handleTekrarGonder = async () => {
-    if (!email) return;
+    if (!email || tekrarBekleniyor) return;
+    setTekrarBekleniyor(true);
+    setMesaj(null);
+    setTekrarGonderildi(false);
     try {
       await axios.post(`${API}/auth/resend-verification`, { email });
-    } catch {
-      // Güvenlik gereği hata sessizce yutulur
-    } finally {
+
       setTekrarGonderildi(true);
       setVerifyHata(false);
+    } catch (err) {
+      setMesaj({ type: "err", text: err.response?.data?.message || "E-posta gönderilemedi. Tekrar deneyebilirsin." });
+      setVerifyHata(true);
+    } finally {
+      setTekrarBekleniyor(false);
     }
   };
 
@@ -239,6 +246,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={handleTekrarGonder}
+                disabled={tekrarBekleniyor}
                 style={{
                   background:    "none",
                   border:        "none",
@@ -252,7 +260,7 @@ export default function Login() {
                   textDecoration: "underline",
                 }}
               >
-                Doğrulama e-postasını tekrar gönder →
+                {tekrarBekleniyor ? "Gönderiliyor..." : "Doğrulama e-postasını tekrar gönder →"}
               </button>
             </div>
           )}

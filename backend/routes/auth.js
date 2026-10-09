@@ -12,7 +12,7 @@ import { TERMS_VERSION, termsStatus, validateTermsAcceptance, newTermsAcceptance
 import { googleUpsert } from "../utils/googleUpsert.js";
 import { sendVerificationEmail, sendPasswordResetEmail, sendEmailVerifyOtp } from "../services/emailService.js";
 import "dotenv/config";
-import { authLimiter, registerLimiter } from "../middlewares/rateLimiter.js";
+import { authLimiter, registerLimiter, verificationLimiter } from "../middlewares/rateLimiter.js";
 
 import { createWebSession, createNativeSession, revokeWebSession, startGoogleSession, verifyGoogleSession } from "../services/authSession.js";
 
@@ -26,7 +26,8 @@ router.use((req, res, next) => {
   next();
 });
 router.use(['/verify-email-otp', '/reset-password'], authLimiter);
-router.use(['/send-verify-otp', '/forgot-password', '/resend-verification'], registerLimiter);
+router.use(['/send-verify-otp', '/forgot-password'], registerLimiter);
+router.use('/resend-verification', verificationLimiter);
 router.post("/logout", async (req, res) => {
   const header = req.headers?.authorization || "";
   await revokeWebSession(req.cookies?.token || (header.startsWith("Bearer ") ? header.slice(7) : undefined));
@@ -129,11 +130,24 @@ router.post("/register", validateTermsAcceptance, async (req, res) => {
       emailVerifyExpires: verifyExpires,
     });
 
-    sendVerificationEmail(email, verifyToken).catch(err =>
-      console.error("Doğrulama e-postası gönderilemedi:", err.message)
-    );
+    try {
+      const messageId = await sendVerificationEmail(email, verifyToken);
+      console.info("Doğrulama e-postası posta sağlayıcısı tarafından kabul edildi:", messageId);
+    } catch (err) {
+      console.error("Doğrulama e-postası gönderilemedi:", err.message);
+      return res.status(503).json({
+        code: "EMAIL_SEND_FAILED",
+        accountCreated: true,
+        emailAccepted: false,
+        message: "Hesabın oluşturuldu ancak doğrulama e-postası gönderilemedi. Tekrar gönder seçeneğini kullanabilirsin.",
+      });
+    }
 
-    return res.status(201).json({ message: "Hesap oluşturuldu. Doğrulama e-postası gönderildi." });
+    return res.status(201).json({
+      accountCreated: true,
+      emailAccepted: true,
+      message: "Hesap oluşturuldu. Doğrulama e-postası gönderimi kabul edildi.",
+    });
   } catch (err) {
     console.error("Register hatası:", err);
     return res.status(500).json({ message: "Sunucu hatası." });
@@ -300,24 +314,49 @@ router.get("/verify-email", async (req, res) => {
 router.post("/resend-verification", async (req, res) => {
   try {
     const { email } = req.body;
+    if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ message: "Geçerli bir e-posta adresi gerekli." });
+    }
     const user = await User.findOne({ email });
 
-    if (!user || user.emailVerified)
-      return res.json({ message: "Eğer hesap varsa e-posta gönderildi." });
+    // Hesap var/yok veya zaten doğrulanmış bilgisini açık etmeyelim.
+    if (!user || user.emailVerified) {
+      return res.json({ message: "Bu adres için doğrulama gerekiyorsa gönderim isteği işlendi." });
+    }
 
     const verifyToken   = crypto.randomBytes(32).toString("hex");
     const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    await User.updateOne(
-      { _id: user._id },
+    // Eski bağlantıyı yalnızca yeni gönderimi denemek için değiştir.
+    // Yarışan isteklerde tek bir güncelleme yapılabilmesi için koşullu güncelleme.
+    const updated = await User.updateOne(
+      { _id: user._id, emailVerified: false, emailVerifyToken: user.emailVerifyToken ?? null },
       { $set: { emailVerifyToken: verifyToken, emailVerifyExpires: verifyExpires } }
     );
+    if (updated.modifiedCount !== 1) {
+      return res.status(409).json({
+        code: "VERIFICATION_REQUEST_IN_PROGRESS",
+        message: "Başka bir doğrulama isteği işleniyor. Lütfen biraz sonra tekrar dene.",
+      });
+    }
 
-    sendVerificationEmail(email, verifyToken).catch(err =>
-      console.error("Yeniden doğrulama maili gönderilemedi:", err)
-    );
+    try {
+      await sendVerificationEmail(email, verifyToken);
+    } catch (err) {
+      console.error("Yeniden doğrulama maili gönderilemedi:", err.message);
+      // Başarısız gönderim, daha önceki geçerli bağlantıyı bozmamalı.
+      await User.updateOne(
+        { _id: user._id, emailVerified: false, emailVerifyToken: verifyToken },
+        { $set: { emailVerifyToken: user.emailVerifyToken ?? null, emailVerifyExpires: user.emailVerifyExpires ?? null } }
+      );
+      return res.status(503).json({
+        code: "EMAIL_SEND_FAILED",
+        emailAccepted: false,
+        message: "Doğrulama e-postası gönderilemedi. Lütfen daha sonra tekrar dene.",
+      });
+    }
 
-    return res.json({ message: "Doğrulama e-postası tekrar gönderildi." });
+    return res.json({ message: "Doğrulama gönderim isteği kabul edildi.", emailAccepted: true });
   } catch (err) {
     console.error("resend-verification hatası:", err);
     return res.status(500).json({ message: "Sunucu hatası." });

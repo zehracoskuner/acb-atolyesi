@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { validateStartupEnvironment } from '../config/startupEnvironment.js';
-const settings = { NODE_ENV: 'production', JWT_SECRET: '', MONGO_URI: 'mongodb://127.0.0.1:27017/isolated', ADMIN_SECRET_PATH: 'staff-admin', CLIENT_URL: 'https://app.example.test', SITE_URL: 'https://app.example.test', GOOGLE_CLIENT_ID: 'test-client', GOOGLE_CLIENT_SECRET: 'test-google-secret', CLOUDINARY_CLOUD_NAME: 'test-cloud', CLOUDINARY_API_KEY: 'test-key', CLOUDINARY_API_SECRET: 'test-secret', RESEND_API_KEY: 'test-mail-key', EMAIL_FROM: 'test@example.test', API_URL: 'https://api.example.test/api', GOOGLE_CALLBACK_URL: 'https://api.example.test/api/auth/google/callback', PORT: '5000' };
+const settings = { EMAIL_PROVIDER: 'resend', NODE_ENV: 'production', JWT_SECRET: '', MONGO_URI: 'mongodb://127.0.0.1:27017/isolated', ADMIN_SECRET_PATH: 'staff-admin', CLIENT_URL: 'https://app.example.test', SITE_URL: 'https://app.example.test', GOOGLE_CLIENT_ID: 'test-client', GOOGLE_CLIENT_SECRET: 'test-google-secret', CLOUDINARY_CLOUD_NAME: 'test-cloud', CLOUDINARY_API_KEY: 'test-key', CLOUDINARY_API_SECRET: 'test-secret', RESEND_API_KEY: 'test-mail-key', EMAIL_FROM: 'test@example.test', API_URL: 'https://api.example.test/api', GOOGLE_CALLBACK_URL: 'https://api.example.test/api/auth/google/callback', PORT: '5000' };
 beforeEach(() => { for (const [name, value] of Object.entries(settings)) vi.stubEnv(name, name === 'JWT_SECRET' ? randomBytes(32).toString('hex') : value); });
 afterEach(() => vi.unstubAllEnvs());
 it('accepts explicitly configured production services', () => expect(validateStartupEnvironment()).toBeUndefined());
@@ -20,4 +20,20 @@ it.each([undefined, '', ' ', '0', '65536', 'abc'])('rejects missing or invalid p
 it('allows the local port fallback outside production', () => {
   vi.stubEnv('NODE_ENV', 'development'); vi.stubEnv('PORT', undefined);
   expect(() => validateStartupEnvironment()).not.toThrow();
+});
+
+it('accepts Gmail without Resend credentials', () => {
+  vi.stubEnv('EMAIL_PROVIDER', 'gmail');
+  vi.stubEnv('GMAIL_APP_PASSWORD', 'test-app-password');
+  vi.stubEnv('RESEND_API_KEY', '');
+  vi.stubEnv('EMAIL_FROM', '');
+  expect(() => validateStartupEnvironment()).not.toThrow();
+});
+it('rejects missing Gmail credentials', () => {
+  vi.stubEnv('EMAIL_PROVIDER', 'gmail'); vi.stubEnv('GMAIL_APP_PASSWORD', '');
+  expect(() => validateStartupEnvironment()).toThrow('GMAIL_APP_PASSWORD');
+});
+it('requires the API path', () => {
+  vi.stubEnv('API_URL', 'https://api.example.test');
+  expect(() => validateStartupEnvironment()).toThrow('API_URL');
 });

@@ -71,3 +71,12 @@ export const uploadUserLimiter = rateLimit({
   keyGenerator: (req) => String(req.user.id),
   message: { message: "Çok fazla dosya yüklendi. 1 saat sonra tekrar dene." },
 });
+
+/* E-posta doğrulama yeniden gönderim sınırı; başarılı istekler de sayılır. */
+export const verificationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { code: "RATE_LIMITED", message: "Çok fazla doğrulama isteği. Lütfen biraz sonra tekrar dene." },
+});

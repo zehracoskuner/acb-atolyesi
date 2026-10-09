@@ -43,6 +43,9 @@ export default function Register() {
   const [mesaj, setMesaj]   = useState(null);
   const [loading, setLoad]  = useState(false);
   const [verified, setVerified] = useState(false);
+  const [mailGonderimHatasi, setMailGonderimHatasi] = useState(false);
+  const [tekrarYukleniyor, setTekrarYukleniyor] = useState(false);
+  const [tekrarMesaj, setTekrarMesaj] = useState(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const navigate = useNavigate();
 
@@ -74,11 +77,33 @@ export default function Register() {
     setLoad(true); setMesaj(null);
     try {
       await axios.post(`${API}/auth/register`, { ...form, termsAccepted, termsVersion: TERMS_VERSION }, { withCredentials: true });
+      setMailGonderimHatasi(false);
       setVerified(true);
     } catch (err) {
       if (err.response?.data?.code === "TERMS_VERSION_MISMATCH") setTermsAccepted(false);
-      setMesaj({ type: "err", text: err.response?.data?.message || "Kayıt başarısız." });
+      if (err.response?.data?.accountCreated && err.response?.data?.code === "EMAIL_SEND_FAILED") {
+        setVerified(true);
+        setMailGonderimHatasi(true);
+      } else {
+        setMesaj({ type: "err", text: err.response?.data?.message || "Kayıt başarısız." });
+      }
     } finally { setLoad(false); }
+  };
+
+  const handleTekrarGonder = async () => {
+    if (tekrarYukleniyor) return;
+    setTekrarYukleniyor(true);
+    setTekrarMesaj(null);
+    try {
+      await axios.post(`${API}/auth/resend-verification`, { email: form.email });
+      setMailGonderimHatasi(false);
+      setTekrarMesaj({ type: "ok", text: "İstek işlendi. Adres doğrulama bekliyorsa e-postanı kontrol et." });
+    } catch (err) {
+      setMailGonderimHatasi(true);
+      setTekrarMesaj({ type: "err", text: err.response?.data?.message || "E-posta gönderilemedi. Tekrar deneyebilirsin." });
+    } finally {
+      setTekrarYukleniyor(false);
+    }
   };
 
   /* ── Breakpoint stiller ── */
@@ -141,12 +166,18 @@ export default function Register() {
           <div style={s.envCircle}><EnvelopeIcon/></div>
           <h2 style={{...s.formTitle, fontSize:"1.6rem", marginBottom:".5rem"}}>E-postanı <em style={s.formTitleEm}>doğrula</em></h2>
           <p style={{...s.formSub, marginBottom:"1.5rem"}}>
-            <strong style={{color:"#1a1209"}}>{form.email}</strong> adresine<br/>bir doğrulama bağlantısı gönderdik.<br/>Doğrulamadan da giriş yapabilirsin.
+            <strong style={{color:"#1a1209"}}>{form.email}</strong> adresin için doğrulama işlemi bekleniyor.<br/>
+            {mailGonderimHatasi
+              ? "Hesabın oluşturuldu ancak e-posta servisinde hata oluştu. Aşağıdan tekrar deneyebilirsin."
+              : "E-postandaki 24 saat geçerli bağlantıyı açarak hesabını doğrula. Doğrulamadan giriş yapamazsın."}
           </p>
+          {tekrarMesaj && <div style={tekrarMesaj.type === "ok" ? s.msgOk : s.msgErr}>{tekrarMesaj.text}</div>}
           <button style={responsive.btnMain} onClick={() => navigate("/login")}>Giriş sayfasına git</button>
           <p style={{...s.switchTxt, marginTop:".75rem"}}>
             E-posta gelmediyse{" "}
-            <button style={s.textBtn} onClick={() => axios.post(`${API}/auth/resend-verification`, { email: form.email }).catch(()=>{})}>tekrar gönder</button>
+            <button type="button" style={s.textBtn} onClick={handleTekrarGonder} disabled={tekrarYukleniyor}>
+              {tekrarYukleniyor ? "Gönderiliyor..." : "tekrar gönder"}
+            </button>
           </p>
         </div>
       </div>
