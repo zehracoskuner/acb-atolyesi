@@ -372,6 +372,32 @@
   flex-wrap: wrap;
 }
 
+.sh-root .sh-secondary-actions .report-actions { align-self: center; }
+.sh-root .sh-secondary-actions .report-actions-trigger {
+  width: 40px;
+  height: 40px;
+  padding: 10px;
+  border: 1px solid var(--sdp-border-med);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sdp-ink-muted);
+  transition: background .15s, border-color .15s, color .15s;
+}
+.sh-root .sh-secondary-actions .report-actions-trigger:hover,
+.sh-root .sh-secondary-actions .report-actions-trigger[aria-expanded="true"] {
+  background: var(--sdp-parchment);
+  border-color: var(--sdp-ink-muted);
+  color: var(--sdp-ink);
+}
+@media (min-width: 601px) {
+  .sh-root .sh-secondary-actions .report-actions-menu { left: auto; right: 0; top: auto; bottom: calc(100% + 8px); }
+}
+@media (max-width: 600px) {
+  .sh-root .sh-secondary-actions { gap: 6px; }
+  .sh-root .sh-secondary-actions .sh-btn-secondary { padding-inline: 12px; }
+  .sh-root .sh-secondary-actions .report-actions-trigger { width: 44px; height: 44px; }
+}
+
 .sh-btn-skeleton {
   width: 180px;
   height: 42px;

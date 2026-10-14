@@ -890,7 +890,6 @@ export default function StoryDetailsPage() {
             </div>
 
             <h1 className="sh-title">{work.title}</h1>
-            <ReportActions isOwner={isOwner} targetOwner={work.author || work.user} targetId={work._id} targetLabel={work.title} image={{ kind: "cover", url: work.coverImage }} />
 
             <div className="sh-meta-row">
               {work.isAnonymous ? (
@@ -1024,6 +1023,7 @@ export default function StoryDetailsPage() {
                       </>
                     )}
                   </button>
+                  <ReportActions isOwner={isOwner} targetOwner={work.author || work.user} targetId={work._id} targetLabel={work.title} image={{ kind: "cover", url: work.coverImage }} />
                 </div>
               )}
 
