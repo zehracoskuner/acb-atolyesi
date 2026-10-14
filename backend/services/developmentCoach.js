@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { randomUUID } from "node:crypto";
 import Work from "../models/Work.js";
 import Chapter from "../models/Chapter.js";
+import { ownerChapter } from "./chapterPublication.js";
 import Analysis from "../models/DevelopmentAnalysis.js";
 import Gate from "../models/DevelopmentGate.js";
 import Sample from "../models/DevelopmentSample.js";
@@ -39,8 +40,8 @@ export async function prepareDevelopmentContext({ workId, userId }) {
     // The initial profile samples current writing (including legacy works).
     // Subsequent comparisons exclusively sample the saved contribution ledger.
     if (remaining && !work.developmentAnalysisCount) {
-      for await (const chapter of Chapter.find({ work: workId }).sort({ order: 1, _id: 1 }).session(session).lean().cursor()) {
-        const words = plainWords(chapter.content).slice(0, remaining);
+      for await (const chapter of Chapter.find({ work: workId }).select("+draftContent").sort({ order: 1, _id: 1 }).session(session).lean().cursor()) {
+        const words = plainWords(ownerChapter(chapter).content).slice(0, remaining);
         if (words.length) samples.push({ chapterId: chapter._id, revision: chapter.revision || 0, contentHash: textHash(plainWords(chapter.content).join(" ")), text: words.join(" "), words: words.length });
         remaining -= words.length;
         if (!remaining) break;

@@ -4,6 +4,7 @@ import { Parser } from "htmlparser2";
 import Work from "../models/Work.js";
 import Chapter from "../models/Chapter.js";
 import { readDevelopmentQuota } from "./developmentQuota.js";
+import { ownerChapter } from "./chapterPublication.js";
 
 export function countWords(html = "") {
   let text = "";
@@ -20,8 +21,8 @@ export function developmentStatus(work) {
 // A single sticky flag means even a 20,000-word legacy work queues only once.
 export async function initializeDevelopment(work, session) {
   if (work.developmentInitializedAt) { advanceDevelopment(work, 0); return; }
-  const chapters = await Chapter.find({ work: work._id }).select("content").session(session).lean();
-  work.developmentNewWords = chapters.reduce((sum, chapter) => sum + countWords(chapter.content), 0);
+  const chapters = await Chapter.find({ work: work._id }).select("content +draftContent").session(session).lean();
+  work.developmentNewWords = chapters.reduce((sum, chapter) => sum + countWords(ownerChapter(chapter).content), 0);
   work.developmentInitializedAt = new Date();
   advanceDevelopment(work, 0);
 }

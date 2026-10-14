@@ -19,6 +19,7 @@ export function chapterReview(action) {
         if (String(work.user) === req.user.id) fail(403, 'Kendi bölümünüzde karar veremezsiniz.');
         if (action === 'approve' && chapter.status !== 'pending_review') fail(409, 'Yazar önce yeniden inceleme istemelidir.');
         chapter.status = action === 'approve' ? 'published' : 'rejected';
+        if (action === 'approve') chapter.publishedRevision = chapter.revision ?? 0;
         chapter.moderationHold = action !== 'approve';
         if (action === 'approve') chapter.moderationCase = null;
         chapter.reviewNote = reason; chapter.reviewedBy = req.user.id; chapter.reviewedAt = new Date();

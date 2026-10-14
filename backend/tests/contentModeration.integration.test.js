@@ -216,18 +216,32 @@ it('chapter removal keeps text/history, survives draft saves, and requires revis
   expect((await Chapter.findById(chapter._id)).moderationHold).toBe(false);
   expect((await Chapter.findById(chapter._id)).content).toBe('<p>Revised context</p>');
 });
-it('old chapter complaints cannot silently remove edited text and normal publication invokes no AI', async () => {
+it('old chapter complaints cannot silently remove a newly published version and normal publication invokes no AI', async () => {
   const work = await Work.create({ user: owner._id, title: 'Book', status: 'published' });
   const chapter = await Chapter.create({ work: work._id, title: 'Chapter', content: '<p>Original</p>', status: 'published' });
   await Work.updateOne({ _id: work._id }, { $set: { publishedChapterIds: [chapter._id] } });
   const r = await report({ kind: 'chapter', target: chapter._id });
   await saveChapterVersion({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Edited</p>' });
-  await expect(decision(r.contentCase)).rejects.toMatchObject({ status: 409 });
   expect((await request(`/chapters/${chapter._id}/status`, owner, 'PATCH', { status: 'published', expectedRevision: 1 })).status).toBe(200);
+  await expect(decision(r.contentCase)).rejects.toMatchObject({ status: 409 });
   for (const file of ['routes/upload.js', 'config/cloudinary.js', 'routes/chapter.js']) {
     expect(await readFile(new URL(`../${file}`, import.meta.url), 'utf8')).not.toMatch(/moderateCover|moderateChapter/);
   }
   expect(await readFile(new URL('../routes/ai.js', import.meta.url), 'utf8')).toContain('router.post');
+});
+it('private drafting does not invalidate complaints against the text still live', async () => {
+  const work = await Work.create({ user: owner._id, title: 'Book', status: 'published' });
+  const chapter = await Chapter.create({ work: work._id, title: 'Chapter', content: '<p>Live version</p>', status: 'published' });
+  await Work.updateOne({ _id: work._id }, { $set: { publishedChapterIds: [chapter._id] } });
+  const r = await report({ kind: 'chapter', target: chapter._id });
+  await saveChapterVersion({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Private draft</p>' });
+  await decision(r.contentCase, 'remove', moderator);
+  const stored = await Chapter.findById(chapter._id).select('+draftContent');
+  expect(stored.content).toBe('<p>Live version</p>');
+  expect(stored.draftContent.content).toBe('<p>Private draft</p>');
+  expect(stored.moderationHold).toBe(true);
+  expect((await request(`/chapters/${chapter._id}/status`, owner, 'PATCH', { status: 'published', expectedRevision: 1 })).status).toBe(202);
+  expect((await Chapter.findById(chapter._id)).content).toBe('<p>Private draft</p>');
 });
 
 it('keeps the authenticated writing coach operational independently of content moderation', async () => {

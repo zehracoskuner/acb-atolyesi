@@ -18,7 +18,7 @@ Eksik/geçersiz sürüm 400; eski sürüm 409 ve sahibine `current` döndürür.
 Başarı yanıtı `item`, `revision`, `savedAt` içerir. Aynı içerik tekrar
 gönderildiğinde yeni sürüm veya yeni kayıt zamanı üretilmez.
 
-Kayıt, değiştirilmeyen ChapterVersion belgeleri ve yayından kaldırma aynı
+Kayıt ve değiştirilmeyen ChapterVersion belgeleri aynı
 MongoDB transaction içinde, majority write concern ile tamamlanır. Replica set
 veya transaction destekleyen sharded cluster gerekir. Standalone veritabanında
 işlem başarısız olur; transaction olmadan kaydetmeye geri dönüş yapılmaz.
@@ -30,9 +30,35 @@ Eski bölümler sürüm 0 kabul edilir. İlk değişiklik sırasında eski içer
 aynı transaction içinde korunur; geçmişe dönük toplu veri işlemi yoktur.
 Sürüm listesi 50 kayıtlık sayfalarla okunur (`before`); okuma ve geri yükleme
 eser sahibiyle sınırlıdır, personel rolü bu yetkiyi sağlamaz.
-Geri yükleme mevcut sürümü korur, yeni taslak sürüm oluşturur ve inceleme
-alanlarını temizler. Mevcut metinle aynı sürümü geri yüklemek gereksiz kopya
+Geri yükleme mevcut sürümü korur ve yeni çalışma sürümü oluşturur. Yayındaki
+bölümün okurlara açık metnini değiştirmez; moderasyon engellerini kaldırmaz.
+Mevcut metinle aynı sürümü geri yüklemek gereksiz kopya
 üretmemek için reddedilir. Otomatik silme/TTL politikası eklenmedi.
+
+## Yayındaki bölümün özel taslağı
+
+Yayındaki bölüm düzenlenirken `title` ve `content` son yayınlanan metin olarak
+kalır. Yeni çalışma metni varsayılan sorgularda seçilmeyen `draftContent`
+alanına kaydedilir. `revision` çalışma sürümünü, `publishedRevision` yayındaki
+sürümü gösterir. İlk düzenlemede eski bölümler için bu ayrım kendiliğinden
+kurulur; toplu veri taşıma gerekmez.
+
+Sahip editörü, çakışma yanıtı, checkpoint, sürüm geçmişi, gelişim koçu ve kitap
+indirme çalışma taslağını kullanır. Okuma, bölüm listesi, akış ve şikâyet
+kanıtları yayındaki metni kullanır. `hasUnpublishedChanges` arayüzde
+“Değişiklikleri yayınla” düğmesini açar; kayıt bu işlemi kendiliğinden yapmaz.
+Yayınlama güncel `expectedRevision` ve sahiplik kontrolünden sonra özel taslağı
+yayın alanlarına aktarır. Çakışma yeni çalışma metninin yanlışlıkla
+yayınlanmasını engeller. Araçlar > Yayından kaldır, özel taslağı koruyarak
+bölümü okurlara kapatır.
+
+Moderasyon engeli ve kullanıcı içerik kısıtlaması yeniden yayınlamada
+uygulanır. Özel taslak yazmak yayındaki sürüme ait şikâyeti geçersiz kılmaz;
+yeni metin açıkça yayınlandığında eski şikâyet kararı yeni sürüme uygulanamaz.
+
+Doğrulama: `tests/publishedDraft.integration.test.js` gerçek izole replica set
+ve HTTP üzerinden okur/sahip ayrımını, yeniden açmayı, kitap snapshot'ını,
+paralel kayıtları, eski yayın isteğini, taslağa almayı ve kısıtlı yayını sınar.
 
 İstemci her isteğin yerel düzenleme sayacını ve kayıt sürümünü izler. Yeni
 yazılan metin eski yanıtla temizlenmez. 409 sonrası kullanıcı karşılaştırma

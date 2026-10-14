@@ -18,8 +18,8 @@ async function remember(workId, text, session) {
 // Conservative net-new accounting, not plagiarism detection. The lifetime
 // chapter high-water prevents delete/reinsert and undo inflation. Fingerprints
 // also catch a second copy appended to the same/different chapter of this work.
-export async function captureDevelopmentWriting({ chapter, work, nextContent, claimed, excluded, session }) {
-  const before = plainWords(chapter.content), after = plainWords(nextContent);
+export async function captureDevelopmentWriting({ chapter, work, beforeContent = chapter.content, nextContent, claimed, excluded, session }) {
+  const before = plainWords(beforeContent), after = plainWords(nextContent);
   if (chapter.developmentWordHighWater == null) {
     let high = before.length;
     for await (const version of ChapterVersion.find({ chapter: chapter._id }).select("content").session(session).lean().cursor()) {

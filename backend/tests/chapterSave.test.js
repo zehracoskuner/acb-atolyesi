@@ -20,7 +20,7 @@ function harness() {
   const edit = (id, value) => dispatch({ type: "UPDATE_CHAPTER_CONTENT", chapterId: id, content: value });
   const unload = new Function("chaptersRef", "return " + source.split("const h = ")[1].split(";\n    window.addEventListener")[0])(chaptersRef);
   const patch = vi.fn(), announce = vi.fn(), alert = vi.fn(), pending = vi.fn();
-  const publishStart = source.indexOf("  const handlePublish = async () => {");
+  const publishStart = source.indexOf("  const handlePublish = async");
   const publishEnd = source.indexOf("  const restoreVersion", publishStart);
   const publish = new Function("chaptersRef", "activeChapterId", "publishingIds", "window", "alert", "setPublishing", "saveChapter", "autoSaveTimers", "apiPatch", "workId", "dispatch", "setReviewPending", "setTimeout", "setAnnounceModal",
     source.slice(publishStart, publishEnd) + "; return handlePublish;")(
@@ -242,6 +242,16 @@ describe("chapter save flow", () => {
     expect(h.chaptersRef.current[0]).toMatchObject({ status, reviewNote: "server note", _dirty: false });
     expect(h.announce).toHaveBeenCalledTimes(status === "published" ? 1 : 0);
     expect(h.pending).toHaveBeenCalledTimes(status === "pending_review" ? 1 : 0);
+  });
+  it("publishes private changes without unpublishing or repeating the new-chapter announcement", async () => {
+    const h = harness();
+    h.edit("a", "private edit");
+    h.request.mockResolvedValue({ ...result("a"), item: { ...result("a").item, status: "published", hasUnpublishedChanges: true } });
+    h.patch.mockResolvedValue({ item: { _id: "a", status: "published", hasUnpublishedChanges: false } });
+    await h.publish();
+    expect(h.patch).toHaveBeenCalledWith("/chapters/a/status", { workId: "work", expectedRevision: 1, status: "published" });
+    expect(h.chaptersRef.current[0]).toMatchObject({ content: "private edit", status: "published", hasUnpublishedChanges: false });
+    expect(h.announce).not.toHaveBeenCalled();
   });
   it("does not publish after save failure or typing during the prerequisite save", async () => {
     for (const failed of [true, false]) {

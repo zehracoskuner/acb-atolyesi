@@ -24,6 +24,8 @@ kalıcı indirme bağlantısı oluşturulmaz. Yanıt `private, no-store` kullan�
   desteklenmiyorsa, eksik bölüm varsa veya üretim başarısızsa hata döner;
   karışık sürümler üretebilen sıradan okumalara geri düşülmez.
 - Editörde “Önce kaydet ve indir” tüm bölümlerin kayıtlarını bekler.
+  Yayındaki bölümün henüz yayınlanmamış çalışma taslağı da dosyaya alınır;
+  indirme işlemi bu düzenlemeleri okurlara yayınlamaz.
   Başarısız kayıt, sürüm çakışması, kurtarılmamış yerel taslak, kayıt
   sırasında düzenleme veya bölüm listesinin değişmesi indirmeyi durdurur.
   “Kayıtlı sürümü indir” seçeneği yerel değişiklikleri içermediğini açıklar.
@@ -36,6 +38,9 @@ onunla aynı ana sürümdeki `htmlparser2` ile HTML ayrıştırılır. İki çı
 paragraf modelini kullanır. Türkçe/Unicode, paragraflar, satır sonları,
 başlıklar, kalın/eğik/altı/üstü çizili yazı, hizalama ve listeler desteklenir.
 TXT'de HTML etiketleri bulunmaz; metin olarak yazılmış `<`/`>` korunur.
+DOCX içine ChatGPT/OpenAI logosu, görsel veya dosya önizleme simgesi eklenmez.
+Tarayıcı indirme bildiriminin ve işletim sistemindeki dosya ilişkilendirmesinin
+simgesi DOCX içeriğinin parçası değildir.
 
 ## Doğrulama
 

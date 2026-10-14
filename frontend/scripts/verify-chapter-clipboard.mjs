@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { sanitizeChapterHtml } from "../../backend/utils/sanitizeHtml.js";
+import { createBookFile, BOOK_TYPES } from "../../backend/services/bookExport.js";
+import mammoth from "../../backend/node_modules/mammoth/lib/index.js";
+import { readFile } from "node:fs/promises";
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || "playwright");
 const root = fileURLToPath(new URL("../", import.meta.url));
 const fixture = '<html><body><div id="root"></div><script type="module" src="/scripts/writing-fixture.jsx"></script></body></html>';
@@ -23,21 +26,37 @@ try {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
-  let chapter = { _id: "chapter1", work: "work1", title: "Yapıştırma", status: "draft", order: 1,
+  let chapter = { _id: "chapter1", work: "work1", title: "Yapıştırma", status: "published", order: 1,
     revision: 0, content: "<div>Başlangıç son.</div>", savedAt: new Date().toISOString() };
-  let saves = 0;
+  let saves = 0, downloads = 0, failSave = false, liveContent = chapter.content;
   await page.route("**/api/**", async route => {
     const request = route.request(), path = new URL(request.url()).pathname.split("/api")[1];
     let result = {};
     if (path === "/auth/me") result = { user: { _id: "writer1" } };
     else if (path === "/user/development-coach") result = { preference: "disabled" };
     else if (path === "/chapters") result = { items: [chapter] };
+    else if (path === "/works/work1/download") {
+      const format = new URL(request.url()).searchParams.get("format");
+      const file = await createBookFile({ title: "Türkçe kitap", chapters: [chapter] }, format);
+      downloads++;
+      await route.fulfill({ headers: { "Access-Control-Expose-Headers": "Content-Disposition", "Content-Type": BOOK_TYPES[format], "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent("Türkçe kitap." + format)}` }, body: file });
+      return;
+    }
+    else if (path === "/chapters/chapter1/status") {
+      chapter = { ...chapter, status: request.postDataJSON().status, hasUnpublishedChanges: false };
+      liveContent = chapter.content;
+      result = { item: chapter, publicationUpdated: true };
+    }
     else if (path === "/chapters/chapter1") {
       if (request.method() === "PUT") {
+        if (failSave) {
+          await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Test kayıt hatası" }) });
+          return;
+        }
         const body = request.postDataJSON();
         assert.equal(body.expectedRevision, chapter.revision);
         chapter = { ...chapter, ...body, content: sanitizeChapterHtml(body.content),
-          revision: chapter.revision + 1, savedAt: new Date().toISOString() };
+          revision: chapter.revision + 1, hasUnpublishedChanges: body.content !== liveContent, savedAt: new Date().toISOString() };
         saves++;
       }
       result = { item: chapter, revision: chapter.revision, savedAt: chapter.savedAt };
@@ -73,14 +92,15 @@ try {
   assert.equal(await editor.textContent(), "Başlangıç son.");
 
   await editor.fill("");
-  await paste(editor, `<p style="margin:80px;line-height:8;color:red">Bir <b>kalın</b> ve <i>italik</i></p>
+  await paste(editor, `<html xmlns:o="urn:schemas-microsoft-com:office:office"><body><!--StartFragment--><p class="MsoNormal" style="margin:80px;line-height:8;color:red">Bir <b>kalın</b> ve <span style="font-style:italic;mso-bidi-font-style:normal">italik</span></p>
     <p></p>
     <p style="text-align:center"><span style="font-weight:700;font-size:72px">İkinci</span></p>
-    <ul><li>Madde</li></ul><img src="invalid" onerror="alert(1)"><script>alert(1)</script>`, "Bir kalın ve italik\n\nİkinci\nMadde");
+    <ul><li>Madde</li></ul><img src="invalid" onerror="alert(1)"><script>alert(1)</script><!--EndFragment--></body></html>`, "Bir kalın ve italik\n\nİkinci\nMadde");
   await page.waitForFunction(() => document.querySelector(".rich-content").textContent.includes("Madde"));
   const formatted = await editor.innerHTML();
   assert(!/margin|line-height|color|font-size|onerror|<img|<script/.test(formatted));
-  assert(formatted.includes("<b>kalın</b>") && formatted.includes("<i>italik</i>"));
+  assert(formatted.includes("<b>kalın</b>"));
+  assert.equal(await editor.getByText("italik", { exact: true }).evaluate(el => getComputedStyle(el).fontStyle), "italic");
   assert(formatted.includes("<div><br></div>"));
   assert(formatted.includes("text-align: center") || formatted.includes("text-align:center"));
   assert.equal(await editor.locator("li").textContent(), "Madde");
@@ -89,6 +109,43 @@ try {
   const beforeReload = await editor.evaluate(el => ({ text: el.innerText, height: el.offsetHeight }));
   await page.reload(); await editor.waitFor();
   assert.deepEqual(await editor.evaluate(el => ({ text: el.innerText, height: el.offsetHeight })), beforeReload);
+  assert.equal(chapter.status, "published");
+  await page.getByRole("button", { name: "Değişiklikleri yayınla", exact: true }).waitFor();
+  assert.equal(liveContent, "<div>Başlangıç son.</div>");
+  await page.getByText("Araçlar", { exact: true }).click();
+  await page.getByRole("button", { name: "Kitabımı indir", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Kitabımı indir" });
+  await dialog.waitFor();
+  assert.equal(await dialog.locator("img, svg").count(), 0);
+  const docxPromise = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "Kayıtlı sürümü indir", exact: true }).click();
+  const docx = await docxPromise;
+  assert.equal(docx.suggestedFilename(), "Türkçe kitap.docx");
+  const docxHtml = (await mammoth.convertToHtml({ buffer: await readFile(await docx.path()) })).value;
+  assert(docxHtml.includes("<strong>kalın</strong>") && docxHtml.includes("<em>italik</em>"));
+  assert(!/chatgpt|openai/i.test(docxHtml));
+  await dialog.locator("select").selectOption("txt");
+  const txtPromise = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "Önce kaydet ve indir", exact: true }).click();
+  const txt = await txtPromise;
+  assert.equal(txt.suggestedFilename(), "Türkçe kitap.txt");
+  assert((await readFile(await txt.path(), "utf8")).includes("Bir kalın ve italik"));
+  await dialog.getByRole("button", { name: "Kapat", exact: true }).click();
+  // A failed save must never produce a stale book download.
+  failSave = true;
+  await editor.fill("Kaydedilmemiş metin");
+  await page.getByRole("button", { name: "Kitabımı indir", exact: true }).click();
+  const downloadCount = downloads;
+  await dialog.getByRole("button", { name: "Önce kaydet ve indir", exact: true }).click();
+  await dialog.getByRole("status").filter({ hasText: "İndirme başlatılmadı" }).waitFor();
+  assert.equal(downloads, downloadCount);
+  failSave = false;
+  await dialog.getByRole("button", { name: "Kapat", exact: true }).click();
+  page.on("dialog", prompt => prompt.accept());
+  await page.getByRole("button", { name: "Değişiklikleri yayınla", exact: true }).click();
+  await page.getByRole("button", { name: "taslağa al", exact: true }).waitFor();
+  assert.equal(liveContent.replace(/<[^>]+>/g, ""), "Kaydedilmemiş metin");
+  assert.equal(await page.locator(".ann-veil").count(), 0);
 
   await editor.fill("");
   await paste(editor, "", "<etiket> & Türkçe\r\nİkinci\r\n\r\nSon");
@@ -103,7 +160,7 @@ try {
   assert(!/font-size|color/.test(await focus.innerHTML()));
   assert.equal(await focus.locator("em").textContent(), "metni");
   assert.deepEqual(errors, []);
-  console.log("PASS: rich/plain clipboard, caret, undo, empty paragraphs, lists, save/reload, focus mode");
+  console.log("PASS: Word bold/italic, rich/plain clipboard, caret/undo, save/reload, DOCX/TXT downloads, failed-save guard, publication update, focus mode");
 } finally {
   await browser?.close();
   await vite.close();

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Work from "../models/Work.js";
 import Chapter from "../models/Chapter.js";
+import { ownerChapter } from "./chapterPublication.js";
 
 // One read-only transaction pins title, chapter membership, order and text to
 // the same database snapshot, including cursor getMore calls for long books.
@@ -15,7 +16,7 @@ export async function readBookSnapshot(workId, userId) {
     const manifest = await Chapter.find({ work: workId })
       .select("_id revision").session(session).lean();
     const chapters = await Chapter.find({ work: workId })
-      .select("_id revision title content order createdAt")
+      .select("_id revision title content order createdAt +draftContent")
       .sort({ order: 1, createdAt: 1, _id: 1 }).session(session).lean();
     const ids = new Set(chapters.map(ch => String(ch._id)));
     const revisions = new Map(chapters.map(ch => [String(ch._id), ch.revision ?? 0]));
@@ -25,7 +26,7 @@ export async function readBookSnapshot(workId, userId) {
       throw new Error("Eksik bölüm içeriği.");
     }
     const snapshot = Object.freeze({ title: work.title, chapters: Object.freeze(chapters.map(ch =>
-      Object.freeze({ title: ch.title, content: ch.content }))) });
+      Object.freeze({ title: ownerChapter(ch).title, content: ownerChapter(ch).content }))) });
     await session.commitTransaction();
     return snapshot;
   } catch (error) {

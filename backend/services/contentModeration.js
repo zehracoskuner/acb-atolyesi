@@ -14,7 +14,7 @@ import { legacyImage, accountForWrite, txOptions, publishImage, purgeImage } fro
 const DAY = 86400000;
 const same = (a, b) => String(a) === String(b);
 export const imageKinds = ['cover', 'avatar', 'banner'];
-export const chapterVersion = c => `${c.revision || 0}:${createHash('sha256').update(JSON.stringify([c.title, c.content])).digest('hex')}`;
+export const chapterVersion = c => `${c.publishedRevision ?? c.revision ?? 0}:${createHash('sha256').update(JSON.stringify([c.title, c.content])).digest('hex')}`;
 const notify = (recipient, text, session, contentCase) => Notification.create([{ recipient, sender: null, type: 'warning', text, contentCase }], { session });
 export function staff(actor) { if (!['admin', 'moderator'].includes(actor?.role)) fail(403, 'Yetkili incelemesi gerekir.'); }
 

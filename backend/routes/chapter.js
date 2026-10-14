@@ -15,6 +15,7 @@ import { readDevelopment } from "../services/developmentProgress.js";
 import { runDevelopmentCoach, readLatestDevelopment, listDevelopmentAnalyses } from "../services/developmentCoach.js";
 import { aiLimiter } from "../middlewares/rateLimiter.js";
 import { deleteLikedChapter } from "../services/likes.js";
+import { ownerChapter, applyChapterDraft } from "../services/chapterPublication.js";
 import { CHAPTER_HISTORY_ENABLED, DEVELOPMENT_COACH_LAUNCH_ENABLED } from "../../shared/features.js";
 
 const router = express.Router();
@@ -73,9 +74,9 @@ router.get("/", ensureAuth, async (req, res) => {
     if (!workId) return res.status(400).json({ message: "workId gerekli." });
     await assertWorkOwner(workId, userId);
     const chapters = await Chapter.find({ work: workId })
-      .select("_id title order")
+      .select("_id title order +draftContent")
       .sort({ order: 1 });
-    res.json({ items: chapters.map(ch => ({ _id: ch._id, title: ch.title, order: ch.order })) });
+    res.json({ items: chapters.map(ch => ({ _id: ch._id, title: ownerChapter(ch).title, order: ch.order })) });
   } catch (err) {
     res.status(err.status || 500).json({ message: err.status && err.status < 500 ? err.message : "Bölümler yüklenemedi." });
   }
@@ -110,10 +111,10 @@ router.post("/development/:workId", ensureAuth, aiLimiter, async (req, res) => {
 router.get("/:id", ensureAuth, async (req, res) => {
   try {
     const userId  = req.user?.id || req.userId;
-    const chapter = await Chapter.findById(req.params.id);
+    const chapter = await Chapter.findById(req.params.id).select("+draftContent");
     if (!chapter) return res.status(404).json({ message: "Bölüm bulunamadı." });
     await assertWorkOwner(chapter.work, userId);
-    res.json({ item: chapter });
+    res.json({ item: ownerChapter(chapter) });
   } catch (err) {
     res.status(err.status || 500).json({ message: err.status && err.status < 500 ? err.message : "Bölüm yüklenemedi." });
   }
@@ -194,13 +195,13 @@ router.patch("/:id/status", ensureAuth, async (req, res) => {
     if (!["draft", "published"].includes(status))
       return res.status(400).json({ message: "Geçersiz status. 'draft' veya 'published' olmalı." });
 
-    const chapter = await Chapter.findById(req.params.id);
+    const chapter = await Chapter.findById(req.params.id).select("+draftContent");
     if (!chapter) return res.status(404).json({ message: "Bölüm bulunamadı." });
 
     const targetWorkId = chapter.work;
     const work = await assertWorkOwner(targetWorkId, userId);
     if (req.body.expectedRevision !== undefined && req.body.expectedRevision !== (chapter.revision ?? 0)) {
-      return res.status(409).json({ code: "CHAPTER_CONFLICT", message: "Bölüm değişti; yayınlamadan önce güncel metni kontrol edin.", current: chapter });
+      return res.status(409).json({ code: "CHAPTER_CONFLICT", message: "Bölüm değişti; yayınlamadan önce güncel metni kontrol edin.", current: ownerChapter(chapter) });
     }
     if (workId !== undefined &&
         (typeof workId !== "string" || workId.toLowerCase() !== targetWorkId.toString())) {
@@ -210,6 +211,8 @@ router.patch("/:id/status", ensureAuth, async (req, res) => {
     // ── Taslağa al ──────────────────────────────────────────────────────
     if (status === "draft") {
       if (["pending_review", "rejected"].includes(chapter.status)) chapter.moderationHold = true;
+      applyChapterDraft(chapter);
+      chapter.publishedRevision = undefined;
       chapter.status = "draft";
       await chapter.save();
       await Work.findByIdAndUpdate(targetWorkId, { $pull: { publishedChapterIds: chapter._id } });
@@ -217,12 +220,14 @@ router.patch("/:id/status", ensureAuth, async (req, res) => {
       return res.json({ item: chapter, message: "Bölüm taslağa alındı." });
     }
 
-    if (!chapter.content?.trim())
+    if (!ownerChapter(chapter).content?.trim())
       return res.status(400).json({ message: "Bölüm içeriği boş, yayınlanamaz." });
 
     // ── contentBanned: ensureAuth token'ında YOK — DB'den oku ───────────
     const dbUser = await User.findById(userId).select("contentBanned").lean();
     if (dbUser?.contentBanned || chapter.moderationHold || ["pending_review", "rejected"].includes(chapter.status)) {
+      applyChapterDraft(chapter);
+      chapter.publishedRevision = undefined;
       chapter.moderationHold = true;
       chapter.status     = "pending_review";
       chapter.reviewNote = "Kullanıcının içerik kısıtlaması var — moderatör onayı bekleniyor.";
@@ -263,13 +268,20 @@ router.patch("/:id/status", ensureAuth, async (req, res) => {
       });
     }
 
+    const publicationUpdated = chapter.status === "published";
+    applyChapterDraft(chapter);
+    chapter.publishedRevision = chapter.revision ?? 0;
     chapter.status = "published"; chapter.reviewNote = "";
     await chapter.save();
     await Work.findByIdAndUpdate(targetWorkId, { $addToSet: { publishedChapterIds: chapter._id } });
     await syncWorkStatus(targetWorkId);
-    return res.json({ item: chapter, message: "Bölüm yayınlandı.", status: "published" });
+    return res.json({ item: ownerChapter(chapter), message: publicationUpdated ? "Değişiklikler yayınlandı." : "Bölüm yayınlandı.", status: "published", publicationUpdated });
   } catch (err) {
     console.error("Status Update Error:", err);
+    if (err.name === "VersionError") {
+      const chapter = await Chapter.findById(req.params.id).select("+draftContent");
+      return res.status(409).json({ code: "CHAPTER_CONFLICT", message: "Bölüm değişti; güncel metni kontrol edin.", current: chapter && ownerChapter(chapter) });
+    }
     res.status(err.status || 500).json({ message: err.status && err.status < 500 ? err.message : "Durum güncellenemedi." });
   }
 });

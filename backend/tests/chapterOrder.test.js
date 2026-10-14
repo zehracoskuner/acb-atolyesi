@@ -13,7 +13,8 @@ function fixture({ owned = true, found = true } = {}) {
     status: 'published', reviewNote: 'Not', revision: 5, savedAt: new Date(0),
     save: vi.fn().mockResolvedValue(undefined) };
   vi.spyOn(mongoose.connection, 'transaction').mockImplementation(fn => fn(session));
-  vi.spyOn(Chapter, 'findById').mockReturnValue({ session: async () => found ? chapter : null });
+  const query = { select: () => query, session: async () => found ? chapter : null };
+  vi.spyOn(Chapter, 'findById').mockReturnValue(query);
   vi.spyOn(Work, 'findOne').mockReturnValue({ session: async () => owned ? { _id: 'w' } : null });
   const lock = vi.spyOn(Work, 'updateOne').mockResolvedValue({ modifiedCount: 1 });
   const versions = vi.spyOn(ChapterVersion, 'create');

@@ -38,6 +38,9 @@ describe("book files", () => {
     expect(xml).toContain('w:val="center"'); expect(xml).toContain('w:val="right"');
     expect(xml).toContain("<w:u"); expect(xml).toContain("<w:strike");
     expect(xml).not.toContain("altChunk"); expect(xml).not.toContain("SECRET_");
+    expect(Object.keys(zip.files).filter(name => /word\/media|thumbnail/i.test(name))).toEqual([]);
+    const metadata = await zip.file("docProps/core.xml").async("string");
+    expect(metadata + xml).not.toMatch(/chatgpt|openai/i);
   });
   it.each(["docx", "txt"])("handles an empty work (%s)", async format => {
     const buffer = await createBookFile({ title: "Boş eser", chapters: [] }, format);

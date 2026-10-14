@@ -10,6 +10,13 @@ const chapterSchema = new mongoose.Schema(
     firstPublishedAt: Date,
     publicationDateEstimated: { type: Boolean, default: false },
     revision: { type: Number, default: 0 },
+    // Reader-facing title/content stay unchanged while the owner edits privately.
+    draftContent: {
+      type: new mongoose.Schema({ title: String, content: String }, { _id: false }),
+      select: false,
+    },
+    hasUnpublishedChanges: { type: Boolean, default: false },
+    publishedRevision: Number,
     moderationHold: { type: Boolean, default: false },
     reviewHistory: [{ revision: Number, by: mongoose.Schema.Types.ObjectId, at: Date, action: String, reason: String }],
     moderationCase: { type: mongoose.Schema.Types.ObjectId, ref: 'ContentCase' },

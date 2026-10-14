@@ -4,6 +4,7 @@ import Chapter from "../models/Chapter.js";
 import Work from "../models/Work.js";
 import ChapterVersion from "../models/ChapterVersion.js";
 import { sanitizeChapterHtml } from "../utils/sanitizeHtml.js";
+import { ownerChapter } from "./chapterPublication.js";
 
 import { initializeDevelopment, advanceDevelopment, developmentStatus } from "./developmentProgress.js";
 
@@ -14,12 +15,12 @@ export async function markChapterCheckpoint({ id, userId, expectedRevision, labe
   return mongoose.connection.transaction(async session => {
     const { chapter } = await ownedChapter(id, userId, session);
     const revision = chapter.revision ?? 0;
-    if (revision !== expectedRevision) throw Object.assign(fail(409, "Bölüm değişti. Güncel metni kontrol edin."), { code: "CHAPTER_CONFLICT", current: chapter.toObject() });
+    if (revision !== expectedRevision) throw Object.assign(fail(409, "Bölüm değişti. Güncel metni kontrol edin."), { code: "CHAPTER_CONFLICT", current: ownerChapter(chapter) });
     // Legacy chapters may not have a snapshot yet. Capture exactly the saved text,
     // without changing the chapter, revision, publication state or save timestamp.
     let item = await ChapterVersion.findOne({ chapter: id, revision }).session(session);
     if (!item) [item] = await ChapterVersion.create([{
-      chapter: id, work: chapter.work, revision, title: chapter.title, content: chapter.content,
+      chapter: id, work: chapter.work, revision, title: ownerChapter(chapter).title, content: ownerChapter(chapter).content,
       savedAt: chapter.savedAt || chapter.updatedAt,
     }], { session });
     item.isCheckpoint = true;
@@ -48,7 +49,7 @@ export async function createChapterVersion({ workId, userId, title }) {
 }
 
 export async function ownedChapter(id, userId, session = null) {
-  const chapter = await Chapter.findById(id).session(session);
+  const chapter = await Chapter.findById(id).select("+draftContent").session(session);
   if (!chapter) throw fail(404, "Bölüm bulunamadı.");
   const work = await Work.findOne({ _id: chapter.work, user: userId }).session(session);
   if (!work) throw fail(403, "Bu bölümün geçmişine yalnızca eser sahibi erişebilir.");
@@ -66,7 +67,7 @@ export async function updateChapterOrder({ id, userId, order }) {
     await Work.updateOne({ _id: chapter.work }, { $inc: { __v: 1 } }, { session });
     chapter.order = order;
     await chapter.save({ session });
-    return { item: chapter, revision: chapter.revision ?? 0,
+    return { item: ownerChapter(chapter), revision: chapter.revision ?? 0,
       savedAt: chapter.savedAt, draftedFromPublished: false };
   }, { readConcern: { level: "snapshot" }, writeConcern: { w: "majority" }, readPreference: "primary" });
 }
@@ -84,7 +85,7 @@ export async function saveChapterVersion({ id, userId, expectedRevision, title, 
     const revision = chapter.revision ?? 0;
     if (revision !== expectedRevision) {
       throw Object.assign(fail(409, "Bölüm başka bir sekme veya cihazda değişti. Metniniz korunuyor; sunucudaki metni karşılaştırın."), {
-        code: "CHAPTER_CONFLICT", current: chapter.toObject(),
+        code: "CHAPTER_CONFLICT", current: ownerChapter(chapter),
       });
     }
     await initializeDevelopment(work, session);
@@ -95,38 +96,48 @@ export async function saveChapterVersion({ id, userId, expectedRevision, title, 
       title = source.title;
       content = source.content;
     }
-    const nextTitle = title === undefined ? chapter.title : title.trim() || chapter.title;
-    const nextContent = content === undefined ? chapter.content : sanitizeChapterHtml(content);
-    const contentChanged = nextContent !== chapter.content;
-    const changed = nextTitle !== chapter.title || nextContent !== chapter.content;
+    const current = ownerChapter(chapter);
+    const nextTitle = title === undefined ? current.title : title.trim() || current.title;
+    const nextContent = content === undefined ? current.content : sanitizeChapterHtml(content);
+    const contentChanged = nextContent !== current.content;
+    const changed = nextTitle !== current.title || nextContent !== current.content;
     if (!changed && source) throw fail(400, "Seçilen metin mevcut metinle aynı; geri yükleme gerekmiyor.");
     if (!changed && !source) {
       if (work.isModified()) await work.save({ session });
-      return { item: chapter, revision, savedAt: chapter.savedAt || chapter.updatedAt, draftedFromPublished: false, development: developmentStatus(work) };
+      return { item: current, revision, savedAt: chapter.savedAt || chapter.updatedAt, draftedFromPublished: false, development: developmentStatus(work) };
     }
 
     // Capture legacy/current text before replacing it. This is lazy, never a bulk migration.
     const previous = await ChapterVersion.exists({ chapter: id, revision }).session(session);
     if (!previous) await ChapterVersion.create([{
-      chapter: id, work: chapter.work, revision, title: chapter.title, content: chapter.content,
+      chapter: id, work: chapter.work, revision, title: current.title, content: current.content,
       savedAt: chapter.savedAt || chapter.updatedAt || new Date(),
     }], { session });
-    const acceptedWords = await captureDevelopmentWriting({ chapter, work, nextContent, claimed: eligibleWordDelta, excluded: !!source || !contentChanged, session });
+    const acceptedWords = await captureDevelopmentWriting({ chapter, work, beforeContent: current.content, nextContent, claimed: eligibleWordDelta, excluded: !!source || !contentChanged, session });
     const savedAt = new Date();
-    const drafted = chapter.status !== "draft";
+    const keepPublished = chapter.status === "published" && !chapter.moderationHold;
+    const drafted = !keepPublished && chapter.status !== "draft";
     if (["pending_review", "rejected"].includes(chapter.status)) chapter.moderationHold = true;
-    chapter.set({ title: nextTitle, content: nextContent, revision: revision + 1, savedAt,
-      status: "draft", ...(chapter.moderationHold ? {} : { reviewNote: "", reviewedAt: null, reviewedBy: null }) });
+    if (keepPublished) {
+      chapter.publishedRevision ??= revision;
+      chapter.hasUnpublishedChanges = nextTitle !== chapter.title || nextContent !== chapter.content;
+      chapter.draftContent = chapter.hasUnpublishedChanges ? { title: nextTitle, content: nextContent } : undefined;
+      chapter.set({ revision: revision + 1, savedAt });
+    } else {
+      chapter.set({ title: nextTitle, content: nextContent, revision: revision + 1, savedAt,
+        draftContent: undefined, hasUnpublishedChanges: false, publishedRevision: undefined,
+        status: "draft", ...(chapter.moderationHold ? {} : { reviewNote: "", reviewedAt: null, reviewedBy: null }) });
+    }
     await chapter.save({ session });
     await ChapterVersion.create([{
       chapter: id, work: chapter.work, revision: chapter.revision, title: nextTitle,
       content: nextContent, savedAt, ...(source ? { restoredFrom: source.revision, restoredFromRevision: source.revision } : {}),
     }], { session });
     advanceDevelopment(work, acceptedWords);
-    work.publishedChapterIds = (work.publishedChapterIds || []).filter(value => String(value) !== String(id));
+    if (!keepPublished) work.publishedChapterIds = (work.publishedChapterIds || []).filter(value => String(value) !== String(id));
     work.status = work.publishedChapterIds.length ? "published" : "draft";
     await work.save({ session });
-    return { item: chapter, revision: chapter.revision, savedAt, draftedFromPublished: drafted, development: developmentStatus(work) };
+    return { item: ownerChapter(chapter), revision: chapter.revision, savedAt, draftedFromPublished: drafted, development: developmentStatus(work) };
   }, { readConcern: { level: "snapshot" }, writeConcern: { w: "majority" }, readPreference: "primary" }).catch(async error => {
     // Concurrent legacy baseline inserts can surface as duplicate-key errors;
     // convert only a verified moved revision into a user-visible conflict.
@@ -134,7 +145,7 @@ export async function saveChapterVersion({ id, userId, expectedRevision, title, 
       const { chapter } = await ownedChapter(id, userId);
       if ((chapter.revision ?? 0) !== expectedRevision) throw Object.assign(
         fail(409, "Bölüm başka bir sekme veya cihazda değişti. Metniniz korunuyor."),
-        { code: "CHAPTER_CONFLICT", current: chapter.toObject() });
+        { code: "CHAPTER_CONFLICT", current: ownerChapter(chapter) });
     }
     throw error;
   });

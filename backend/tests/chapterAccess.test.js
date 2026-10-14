@@ -391,12 +391,14 @@ describe("İki kullanıcı arasında bölüm sahipliği", () => {
     expect(db.works[WA]).toEqual(otherWork);
   });
 
-  it("Sahibin içerik güncellemesi çalışır ve yayından kaldırır", async () => {
+  it("Sahibin içerik güncellemesi özel taslağı kaydeder ve yayını korur", async () => {
     const result = await request(B, "PUT", `/api/chapters/${CB}`, { expectedRevision: 0, content: "<p>Yeni içerik</p>" });
     expect(result.status).toBe(200);
-    expect(db.chapters[CB].content).toBe("<p>Yeni içerik</p>");
-    expect(db.chapters[CB].status).toBe("draft");
-    expect(db.works[WB].publishedChapterIds).toEqual([]);
+    expect(result.body.item.content).toBe("<p>Yeni içerik</p>");
+    expect(db.chapters[CB].content).toBe("B özel içeriği");
+    expect(db.chapters[CB].draftContent.content).toBe("<p>Yeni içerik</p>");
+    expect(db.chapters[CB].status).toBe("published");
+    expect(db.works[WB].publishedChapterIds).toEqual([CB]);
     expect(db.works[WA].publishedChapterIds).toEqual([CA]);
   });
 
@@ -629,7 +631,7 @@ describe("Version history and atomic saves (isolated storage)", () => {
     expect(db).toEqual(before);
     expect(result.body.savedAt).toBeUndefined();
   });
-  it("restore preserves current and older versions and clears all approval fields", async () => {
+  it("restore preserves history and leaves the published text and approval unchanged", async () => {
     const original = db.chapters[CB].content;
     await request(B, "PUT", `/api/chapters/${CB}`, { expectedRevision: 0, content: "new text" });
     db.chapters[CB].status = "published";
@@ -638,10 +640,10 @@ describe("Version history and atomic saves (isolated storage)", () => {
     db.chapters[CB].reviewNote = "approved";
     const result = await request(B, "POST", `/api/chapters/${CB}/versions/0/restore`, { expectedRevision: 1 });
     expect(result.status).toBe(200);
-    expect(result.body.item).toMatchObject({ content: original, revision: 2, status: "draft", reviewedBy: null, reviewedAt: null, reviewNote: "" });
+    expect(result.body.item).toMatchObject({ content: original, revision: 2, status: "published", reviewedBy: STAFF, reviewNote: "approved", hasUnpublishedChanges: false });
     expect(db.versions.map(v => v.content)).toEqual([original, "new text", original]);
     expect(db.versions[2].restoredFrom).toBe(0);
-    expect(db.works[WB].publishedChapterIds).toEqual([]);
+    expect(db.works[WB].publishedChapterIds).toEqual([CB]);
   });
   it.each([A, STAFF])("non-owner %s cannot list, read or restore versions", async user => {
     await request(B, "PUT", `/api/chapters/${CB}`, { expectedRevision: 0, content: "private version" });
@@ -659,22 +661,23 @@ describe("Version history and atomic saves (isolated storage)", () => {
     expect((await request(B, "GET", `/api/chapters/${CB}/versions/1`)).body.item.content).toBe("new text");
     expect((await request(B, "POST", `/api/chapters/${CB}/versions/0/restore`, { expectedRevision: 0 })).status).toBe(409);
     expect((await request(B, "PUT", `/api/chapters/${CB}`, { content: "unsafe" })).status).toBe(400);
-    expect(db.chapters[CB].content).toBe("new text");
+    expect(db.chapters[CB].draftContent.content).toBe("new text");
+    expect(db.chapters[CB].content).toBe("B özel içeriği");
   });
 });
 
 describe("Kayıt yanıtı ve taslağa geçiş", () => {
-  it.each(["published", "pending_review", "rejected"])("%s başlık düzenlemesi taslağa geçer ve varsa moderasyon gerekçesini korur", async status => {
+  it.each(["published", "pending_review", "rejected"])("%s başlık düzenlemesi yayın ve moderasyon sınırlarını korur", async status => {
     db.chapters[CB].status = status;
     db.chapters[CB].reviewNote = "Eski inceleme";
     const result = await request(B, "PUT", `/api/chapters/${CB}`, { expectedRevision: 0, title: "Yeni başlık" });
     expect(result.status).toBe(200);
     const held = status !== "published";
-    expect(result.body.item).toMatchObject({ title: "Yeni başlık", status: "draft", reviewNote: held ? "Eski inceleme" : "" });
+    expect(result.body.item).toMatchObject({ title: "Yeni başlık", status: held ? "draft" : "published", reviewNote: "Eski inceleme", hasUnpublishedChanges: !held });
     if (held) expect(result.body.item.moderationHold).toBe(true);
-    expect(result.body.draftedFromPublished).toBe(true);
-    expect(db.works[WB].publishedChapterIds).toEqual([]);
-    expect(db.works[WB].status).toBe("draft");
+    expect(result.body.draftedFromPublished).toBe(held);
+    expect(db.works[WB].publishedChapterIds).toEqual(held ? [] : [CB]);
+    expect(db.works[WB].status).toBe(held ? "draft" : "published");
   });
   it("değişmeyen kayıt yayını kaldırmaz", async () => {
     const result = await request(B, "PUT", `/api/chapters/${CB}`, { expectedRevision: 0, title: db.chapters[CB].title, content: db.chapters[CB].content });

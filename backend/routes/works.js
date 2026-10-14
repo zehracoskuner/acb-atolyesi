@@ -272,9 +272,9 @@ router.get("/:id/chapters", ensureAuth, async (req, res) => {
     const work = await Work.findOne({ _id: req.params.id, user: userId });
     if (!work) return res.status(404).json({ message: "Çalışma bulunamadı veya yetkiniz yok." });
 
-    const chapters = await Chapter.find({ work: req.params.id }).select("_id title order status revision savedAt updatedAt reviewNote").sort({ order: 1 });
+    const chapters = await Chapter.find({ work: req.params.id }).select("_id title order status revision savedAt updatedAt reviewNote hasUnpublishedChanges +draftContent").sort({ order: 1 });
 
-    return res.json({ items: chapters.map(ch => ({ _id: ch._id, title: ch.title, order: ch.order, status: ch.status, revision: ch.revision ?? 0, savedAt: ch.savedAt, updatedAt: ch.updatedAt, reviewNote: ch.reviewNote || "" })) });
+    return res.json({ items: chapters.map(ch => ({ _id: ch._id, title: ch.draftContent?.title ?? ch.title, order: ch.order, status: ch.status, hasUnpublishedChanges: ch.hasUnpublishedChanges, revision: ch.revision ?? 0, savedAt: ch.savedAt, updatedAt: ch.updatedAt, reviewNote: ch.reviewNote || "" })) });
   } catch (err) {
     console.error("GET /works/:id/chapters error:", err);
     return res.status(500).json({ message: "Bölümler yüklenemedi." });
