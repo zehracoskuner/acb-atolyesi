@@ -1,0 +1,61 @@
+/* Profile LogComposer styling, scoped to the two existing feed views. */
+.feed-composer {
+  box-sizing:border-box;
+  min-width:0;
+  margin-bottom:28px;
+  padding:14px 16px;
+  border:1.5px solid rgba(0,0,0,.12);
+  border-radius:12px;
+  background:#fff;
+  color:#1c1917;
+  font-family:'DM Sans',sans-serif;
+  transition:border-color .2s,box-shadow .2s;
+}
+.feed-composer.is-expanded {
+  border-color:rgba(184,134,11,.22);
+  box-shadow:0 0 0 3px rgba(184,134,11,.10);
+}
+.feed-composer:focus-visible { outline:2px solid #baa895; outline-offset:3px; }
+.feed-composer .feed-composer-header { display:flex; align-items:flex-start; gap:12px; min-width:0; }
+.feed-composer .feed-composer-form textarea {
+  display:block;
+  flex:1;
+  box-sizing:border-box;
+  min-width:0;
+  width:100%;
+  min-height:52px;
+  max-height:240px;
+  padding:0;
+  border:0;
+  outline:0;
+  resize:none;
+  background:transparent;
+  color:#1c1917;
+  font:.95rem/1.7 'Lora',Georgia,serif;
+  overflow-y:auto;
+  overflow-wrap:anywhere;
+}
+.feed-composer .feed-composer-form textarea::placeholder { color:#a8a29e; font-style:italic; opacity:1; }
+.feed-composer .feed-composer-footer { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid rgba(0,0,0,.07); }
+.feed-composer .feed-composer-audience { flex:1 1 160px; min-width:0; color:#6c7578; font-size:.72rem; line-height:1.5; overflow-wrap:anywhere; }
+.feed-composer .feed-composer-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; max-width:100%; margin-left:auto; }
+.feed-composer .feed-composer-count { min-width:30px; color:#a8a29e; font-size:.72rem; text-align:right; font-variant-numeric:tabular-nums; }
+.feed-composer .feed-composer-count[data-near-limit="true"] { color:#ba7517; }
+.feed-composer .feed-composer-footer .feed-composer-actions button { display:inline-flex; align-items:center; justify-content:center; min-height:44px; border-radius:6px; font-family:'DM Sans',sans-serif; cursor:pointer; transition:background .18s,color .18s,border-color .18s; }
+.feed-composer .feed-composer-footer .feed-composer-actions .feed-composer-cancel { padding:5px 12px; border:1px solid rgba(0,0,0,.12); background:transparent; color:#a8a29e; font-size:.75rem; }
+.feed-composer .feed-composer-actions .feed-composer-cancel:hover { background:#f0ede6; color:#6c7578; }
+.feed-composer .feed-composer-footer .feed-composer-actions .feed-composer-submit { padding:6px 18px; border:0; background:#1c1917; color:#fff; font-size:.78rem; font-weight:500; letter-spacing:.03em; }
+.feed-composer .feed-composer-actions .feed-composer-submit:hover:not(:disabled) { background:#87432d; }
+.feed-composer .feed-composer-footer .feed-composer-actions button:focus-visible { outline:2px solid #87432d; outline-offset:3px; }
+.feed-composer .feed-composer-footer .feed-composer-actions button:disabled { opacity:.4; cursor:not-allowed; }
+.feed-composer[aria-busy="true"] .feed-composer-actions button:disabled { cursor:wait; }
+.feed-composer .feed-composer-error, .feed-composer .feed-composer-notice { margin:6px 0 0; font-size:.75rem; line-height:1.6; overflow-wrap:anywhere; }
+.feed-composer .feed-composer-error { color:#dc2626; }
+.feed-composer .feed-composer-notice { color:#6c7578; }
+@media(max-width:480px) {
+  .feed-composer { padding:12px 14px; }
+  .feed-composer .feed-composer-header { gap:10px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .feed-composer, .feed-composer .feed-composer-footer .feed-composer-actions button { transition:none; }
+}

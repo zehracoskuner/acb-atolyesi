@@ -14,6 +14,7 @@ import { ownedChapter, saveChapterVersion, createChapterVersion, markChapterChec
 import { readDevelopment } from "../services/developmentProgress.js";
 import { runDevelopmentCoach, readLatestDevelopment, listDevelopmentAnalyses } from "../services/developmentCoach.js";
 import { aiLimiter } from "../middlewares/rateLimiter.js";
+import { deleteLikedChapter } from "../services/likes.js";
 import { CHAPTER_HISTORY_ENABLED, DEVELOPMENT_COACH_LAUNCH_ENABLED } from "../../shared/features.js";
 
 const router = express.Router();
@@ -291,12 +292,7 @@ router.patch("/:id/reject", ensureAuth, chapterReview('reject'));
 router.delete("/:id", ensureAuth, async (req, res) => {
   try {
     const userId  = req.user?.id || req.userId;
-    const chapter = await Chapter.findById(req.params.id);
-    if (!chapter) return res.status(404).json({ message: "Bölüm bulunamadı." });
-    await assertWorkOwner(chapter.work, userId);
-    await chapter.deleteOne();
-    await Work.findByIdAndUpdate(chapter.work, { $pull: { publishedChapterIds: chapter._id } });
-    await syncWorkStatus(chapter.work);
+    await deleteLikedChapter({ chapterId: req.params.id, userId });
     res.json({ message: "Bölüm silindi." });
   } catch (err) {
     console.error("Delete Error:", err);

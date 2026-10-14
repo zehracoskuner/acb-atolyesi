@@ -3,6 +3,7 @@ import { BookOpen, ArrowDown } from "lucide-react";
 import { apiGet } from "../../lib/api";
 import { LogCard, ChapterCard } from "./FeedCards";
 import AtelierToday from "./AtelierToday";
+import FeedComposer from "./FeedComposer";
 import "../../styles/WorkshopFeed.css";
 
 function FeedSkeleton() {
@@ -35,13 +36,20 @@ function FeedStream({ scope, onDiscover }) {
 
 export default function WorkshopFeed({ onDiscover }) {
   const [scope, setScope] = useState("public");
+  const [revision, setRevision] = useState(0);
+  function refreshAfterPost() {
+    // Own public posts belong in the public scope, ordered by the existing API.
+    setScope("public");
+    setRevision(value => value + 1);
+  }
   return <section className="workshop-feed" aria-label="Atölye akışı">
     <div className="workshop-feed-layout">
       <div className="workshop-feed-column">
         <div className="feed-scope-tabs" role="group" aria-label="Akış kapsamı">{[["public", "Herkese Açık"], ["following", "Takip Ettiklerim"]].map(([value, label]) => <button type="button" key={value} aria-pressed={scope === value} onClick={() => setScope(value)}>{label}</button>)}</div>
         <p className="feed-scope-note">{scope === "public" ? "Atölyenin her köşesinden, herkesle paylaşılan notlar." : "Takip ettiğin kalemlerden günlükler ve yeni bölümler."}</p>
+        <FeedComposer onPost={refreshAfterPost} />
         {/* Remount resets pagination and ignores any response from the previous scope. */}
-        <FeedStream key={scope} scope={scope} onDiscover={onDiscover} />
+        <FeedStream key={`${scope}-${revision}`} scope={scope} onDiscover={onDiscover} />
       </div>
       <AtelierToday />
     </div>

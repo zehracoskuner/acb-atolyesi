@@ -180,7 +180,7 @@ export default function ExplorePage() {
   const worksVisible = searching || mode === "explore" || !isLoggedIn;
   const editorial = !searching && genre === "all";
 
-  return <div className="explore-page">
+  return <div className={`explore-page${status === "guest" ? " explore-page-guest" : ""}`}>
     <TopBar />
     <main className="explore-shell" data-tour={!results.loading ? "tour-page-ready" : undefined}>
       <SpotlightHero work={dailyWork} isLoggedIn={isLoggedIn} onDiscover={discover} onJoin={() => requireMember()} showJoin={status === "guest"} />
@@ -211,8 +211,8 @@ export default function ExplorePage() {
         </div> : <WorkshopFeed onDiscover={() => { setMode("explore"); searchRef.current?.focus(); }} />}
       </section>
 
-      <section className="explore-workshop" aria-labelledby="explore-workshop-title"><PenLine size={28} aria-hidden="true" /><div><p className="explore-eyebrow"></p><h2 id="explore-workshop-title">Kendi sesinle yaz. Gelişimini gör.</h2><p>Bölümlerini yaz, evren ve karakter notlarını bir arada tut. AI geri bildirimiyle metnine yeniden bak; hangi önerilerin sesine uyacağına sen karar ver.</p></div>{isLoggedIn ? <Link className="explore-button" to="/studio">Atölyeme git <ArrowRight size={16} aria-hidden="true" /></Link> : status === "guest" && <button className="explore-button" onClick={() => requireMember("/studio")}>Atölyeye katıl</button>}</section>
+      <section className="explore-workshop" aria-labelledby="explore-workshop-title"><PenLine size={28} aria-hidden="true" /><div><p className="explore-eyebrow">{status === "guest" ? "OKURLARA VE YAZARLARA AÇIK" : ""}</p><h2 id="explore-workshop-title">Kendi sesinle yaz. Gelişimini gör.</h2><p>{status === "guest" ? "Yeni hikâyeler keşfet, sevdiğin kalemlerin yolculuğuna eşlik et. Yazmak istersen bölümlerini, evren ve karakter notlarını bir arada tut; AI geri bildirimiyle metnine kendi sesini koruyarak yeniden bak." : "Bölümlerini yaz, evren ve karakter notlarını bir arada tut. AI geri bildirimiyle metnine yeniden bak; hangi önerilerin sesine uyacağına sen karar ver."}</p></div>{isLoggedIn ? <Link className="explore-button" to="/studio">Atölyeme git <ArrowRight size={16} aria-hidden="true" /></Link> : status === "guest" && <button className="explore-button" onClick={() => requireMember("/studio")}>Atölyeye katıl</button>}</section>
     </main>
-    <Footer />
+    {status === "guest" ? <footer className="explore-guest-footer"><Footer /></footer> : <Footer />}
   </div>;
 }

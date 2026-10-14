@@ -76,6 +76,8 @@ const WorkSchema = new mongoose.Schema(
       default: {}
     },
   
+    // Serialize like transactions without invalidating an author's text edits.
+    likeRevision: { type: Number, default: 0, select: false },
     likeCount: { 
       type: Number, 
       default: 0, 

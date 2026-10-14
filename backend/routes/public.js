@@ -290,7 +290,7 @@ router.get("/profile/:userId/logs", async (req, res) => {
       _id:       l._id,
       content:   l.content,
       likeCount: l.likes?.length ?? 0,
-      likedByMe: false,
+      likedByMe: !!req.user && (l.likes || []).some(id => String(id) === String(req.user.id)),
       relatedWork: l.relatedWork
         ? { _id: l.relatedWork._id, title: l.relatedWork.title }
         : null,

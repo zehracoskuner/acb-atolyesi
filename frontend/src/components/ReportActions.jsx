@@ -5,7 +5,7 @@ import { useSession } from '../lib/session';
 import ReportModal from './ReportModal';
 import './ReportActions.css';
 
-export default function ReportActions({ targetType = 'work', targetId, targetLabel, image, targetOwner, isOwner = false }) {
+export default function ReportActions({ targetType = 'work', targetId, targetLabel, image, targetOwner, isOwner = false, triggerContent }) {
   const [open, setOpen] = useState(false);
   const [report, setReport] = useState(null);
   const root = useRef(null), trigger = useRef(null);
@@ -36,7 +36,7 @@ export default function ReportActions({ targetType = 'work', targetId, targetLab
   }}>
     <button ref={trigger} type="button" className="report-actions-trigger" aria-label={buttonLabel}
       title={buttonLabel} aria-expanded={open} aria-controls={id} onClick={() => setOpen(v => !v)}>
-      <MoreHorizontal size={20} aria-hidden="true" />
+      {triggerContent ?? <MoreHorizontal size={20} aria-hidden="true" />}
     </button>
     {open && <div id={id} className="report-actions-menu" aria-label="Şikâyet seçenekleri">
       {content && <>

@@ -1,3 +1,4 @@
+import { useLike } from "../../hooks/useLike";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Heart, MessageCircle, ArrowUpRight, BookOpen, LockKeyhole } from "lucide-react";
@@ -170,23 +171,13 @@ function AuthorLine({ item, shelf }) {
 
 export function LogCard({ item }) {
   const { status, requireMember } = useMembership();
-  const [liked, setLiked] = useState(item.likedByMe ?? false);
-  const [likeCount, setLikeCount] = useState(item.likeCount ?? 0);
-  const [liking, setLiking] = useState(false);
-  const [error, setError] = useState("");
+  const { liked, likeCount, busy: liking, error, toggle } = useLike({
+    path: `/logs/${item._id}/like`, initialLiked: item.likedByMe, initialCount: item.likeCount,
+  });
   const [showComments, setShowComments] = useState(false);
   async function handleLike() {
-    if (liking || !requireMember()) return;
-    setLiking(true); setError("");
-    const previous = { liked, likeCount };
-    setLiked(!liked); setLikeCount(Math.max(0, likeCount + (liked ? -1 : 1)));
-    try {
-      const res = await apiPost(`/logs/${item._id}/like`);
-      setLiked(res.likedByMe); setLikeCount(res.likeCount);
-    } catch {
-      setLiked(previous.liked); setLikeCount(previous.likeCount);
-      setError("Beğeni kaydedilemedi. Yeniden deneyebilirsin.");
-    } finally { setLiking(false); }
+    if (!requireMember()) return;
+    await toggle();
   }
   return <article className="feed-card">
     <div className="feed-card-main">
@@ -208,24 +199,19 @@ export function LogCard({ item }) {
 
 export function ChapterCard({ item }) {
   const { requireMember } = useMembership();
-  const [like, setLike] = useState({ liked: item.likedByMe ?? false, count: item.likeCount ?? 0 });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { liked, likeCount, busy, error, toggle } = useLike({
+    path: `/chapters/${item.chapter._id}/like`, initialLiked: item.likedByMe, initialCount: item.likeCount,
+  });
   async function handleLike() {
-    if (busy || !requireMember()) return;
-    setBusy(true); setError("");
-    try {
-      const res = await apiPost(`/chapters/${item.chapter._id}/like`, { workId: item.work._id });
-      setLike({ liked: res.liked, count: res.likeCount });
-    } catch { setError("Beğeni kaydedilemedi."); }
-    finally { setBusy(false); }
+    if (!requireMember()) return;
+    await toggle();
   }
   return <article className="feed-card feed-chapter-card"><div className="feed-card-main">
     <AuthorLine item={item} />
     <Link className="feed-chapter-link" to={`/read/${item.work._id}?chapter=${item.chapter._id}`}>
       <BookCover work={item.work} /><span><small>{item.work.title}</small><strong>{item.chapter.title || `Bölüm ${item.chapter.order}`}</strong><span>Bölümü oku <ArrowUpRight size={14} aria-hidden="true" /></span></span><BookOpen size={22} aria-hidden="true" />
     </Link>
-    <footer className="feed-card-actions"><button type="button" aria-label={like.liked ? "Beğeniyi kaldır" : "Beğen"} aria-pressed={like.liked} disabled={busy} onClick={handleLike}><Heart size={16} fill={like.liked ? "currentColor" : "none"} aria-hidden="true" />{like.count || "Beğen"}</button><Link to={`/story/${item.work._id}`}>Eserin tamamı <ArrowUpRight size={13} aria-hidden="true" /></Link></footer>
+    <footer className="feed-card-actions"><button type="button" aria-label={liked ? "Beğeniyi kaldır" : "Beğen"} aria-pressed={liked} disabled={busy} onClick={handleLike}><Heart size={16} fill={liked ? "currentColor" : "none"} aria-hidden="true" />{likeCount || "Beğen"}</button><Link to={`/story/${item.work._id}`}>Eserin tamamı <ArrowUpRight size={13} aria-hidden="true" /></Link></footer>
     {error && <p className="feed-error" role="alert">{error}</p>}
   </div></article>;
 }

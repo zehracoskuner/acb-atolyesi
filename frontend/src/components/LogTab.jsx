@@ -1,10 +1,11 @@
+import { useLike } from "../hooks/useLike";
 import { useMembership } from "../lib/membershipContext";
 // src/components/LogTab.jsx
 
 import { useCallback, useState, useEffect, useRef } from "react";
 import { apiGet, apiPost, apiDelete } from "../lib/api";
 
-const MAX_CHARS = 400;
+const MAX_CHARS = 800;
 
 function timeAgo(iso) {
   if (!iso) return "";
@@ -157,33 +158,19 @@ function CommentSection({ logId, isLoggedIn, logAuthorId }) {
 /* ── Tek girdi ── */
 function LogEntry({ log, isOwner, onDelete, isLoggedIn }) {
   const { requireMember } = useMembership();
-  const [likeCount, setLikeCount] = useState(log.likeCount ?? 0);
-  const [likedByMe, setLikedByMe] = useState(log.likedByMe ?? false);
-  const [liking,    setLiking]    = useState(false);
-
+  const { likeCount, liked: likedByMe, busy: liking, error: likeError, toggle } = useLike({
+    path: `/logs/${log._id}/like`, initialLiked: log.likedByMe, initialCount: log.likeCount,
+  });
   async function handleLike() {
     if (!requireMember()) return;
-    if (liking) return;
-    setLiking(true);
-    const was = likedByMe;
-    setLikedByMe(!was);
-    setLikeCount(c => was ? c - 1 : c + 1);
-    try {
-      const res = await apiPost(`/logs/${log._id}/like`);
-      setLikeCount(res.likeCount);
-      setLikedByMe(res.likedByMe);
-    } catch {
-      setLikedByMe(was);
-      setLikeCount(c => was ? c + 1 : c - 1);
-    } finally {
-      setLiking(false);
-    }
+    await toggle();
   }
 
   const vis = VIS[log.visibility] ?? VIS.public;
 
   return (
     <div className="log-entry">
+      {likeError && <p role="alert">{likeError}</p>}
       <div className="log-entry-dot" />
       <div className="log-entry-card">
         <div className="log-entry-top">
@@ -218,6 +205,7 @@ function LogEntry({ log, isOwner, onDelete, isLoggedIn }) {
           <button
             className={`log-like-btn ${likedByMe ? "log-like-btn--active" : ""}`}
             onClick={handleLike}
+            aria-pressed={likedByMe}
             disabled={liking}
             title={!isLoggedIn ? "Beğenmek için giriş yap" : ""}
           >
@@ -283,7 +271,7 @@ function LogComposer({ works, onPost }) {
         onChange={e => setContent(e.target.value)}
         onFocus={() => setExpanded(true)}
         onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handlePost(); }}
-        maxLength={MAX_CHARS + 10}
+        maxLength={MAX_CHARS}
         rows={expanded ? 4 : 2}
       />
       {expanded && (

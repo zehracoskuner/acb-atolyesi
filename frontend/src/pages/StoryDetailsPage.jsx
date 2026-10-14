@@ -1,4 +1,5 @@
 import ReportActions from "../components/ReportActions";
+import { useLike } from "../hooks/useLike";
 import { useMembership } from "../lib/membershipContext";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
@@ -94,8 +95,9 @@ function Avatar({ user, size = "md" }) {
 ════════════════════════════ */
 function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdded, onDeleted }) {
   const { requireMember } = useMembership();
-  const [liked, setLiked] = useState(comment.isLiked ?? false);
-  const [likeCount,  setLikeCount]  = useState(comment.likeCount ?? 0);
+  const { liked, likeCount, busy: liking, error: likeError, toggle: toggleLike } = useLike({
+    path: `/comments/${comment._id}/like`, initialLiked: comment.isLiked, initialCount: comment.likeCount,
+  });
   const [replyOpen,  setReplyOpen]  = useState(false);
   const [collapsed,  setCollapsed]  = useState(true);
   const [replyText,  setReplyText]  = useState("");
@@ -137,17 +139,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
   /* ── Beğeni ── */
   async function handleLike() {
     if (!requireMember()) return;
-    const wasLiked = liked;
-    setLiked(!wasLiked);
-    setLikeCount(c => c + (wasLiked ? -1 : 1));
-    try {
-      const res = await apiPost(`/comments/${comment._id}/like`);
-      if (typeof res.likeCount === "number") setLikeCount(res.likeCount);
-      if (typeof res.liked    === "boolean") setLiked(res.liked);
-    } catch {
-      setLiked(wasLiked);
-      setLikeCount(c => c + (wasLiked ? 1 : -1));
-    }
+    await toggleLike();
   }
 
   /* ── Yanıt ── */
@@ -372,6 +364,8 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
             <button
               className={`sdp-action-btn sdp-like-btn ${liked ? "sdp-like-btn--active" : ""}`}
               onClick={handleLike}
+              disabled={liking}
+              aria-pressed={liked}
               aria-label={liked ? "Beğeniyi geri al" : "Beğen"}
             >
               <svg width="14" height="14" viewBox="0 0 24 24"
@@ -380,6 +374,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
               </svg>
               <span>{likeCount > 0 ? likeCount : "Beğen"}</span>
             </button>
+            {likeError && <p role="alert">{likeError}</p>}
 
             {!isReply && (
               <button className="sdp-action-btn" onClick={() => { if (requireMember()) setReplyOpen(v => !v); }}>
@@ -672,9 +667,10 @@ export default function StoryDetailsPage() {
   const [myWorkIds,       setMyWorkIds]       = useState(new Set());
   const [inLibrary,       setInLibrary]       = useState(false);
   const [libraryStatus,   setLibraryStatus]   = useState("idle");
-  const [likeCount,       setLikeCount]       = useState(0);
-  const [liked, setLiked] = useState(false);
-  const [likeStatus,      setLikeStatus]      = useState("idle");
+  const { liked, likeCount, busy: liking, error: likeError, toggle: toggleWorkLike, refresh: refreshWorkLike } = useLike({
+    path: "/likes", body: { workId }, checkPath: `/likes/check/${workId}`,
+  });
+  const likeStatus = liking ? "loading" : "idle";
   const [readingProgress, setReadingProgress] = useState(null);
   const [progressLoading, setProgressLoading] = useState(true);
   const [heroImgLoaded,   setHeroImgLoaded]   = useState(false);
@@ -701,7 +697,6 @@ export default function StoryDetailsPage() {
         if (cancelled) return;
         setWork(wData.item);
         setChapters(cData.items || []);
-        setLikeCount(wData.item?.likeCount ?? 0);
       } catch {
         // hata: loading false
       } finally {
@@ -758,17 +753,6 @@ export default function StoryDetailsPage() {
       .catch(() => {});
   }, [workId, token]);
 
-  // Beğeni durumu
-  useEffect(() => {
-    if (!token || !workId) return;
-    apiGet(`/likes/check/${workId}`)
-      .then(res => {
-        setLiked(res.liked ?? false);
-        if (typeof res.likeCount === "number") setLikeCount(res.likeCount);
-      })
-      .catch(() => {});
-  }, [workId, token]);
-
   const handleToggleLibrary = async () => {
     if (!requireMember()) return;
     if (libraryStatus === "loading") return;
@@ -790,23 +774,8 @@ export default function StoryDetailsPage() {
 
   const handleToggleLike = async () => {
     if (!requireMember()) return;
-    if (likeStatus === "loading") return;
-    setLikeStatus("loading");
-    const wasLiked = liked;
-    setLiked(!wasLiked);
-    setLikeCount(c => c + (wasLiked ? -1 : 1));
-    try {
-      const res = wasLiked
-        ? await apiDelete(`/likes/${workId}`)
-        : await apiPost("/likes", { workId });
-      if (typeof res.likeCount === "number") setLikeCount(res.likeCount);
-      if (typeof res.liked    === "boolean") setLiked(res.liked);
-    } catch {
-      setLiked(wasLiked);
-      setLikeCount(c => c + (wasLiked ? 1 : -1));
-    } finally {
-      setLikeStatus("idle");
-    }
+    if (likeError) { await refreshWorkLike(); return; }
+    await toggleWorkLike();
   };
 
   // — Baştan başla —
@@ -1019,6 +988,7 @@ export default function StoryDetailsPage() {
                   <button
                     className={`sh-icon-btn ${liked ? "sh-icon-btn--liked" : ""}`}
                     onClick={handleToggleLike}
+                    aria-pressed={liked}
                     disabled={likeStatus === "loading"}
                     aria-label={liked ? "Beğeniyi geri al" : "Beğen"}
                     title={liked ? "Beğeniyi geri al" : "Beğen"}
@@ -1029,6 +999,7 @@ export default function StoryDetailsPage() {
                     </svg>
                     {likeStatus === "loading" ? <span className="sdp-spinner sdp-spinner--sm" /> : likeCount > 0 ? likeCount : null}
                   </button>
+                  {likeError && <p role="alert">{likeError}</p>}
 
                   <button
                     className={`sh-btn-secondary ${inLibrary ? "sh-btn-secondary--active" : ""}`}

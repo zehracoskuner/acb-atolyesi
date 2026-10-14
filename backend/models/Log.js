@@ -12,7 +12,7 @@ const logSchema = new mongoose.Schema(
     content: {
       type:      String,
       required:  true,
-      maxlength: 280,
+      maxlength: 800,
       trim:      true,
     },
     // İsteğe bağlı — hangi eserle ilgili olduğunu etiketleyebilir

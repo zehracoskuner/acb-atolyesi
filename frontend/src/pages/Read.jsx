@@ -1,4 +1,5 @@
 import ReportActions from "../components/ReportActions";
+import { useLike } from "../hooks/useLike";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../lib/api";
 import { useMembership } from "../lib/membershipContext";
 import { useSession } from "../lib/session";
@@ -6,7 +7,6 @@ import {
   useEffect, useLayoutEffect, useState, useRef, useCallback, useMemo,
 } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import "../styles/Read.css";
 import ReportModal from "../components/ReportModal";
@@ -619,8 +619,9 @@ function InlineCommentItem({ comment, currentUser, onUpdated, onDeleted }) {
    YORUM SATIRI
 ════════════════════════════ */
 function CommentItem({ comment, workId, chapterId, currentUser, isReply = false, onDeleted }) {
-  const [liked, setLiked] = useState(comment.isLiked ?? false);
-  const [likeCount,  setLikeCount] = useState(comment.likeCount ?? 0);
+  const { liked, likeCount, busy: liking, error: likeError, toggle: toggleLike } = useLike({
+    path: `/comments/${comment._id}/like`, initialLiked: comment.isLiked, initialCount: comment.likeCount,
+  });
   const [replyOpen,  setReplyOpen] = useState(false);
   const [collapsed,  setCollapsed] = useState(true);
   const [replyText,  setReplyText] = useState("");
@@ -659,15 +660,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
   /* ── Beğeni ── */
   async function handleLike() {
     if (!isLoggedIn) return;
-    const next = !liked;
-    setLiked(next); setLikeCount(c => c + (next ? 1 : -1));
-    try {
-      const res = await apiPost(`/comments/${comment._id}/like`);
-      if (typeof res.likeCount === "number") setLikeCount(res.likeCount);
-      if (typeof res.liked    === "boolean") setLiked(res.liked);
-    } catch {
-      setLiked(!next); setLikeCount(c => c + (next ? -1 : 1));
-    }
+    await toggleLike();
   }
 
   /* ── Yanıt gönder ── */
@@ -884,7 +877,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
           <div className="rd-comment-actions">
             <button
               className={`rd-ca-btn rd-ca-like ${liked ? "rd-ca-like--active" : ""}`}
-              onClick={handleLike} disabled={!isLoggedIn}
+              onClick={handleLike} disabled={!isLoggedIn || liking} aria-pressed={liked}
               aria-label={liked ? "Beğeniyi geri al" : "Beğen"}
             >
               <svg width="12" height="12" viewBox="0 0 24 24"
@@ -893,6 +886,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
               </svg>
               <span>{likeCount > 0 ? likeCount : "Beğen"}</span>
             </button>
+            {likeError && <p role="alert">{likeError}</p>}
 
             {!isReply && isLoggedIn && (
               <button className="rd-ca-btn" onClick={() => setReplyOpen(v => !v)}>
@@ -1075,39 +1069,25 @@ function CommentSection({ chapterId, workId }) {
 /* ════════════════════════════
    BÖLÜM BEĞENİ
 ════════════════════════════ */
-function ChapterLikeButton({ chapterId, workId }) {
+function ChapterLikeButton({ chapterId }) {
   const currentUser = useSession().user;
   const isLoggedIn  = !!currentUser;
-  const [liked,     setLiked]     = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
-  const [fetching,  setFetching]  = useState(true);
-
-  useEffect(() => {
-    if (!chapterId || !isLoggedIn) { setFetching(false); return; }
-    apiGet(`/chapters/${chapterId}/like/check`)
-      .then(res => { setLiked(res.liked ?? false); setLikeCount(res.likeCount ?? 0); })
-      .catch(() => {})
-      .finally(() => setFetching(false));
-  }, [chapterId, isLoggedIn]);
+  const { liked, likeCount, busy, error, toggle: toggleLike, refresh } = useLike({
+    path: `/chapters/${chapterId}/like`, checkPath: `/chapters/${chapterId}/like/check`,
+  });
 
   async function toggle() {
-    if (!isLoggedIn || fetching) return;
-    const next = !liked;
-    setLiked(next); setLikeCount(c => c + (next ? 1 : -1));
-    try {
-      const res = await apiPost(`/chapters/${chapterId}/like`, { workId });
-      if (typeof res.liked    === "boolean") setLiked(res.liked);
-      if (typeof res.likeCount === "number") setLikeCount(res.likeCount);
-    } catch {
-      setLiked(!next); setLikeCount(c => c + (next ? -1 : 1));
-    }
+    if (!isLoggedIn) return;
+    if (error) { await refresh(); return; }
+    await toggleLike();
   }
 
   return (
     <div className="rd-like-wrapper">
+      {error && <p role="alert">{error}</p>}
       <button
         className={`rd-like-btn ${liked ? "rd-like-btn--active" : ""}`}
-        onClick={toggle} disabled={!isLoggedIn || fetching}
+        onClick={toggle} disabled={!isLoggedIn || busy} aria-pressed={liked}
         aria-label={liked ? "Beğeniyi geri al" : "Bölümü beğen"}
       >
         <svg width="17" height="17" viewBox="0 0 24 24"
@@ -1339,8 +1319,6 @@ export default function ReadPage() {
 
   return (
     <div className={`rd-root rd-theme-${theme}`}>
-      <TopBar />
-
       {/* Progress bar */}
       <div
         className="rd-progress-bar"
@@ -1392,7 +1370,14 @@ export default function ReadPage() {
         </div>
 
         <div className="rd-tb-right">
-          <ReportActions isOwner={work.isOwner} targetOwner={work.author || work.user} targetType={chapter && !prefaceOpen ? "chapter" : "work"} targetId={chapter && !prefaceOpen ? chapter._id : work._id} targetLabel={chapter && !prefaceOpen ? chapter.title : work.title} />
+          <ReportActions
+            isOwner={work.isOwner}
+            targetOwner={work.author || work.user}
+            targetType={chapter && !prefaceOpen ? "chapter" : "work"}
+            targetId={chapter && !prefaceOpen ? chapter._id : work._id}
+            targetLabel={chapter && !prefaceOpen ? chapter.title : work.title}
+            triggerContent={<span className="rd-more-label" aria-hidden="true">...</span>}
+          />
           <div className="rd-font-btns" role="group" aria-label="Yazı boyutu">
             {FONT_OPTIONS.map(({ scale, label }) => (
               <button key={scale}
@@ -1583,7 +1568,7 @@ export default function ReadPage() {
                   © Bu eserin tüm hakları yazarına aittir. İzinsiz kopyalanamaz, dağıtılamaz.
                 </p>
 
-                <ChapterLikeButton chapterId={chapter._id} workId={workId} />
+                <ChapterLikeButton key={chapter._id} chapterId={chapter._id} />
                 <CommentSection chapterId={chapter._id} workId={workId} />
 
                 <div className="rd-nav-btns">

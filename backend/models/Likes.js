@@ -11,6 +11,7 @@ const likeSchema = new mongoose.Schema(
 
 // Bir kullanıcı bir eseri sadece bir kez beğenebilir
 likeSchema.index({ user: 1, work: 1 }, { unique: true });
+likeSchema.index({ work: 1 });
 
 const Like = mongoose.model("Like", likeSchema);
 export default Like;

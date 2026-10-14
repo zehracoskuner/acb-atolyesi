@@ -1,0 +1,59 @@
+{
+  "testedAt": "2026-10-04T10:20:16.820Z",
+  "promptVersion": "writer-development-v1",
+  "pricingBasis": "2026-10-04 standard USD per 1M tokens: Gemini 0.10/0.40; OpenAI 0.10/0.50, cached input 0.01. Estimates, not invoices; excludes cache-write adjustments.",
+  "productionProviderChanged": false,
+  "limitations": "One baseline sample, one request per provider. Quality is a same-model second pass, not a human review.",
+  "sampleWords": 3000,
+  "gemini": {
+    "completed": false,
+    "schemaValid": null,
+    "refusal": true,
+    "code": "DEVELOPMENT_PROVIDER_BLOCKED",
+    "model": "gemini-2.5-flash-lite",
+    "latencyMs": 742,
+    "usage": {
+      "inputTokens": 10910,
+      "outputTokens": 0,
+      "cachedInputTokens": 0,
+      "reasoningTokens": 0
+    },
+    "httpStatus": null,
+    "estimatedUSD": 0.001091
+  },
+  "openai": {
+    "completed": true,
+    "schemaValid": true,
+    "refusal": false,
+    "model": "gpt-6-luna",
+    "latencyMs": 18879,
+    "usage": {
+      "inputTokens": 11519,
+      "outputTokens": 1960,
+      "cachedInputTokens": 0,
+      "reasoningTokens": 90
+    },
+    "estimatedUSD": 0.0021319,
+    "quality": {
+      "assessed": true,
+      "method": "same-model second-pass; provisional",
+      "grounding": 2,
+      "turkishClarity": 2,
+      "actionability": 2,
+      "literaryHandling": 2,
+      "inventedDetails": false,
+      "refusalLike": false,
+      "adequate": true,
+      "latencyMs": 1476,
+      "usage": {
+        "inputTokens": 9207,
+        "outputTokens": 49,
+        "cachedInputTokens": 0,
+        "reasoningTokens": 0
+      },
+      "estimatedUSD": 0.0009452000000000001
+    }
+  },
+  "dailyQuotaUnchanged": true,
+  "sameSampleForBothProviders": true
+}

@@ -5,7 +5,7 @@ import { beforeAll, afterAll, afterEach, describe, it, expect, vi } from "vitest
 import Chapter from "../models/Chapter.js";
 import ChapterVersion from "../models/ChapterVersion.js";
 import Work from "../models/Work.js";
-import { saveChapterVersion, createChapterVersion, markChapterCheckpoint } from "../services/chapterHistory.js";
+import { saveChapterVersion, createChapterVersion, markChapterCheckpoint, updateChapterOrder } from "../services/chapterHistory.js";
 
 // Opt-in, loopback only, never reads .env or the application's MONGO_URI.
 const uri = process.env.CHAPTER_TEST_MONGO_URI;
@@ -134,6 +134,50 @@ describe.skipIf(!uri)("MongoDB replica-set chapter history integration", () => {
     expect(created.map(r => r.item.order).sort((a, b) => a - b)).toEqual([18, 19, 20]);
     expect((await Chapter.findById(base.id)).order).toBe(17);
     expect((await Chapter.findById(base.id)).content).toBe("original");
+  });
+
+  it("reordering preserves publication, text, saved revision and history", async () => {
+    const base = await fixture();
+    const chapter = await Chapter.findById(base.id);
+    chapter.status = "published";
+    chapter.reviewNote = "Existing review";
+    await chapter.save();
+    const before = chapter.toObject();
+    await Work.updateOne({ _id: chapter.work }, { $set: {
+      status: "published", publishedChapterIds: [chapter._id],
+    } });
+    const result = await updateChapterOrder({ ...base, order: 2 });
+    expect(result.item.order).toBe(2);
+    expect(result.revision).toBe(0);
+    const after = (await Chapter.findById(base.id)).toObject();
+    for (const key of ["title", "content", "status", "reviewNote", "revision", "savedAt"])
+      expect(after[key]).toEqual(before[key]);
+    expect((await Work.findById(chapter.work)).publishedChapterIds.map(String)).toEqual([String(chapter._id)]);
+    expect(await ChapterVersion.countDocuments({ chapter: base.id })).toBe(0);
+    const renamed = await saveChapterVersion({ ...base, title: "Renamed after reorder" });
+    expect(renamed.revision).toBe(1);
+    expect(renamed.item.order).toBe(2);
+  });
+  it("concurrent text save and reorder both survive transaction retries", async () => {
+    const base = await fixture();
+    await Promise.all([
+      updateChapterOrder({ ...base, order: 3 }),
+      saveChapterVersion({ ...base, content: "Concurrent new text" }),
+    ]);
+    const chapter = await Chapter.findById(base.id);
+    expect(chapter.order).toBe(3);
+    expect(chapter.content).toBe("Concurrent new text");
+    expect(chapter.revision).toBe(1);
+    expect(await ChapterVersion.countDocuments({ chapter: base.id })).toBe(2);
+  });
+  it("failed reorder rolls back its order and work lock", async () => {
+    const base = await fixture();
+    const before = await Chapter.findById(base.id);
+    const workBefore = await Work.findById(before.work);
+    vi.spyOn(Chapter.prototype, "save").mockRejectedValueOnce(new Error("Injected reorder failure"));
+    await expect(updateChapterOrder({ ...base, order: 4 })).rejects.toThrow("Injected reorder failure");
+    expect((await Chapter.findById(base.id)).order).toBe(before.order);
+    expect((await Work.findById(before.work)).__v).toBe(workBefore.__v);
   });
   it("version insertion failure rolls back the actual chapter write", async () => {
     const base = await fixture();

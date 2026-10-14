@@ -8,6 +8,7 @@ import ensureAuth, { optionalAuth } from "../middlewares/ensureAuth.js";
 import { notifyLogLike, notifyLogComment } from "../services/notificationService.js";
 
 import { canReadLog } from "../services/logAccess.js";
+import { arrayLikeUpdate, desiredLike, validateLikeId } from "../services/likes.js";
 
 const router = Router();
 router.use(readerAccess);
@@ -17,7 +18,8 @@ router.use(readerAccess);
    — Bir yazarın günlük girdilerini getir
    — Gizlilik: public → herkes, followers → sadece takipçiler
 ═══════════════════════════════════════════ */
-router.get("/:userId", optionalAuth, async (req, res) => {
+router.get("/:userId", optionalAuth, async (req, res, next) => {
+  if (req.params.userId === "my") return next("route");
   try {
     const { userId } = req.params;
     const page  = Math.max(1, parseInt(req.query.page)  || 1);
@@ -96,7 +98,7 @@ router.get("/my", ensureAuth, async (req, res) => {
       content:   l.content,
       visibility: l.visibility,
       likeCount: l.likes?.length ?? 0,
-      likedByMe: false,
+      likedByMe: (l.likes || []).some(id => String(id) === String(req.user.id)),
       relatedWork: l.relatedWork
         ? { _id: l.relatedWork._id, title: l.relatedWork.title }
         : null,
@@ -121,8 +123,8 @@ router.post("/", ensureAuth, async (req, res) => {
     if (!content?.trim())
       return res.status(400).json({ message: "İçerik boş olamaz." });
 
-    if (content.trim().length > 280)
-      return res.status(400).json({ message: "Günlük girdisi en fazla 280 karakter olabilir." });
+    if (content.trim().length > 800)
+      return res.status(400).json({ message: "Günlük girdisi en fazla 800 karakter olabilir." });
 
     const log = await Log.create({
       author:      req.user.id,
@@ -175,24 +177,27 @@ router.delete("/:id", ensureAuth, async (req, res) => {
 ═══════════════════════════════════════════ */
 router.post("/:id/like", ensureAuth, async (req, res) => {
   try {
+    validateLikeId(req.params.id);
+    const desired = desiredLike(req.body);
     const log = await Log.findById(req.params.id);
     if (!log) return res.status(404).json({ message: "Girdi bulunamadı." });
 
     if (!await canReadLog(log, req.user.id))
       return res.status(403).json({ message: "Bu içeriği görüntüleme yetkiniz yok." });
 
-    const alreadyLiked = log.likes.some(id => id.toString() === String(req.user.id));
-
-    if (alreadyLiked) {
-      log.likes.pull(req.user.id);
-    } else {
-      log.likes.addToSet(req.user.id);
-    }
-
-    await log.save();
+    // Return the pre-update document from this atomic operation, rather than
+    // the stale access-check read, to decide whether a notification is due.
+    const before = await Log.findOneAndUpdate(
+      { _id: log._id, visibility: log.visibility, author: log.author },
+      arrayLikeUpdate(req.user.id, desired), { new: false, select: "likes" }
+    ).lean();
+    if (!before) return res.status(404).json({ message: "Girdi artık kullanılamıyor." });
+    const alreadyLiked = (before.likes || []).some(id => String(id) === String(req.user.id));
+    const liked = desired ?? !alreadyLiked;
+    const beforeCount = new Set((before.likes || []).map(String)).size;
 
     // Bildirim — sadece beğenirken, beğeniyi geri alırken değil
-    if (!alreadyLiked) {
+    if (liked && !alreadyLiked) {
       notifyLogLike({
         senderId:    req.user.id,
         logId:       log._id.toString(),
@@ -201,11 +206,11 @@ router.post("/:id/like", ensureAuth, async (req, res) => {
     }
 
     return res.json({
-      likeCount: log.likes.length,
-      likedByMe: !alreadyLiked,
+      likeCount: beforeCount + (liked === alreadyLiked ? 0 : liked ? 1 : -1),
+      likedByMe: liked,
     });
   } catch (err) {
-    return res.status(500).json({ message: "İşlem başarısız." });
+    return res.status(err.status || 500).json({ message: err.status ? err.message : "İşlem başarısız." });
   }
 });
 

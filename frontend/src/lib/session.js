@@ -7,7 +7,7 @@ let generation = 0;
 let pending;
 function publish(next) { state = next; listeners.forEach(fn => fn()); }
 export const getSession = () => state;
-export function useSession() { return useSyncExternalStore(fn => { listeners.add(fn); return () => listeners.delete(fn); }, getSession); }
+export function useSession() { return useSyncExternalStore(fn => { listeners.add(fn); return () => listeners.delete(fn); }, getSession, getSession); }
 function clearLocalSession() {
   generation++;
   pending = null;

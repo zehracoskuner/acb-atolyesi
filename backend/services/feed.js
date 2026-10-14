@@ -37,10 +37,11 @@ export async function readFeed({ viewerId, scope, page }) {
   if (scope === "following" && following.length) pipeline.push({ $unionWith: {
     coll: Chapter.collection.name,
     pipeline: [
-      { $match: { status: "published", createdAt: { $gt: new Date(Date.now() - 30 * 86400000) } } },
+      { $match: { status: "published", moderationHold: { $ne: true }, createdAt: { $gt: new Date(Date.now() - 30 * 86400000) } } },
       { $lookup: { from: Work.collection.name, localField: "work", foreignField: "_id", as: "book",
-        pipeline: [{ $match: { ...publicWork, ...matureFilter(), user: { $in: following } } }, { $project: { ...workFields, user: 1 } }] } },
+        pipeline: [{ $match: { ...publicWork, ...matureFilter(), user: { $in: following } } }, { $project: { ...workFields, user: 1, publishedChapterIds: 1 } }] } },
       { $unwind: "$book" },
+      { $match: { $expr: { $in: ["$_id", { $ifNull: ["$book.publishedChapterIds", []] }] } } },
       { $project: { _id: 1, type: { $literal: "chapter" }, createdAt: 1, author: "$book.user",
         chapter: { _id: "$_id", title: "$title", order: "$order" },
         work: { _id: "$book._id", title: "$book.title", coverImage: "$book.coverImage" } } },

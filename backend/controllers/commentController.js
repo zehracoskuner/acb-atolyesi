@@ -5,6 +5,7 @@ import Chapter  from "../models/Chapter.js";
 import Work     from "../models/Work.js";
 import User     from "../models/User.js";
 import { publishedDiscussion } from '../services/discussionAccess.js';
+import { arrayLikeUpdate, desiredLike } from '../services/likes.js';
 import {
   notifyComment,
   notifyReply,
@@ -30,7 +31,7 @@ function shapeComment(c, viewerId) {
   const shaped = {
     ...c,
     content:   c.isDeleted ? null : c.content,
-    likeCount: typeof c.likeCount === "number" ? c.likeCount : likes.length,
+    likeCount: likes.length,
     isLiked,
   };
 
@@ -310,34 +311,23 @@ export async function likeComment(req, res) {
     const userId  = req.user.id;
     const userOid = toId(userId);
 
-    const current = await Comment.findById(commentId).select("isDeleted likes").lean();
+    const desired = desiredLike(req.body);
+    const current = await Comment.findById(commentId).select("isDeleted status work chapter").lean();
     if (!current)           return res.status(404).json({ error: "Yorum bulunamadı." });
     if (current.isDeleted)  return res.status(410).json({ error: "Bu yorum silinmiş." });
 
-    const wasLiked = (current.likes || []).some((id) => id.toString() === userId);
-
-    await Comment.updateOne({ _id: commentId }, [
-      {
-        $set: {
-          likes: {
-            $cond: [
-              { $in: [userOid, { $ifNull: ["$likes", []] }] },
-              { $setDifference: ["$likes", [userOid]] }, // beğeniyi kaldır
-              { $setUnion:      ["$likes", [userOid]] },  // beğeni ekle (dedupe)
-            ],
-          },
-        },
-      },
-      { $set: { likeCount: { $size: "$likes" } } },
-    ]);
-
-    const liked     = !wasLiked;
-    const likeCount = (current.likes?.length || 0) + (liked ? 1 : -1);
-
-    res.json({ liked, likeCount: Math.max(0, likeCount) });
+    if (current.status !== "published" || !await publishedDiscussion(current.work, current.chapter))
+      return res.status(404).json({ message: "İçerik bulunamadı." });
+    const updated = await Comment.findOneAndUpdate(
+      { _id: commentId, isDeleted: false, status: "published" },
+      arrayLikeUpdate(userOid, desired, true),
+      { new: true, select: "likes likeCount" }
+    ).lean();
+    if (!updated) return res.status(410).json({ message: "Bu yorum artık kullanılamıyor." });
+    res.json({ liked: updated.likes.some(id => String(id) === String(userId)), likeCount: updated.likeCount });
   } catch (err) {
     console.error("likeComment:", err);
-    res.status(500).json({ error: "Beğeni işlemi başarısız." });
+    res.status(err.status || 500).json({ message: err.status ? err.message : "Beğeni işlemi başarısız." });
   }
 }
 

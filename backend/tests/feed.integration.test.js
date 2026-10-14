@@ -61,7 +61,8 @@ it("following includes only followed public/followers logs and public non-anonym
   await Work.updateOne({ _id: hidden._id }, { isAnonymous: true });
   const other = await book(stranger, "Other");
   const draft = await book(followed, "Draft", { status: "draft" });
-  await Chapter.insertMany([visible, hidden, other, draft].map(work => ({ work: work._id, title: work.title, status: "published" })));
+  const published = await Chapter.insertMany([visible, hidden, other, draft].map(work => ({ work: work._id, title: work.title, status: "published" })));
+  for (const chapter of published) await Work.updateOne({ _id: chapter.work }, { publishedChapterIds: [chapter._id] });
   await Chapter.create({ work: visible._id, title: "Unpublished chapter", status: "draft" });
   const res = await request("/feed?scope=following");
   expect(res.body.items.filter(item => item.type === "log").map(item => item.content).sort()).toEqual(["followed-followers", "followed-public"]);
@@ -77,12 +78,24 @@ it("following stays empty without follows and responds to an unfollow immediatel
 it("chapter like counts and viewer state load in one batch", async () => {
   const work = await book(followed, "Liked book");
   const chapters = await Chapter.insertMany(["First", "Second"].map(title => ({ work: work._id, title, status: "published" })));
+  await Work.updateOne({ _id: work._id }, { publishedChapterIds: chapters.map(chapter => chapter._id) });
   await ChapterLike.create([{ chapter: chapters[0]._id, work: work._id, user: viewer._id }, { chapter: chapters[0]._id, work: work._id, user: stranger._id }]);
   const spy = vi.spyOn(ChapterLike, "aggregate");
   const res = await request("/feed?scope=following");
   expect(spy).toHaveBeenCalledTimes(1);
   expect(res.body.items.find(item => item._id === String(chapters[0]._id))).toMatchObject({ likeCount: 2, likedByMe: true });
   expect(res.body.items.find(item => item._id === String(chapters[1]._id))).toMatchObject({ likeCount: 0, likedByMe: false });
+});
+it("following excludes unlisted and held chapters so every like target is readable", async () => {
+  const work = await book(followed, "Published boundaries");
+  const chapters = await Chapter.insertMany([
+    { work: work._id, title: "Visible", status: "published" },
+    { work: work._id, title: "Unlisted", status: "published" },
+    { work: work._id, title: "Held", status: "published", moderationHold: true },
+  ]);
+  await Work.updateOne({ _id: work._id }, { publishedChapterIds: [chapters[0]._id, chapters[2]._id] });
+  const items = (await request("/feed?scope=following")).body.items;
+  expect(items.map(item => item.chapter.title)).toEqual(["Visible"]);
 });
 it.each(["public", "following"])("%s paginates past 50 records without duplicates at equal timestamps", async scope => {
   const createdAt = new Date();
@@ -99,7 +112,8 @@ it.each(["public", "following"])("%s paginates past 50 records without duplicate
 it("merges chapter and log streams before pagination", async () => {
   const work = await book(followed, "Mixed");
   await Log.insertMany(Array.from({ length: 20 }, (_, index) => ({ author: followed._id, content: `Log ${index}`, createdAt: new Date(Date.now() - index * 2000) })));
-  await Chapter.insertMany(Array.from({ length: 20 }, (_, index) => ({ work: work._id, title: `Chapter ${index}`, status: "published", createdAt: new Date(Date.now() - index * 2000 - 1000) })));
+  const chapters = await Chapter.insertMany(Array.from({ length: 20 }, (_, index) => ({ work: work._id, title: `Chapter ${index}`, status: "published", createdAt: new Date(Date.now() - index * 2000 - 1000) })));
+  await Work.updateOne({ _id: work._id }, { publishedChapterIds: chapters.map(chapter => chapter._id) });
   const items = [];
   for (let page = 1; page <= 3; page++) items.push(...(await request(`/feed?scope=following&page=${page}`)).body.items);
   expect(items).toHaveLength(40); expect(new Set(items.map(item => item._id)).size).toBe(40);
@@ -162,4 +176,39 @@ it("private/followers comments and likes enforce the same visibility boundary", 
   const posted = await request(`/logs/${restricted._id}/comments`, { method: "POST", body: { content: "Visible reply" } });
   expect(posted.status).toBe(201);
   expect((await request(`/logs/${restricted._id}/comments/${posted.body.item._id}`, { method: "DELETE" })).status).toBe(200);
+});
+
+// Sharing uses the same log route, limits and account permissions as profiles.
+it("creates a public log for the session author and returns it through the existing ordered feed", async () => {
+  await log(followed, "public", "Önceki paylaşım", { createdAt: new Date(Date.now() - 60000) });
+  const created = await request("/logs", { method: "POST", body: { content: "  Yeni bir satır.\nİkinci satır.  ", visibility: "public", author: stranger._id } });
+  expect(created.status).toBe(201);
+  expect(created.body.item).toMatchObject({ content: "Yeni bir satır.\nİkinci satır.", visibility: "public", author: { _id: String(viewer._id), kullaniciAdi: "viewer" }, likeCount: 0, likedByMe: false });
+  const feed = await request("/feed?scope=public&page=1");
+  expect(feed.body.items[0]).toMatchObject({ _id: created.body.item._id, type: "log", content: created.body.item.content });
+  expect(feed.body.items[1].content).toBe("Önceki paylaşım");
+  expect(feed.body.total).toBe(2);
+  expect((await request("/feed?scope=following")).body.items.some(item => item._id === created.body.item._id)).toBe(false);
+});
+it.each(["", "   ", "\n\t  "])("rejects empty sharing content %j without persistence", async content => {
+  expect((await request("/logs", { method: "POST", body: { content, visibility: "public" } })).status).toBe(400);
+  expect(await Log.countDocuments()).toBe(0);
+});
+it("enforces the 800 character limit", async () => {
+  const rejected = await request("/logs", { method: "POST", body: { content: "a".repeat(801) } });
+  expect(rejected.status).toBe(400);
+  expect(rejected.body.message).toBe("Günlük girdisi en fazla 800 karakter olabilir.");
+  expect(await Log.countDocuments()).toBe(0);
+  const content = "a".repeat(800);
+  const created = await request("/logs", { method: "POST", body: { content } });
+  expect(created.status).toBe(201);
+  expect(created.body.item.content).toBe(content);
+  expect(await Log.countDocuments()).toBe(1);
+  expect((await request("/feed?scope=public")).body.items[0].content).toBe(content);
+});
+it("does not allow guests or banned members to create shares", async () => {
+  expect((await request("/logs", { user: null, method: "POST", body: { content: "Misafir paylaşımı" } })).status).toBe(401);
+  await User.updateOne({ _id: viewer._id }, { role: "banned" });
+  expect((await request("/logs", { method: "POST", body: { content: "Kısıtlı hesap paylaşımı" } })).status).toBe(403);
+  expect(await Log.countDocuments()).toBe(0);
 });

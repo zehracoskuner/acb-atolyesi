@@ -8,7 +8,7 @@ const router = Router();
 router.use(readerAccess);
 
 router.post("/",             auth, ctrl.toggleLike);
-router.get("/check/:workId", auth, ctrl.checkLike);
+router.get("/check/:workId", ctrl.checkLike);
 router.delete("/:workId",    auth, ctrl.unlike);
 
 export default router;

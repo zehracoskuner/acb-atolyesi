@@ -7,6 +7,6 @@ import * as ctrl from "../controllers/chapterLikesController.js";
 const router = Router();
 router.use(readerAccess);
 router.post("/:chapterId/like",      writeLimiter, auth, ctrl.toggleChapterLike);
-router.get("/:chapterId/like/check", auth, ctrl.checkChapterLike);
+router.get("/:chapterId/like/check", ctrl.checkChapterLike);
 
 export default router;

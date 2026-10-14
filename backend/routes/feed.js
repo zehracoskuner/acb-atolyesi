@@ -147,6 +147,7 @@ router.get("/top-logs", async (req, res) => {
       .map(l => ({
         ...l,
         likeCount:    l.likes?.length ?? 0,
+        likedByMe: !!req.user && (l.likes || []).some(id => String(id) === String(req.user.id)),
         commentCount: commentMap[l._id.toString()] ?? 0,
         score:        (l.likes?.length ?? 0) * 2 + (commentMap[l._id.toString()] ?? 0) * 3,
         likes:        undefined,
@@ -158,6 +159,7 @@ router.get("/top-logs", async (req, res) => {
     const items = scored.length > 0 ? scored : logs.slice(0, 3).map(l => ({
       ...l,
       likeCount:    l.likes?.length ?? 0,
+      likedByMe: !!req.user && (l.likes || []).some(id => String(id) === String(req.user.id)),
       commentCount: commentMap[l._id.toString()] ?? 0,
       likes:        undefined,
     }));

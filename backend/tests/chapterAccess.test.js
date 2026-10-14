@@ -187,6 +187,15 @@ beforeEach(() => {
     return rows;
   });
   mockStorage(Work, "works");
+  vi.spyOn(Work, "findOneAndUpdate").mockImplementation((filter, update) => {
+    const row = Object.values(db.works).find(row => matches(row, filter));
+    if (!row) return query(null);
+    writes.push(["works", "update", String(row._id)]);
+    for (const [key, value] of Object.entries(update.$inc || {})) row[key] = (row[key] || 0) + value;
+    for (const [key, value] of Object.entries(update.$pull || {})) row[key] = (row[key] || []).filter(id => String(id) !== String(value));
+    Object.assign(row, update.$set || {});
+    return query(Work.hydrate(structuredClone(row)));
+  });
   mockStorage(Chapter, "chapters");
   vi.spyOn(Work, "findByIdAndUpdate").mockImplementation(async (key, update) => {
     writes.push(["works", "update", String(key)]);

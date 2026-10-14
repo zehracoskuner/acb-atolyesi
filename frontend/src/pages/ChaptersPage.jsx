@@ -19,6 +19,7 @@ import ChapterHistory, { ChapterPreview } from "../components/ChapterHistory";
 import { draftKey, readDrafts, persistDraft } from "../lib/chapterDrafts";
 import DOMPurify from "dompurify";
 import { setWritingFocus } from "../lib/writingFocus";
+import { chapterClipboardHtml, insertChapterHtml } from "../lib/chapterClipboard";
 
 const AUTOSAVE_DELAY   = 2000;
 const WORDS_PER_MINUTE = 200;
@@ -281,6 +282,7 @@ function BubbleToolbar({ editorRef }) {
 function RichEditor({ value, onChange, placeholder, className, readOnly = false }) {
   const editorRef    = useRef(null);
   const isComposing  = useRef(false);
+  const isPasting    = useRef(false);
 
   // Dış değer değişirse (undo vs.) güncelle
   useEffect(() => {
@@ -297,7 +299,7 @@ function RichEditor({ value, onChange, placeholder, className, readOnly = false 
   }, [value]);
 
   function triggerChange(event, composition = false) {
-    if (isComposing.current) return;
+    if (isComposing.current || isPasting.current) return;
     const eligible = composition || ["insertText", "insertFromPaste", "insertFromDrop", "insertCompositionText", "insertParagraph", "insertLineBreak"].includes(event?.nativeEvent?.inputType);
     if (onChange && editorRef.current) onChange(editorRef.current.innerHTML, eligible);
   }
@@ -312,6 +314,15 @@ function RichEditor({ value, onChange, placeholder, className, readOnly = false 
         suppressContentEditableWarning
         data-placeholder={placeholder || "Yaz…"}
         onInput={triggerChange}
+        onPaste={(event) => {
+          event.preventDefault();
+          if (readOnly) return;
+          const html = chapterClipboardHtml(event.clipboardData);
+          isPasting.current = true;
+          try { insertChapterHtml(editorRef.current, html); }
+          finally { isPasting.current = false; }
+          triggerChange(null, true);
+        }}
         onKeyUp={() => {}}
         onMouseUp={() => {}}
         onKeyDown={(e) => { if (e.key === "Tab") { e.preventDefault(); document.execCommand("insertText", false, "  "); } }}
@@ -343,7 +354,7 @@ function AnnounceModal({ chapterTitle, workId, onClose }) {
   const [text, setText]       = useState("");
   const [posting, setPosting] = useState(false);
   const [done, setDone]       = useState(false);
-  const MAX = 280;
+  const MAX = 800;
   async function handleAnnounce() {
     if (!text.trim() || posting) return;
     setPosting(true);
@@ -363,7 +374,7 @@ function AnnounceModal({ chapterTitle, workId, onClose }) {
             </div>
             <div className="ann-tag">📖 {chapterTitle}</div>
             <EtikHatirlatma variant="paylasim" />
-            <textarea className="ann-textarea" placeholder={`"Bu bölümü yazarken en çok…" gibi bir şey paylaşabilirsin.`} value={text} onChange={(e)=>setText(e.target.value)} maxLength={MAX+10} autoFocus rows={4}/>
+            <textarea className="ann-textarea" placeholder={`"Bu bölümü yazarken en çok…" gibi bir şey paylaşabilirsin.`} value={text} onChange={(e)=>setText(e.target.value)} maxLength={MAX} autoFocus rows={4}/>
             <div className="ann-foot">
               <span className="ann-chr" style={{color:MAX-text.length<30?"#c8832a":undefined}}>{MAX-text.length}</span>
               <div style={{display:"flex",gap:8}}>

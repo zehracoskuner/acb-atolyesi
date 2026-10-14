@@ -1,10 +1,12 @@
+import { useLike } from "../hooks/useLike";
 import { useSession } from "../lib/session";
 // src/pages/Feed.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
-import { apiGet, apiPost } from "../lib/api";
+import { apiGet } from "../lib/api";
+import FeedComposer from "../components/feed/FeedComposer";
 
 /* ─── Yardımcılar ─── */
 function timeAgo(iso) {
@@ -88,27 +90,18 @@ function Avatar({ user, size = 38 }) {
 /* ── Günlük girdisi kartı ── */
 function LogCard({ item }) {
   const navigate = useNavigate();
-  const [liked,     setLiked]     = useState(item.likedByMe);
-  const [likeCount, setLikeCount] = useState(item.likeCount);
+  const { liked, likeCount, busy: liking, error: likeError, toggle } = useLike({
+    path: `/logs/${item._id}/like`, initialLiked: item.likedByMe, initialCount: item.likeCount,
+  });
   const isLoggedIn = useSession().status === "authenticated";
-
   async function handleLike() {
     if (!isLoggedIn) { navigate("/login"); return; }
-    const was = liked;
-    setLiked(!was);
-    setLikeCount(c => was ? c - 1 : c + 1);
-    try {
-      const res = await apiPost(`/logs/${item._id}/like`);
-      setLiked(res.likedByMe);
-      setLikeCount(res.likeCount);
-    } catch {
-      setLiked(was);
-      setLikeCount(c => was ? c + 1 : c - 1);
-    }
+    await toggle();
   }
 
   return (
     <div style={c.card}>
+      {likeError && <p role="alert">{likeError}</p>}
       <div style={c.cardTop}>
         <button
           style={c.authorBtn}
@@ -143,6 +136,8 @@ function LogCard({ item }) {
         <button
           style={{ ...c.likeBtn, color: liked ? "#e24b4a" : "#a8a29e" }}
           onClick={handleLike}
+          disabled={liking}
+          aria-pressed={liked}
           aria-label={liked ? "Beğeniyi kaldır" : "Beğen"}
         >
           <svg width="14" height="14" viewBox="0 0 24 24"
@@ -159,27 +154,18 @@ function LogCard({ item }) {
 /* ── Yeni bölüm kartı ── */
 function ChapterCard({ item }) {
   const navigate  = useNavigate();
-  const [liked,     setLiked]     = useState(item.likedByMe ?? false);
-  const [likeCount, setLikeCount] = useState(item.likeCount ?? 0);
+  const { liked, likeCount, busy: liking, error: likeError, toggle } = useLike({
+    path: `/chapters/${item.chapter._id}/like`, initialLiked: item.likedByMe, initialCount: item.likeCount,
+  });
   const isLoggedIn = useSession().status === "authenticated";
-
   async function handleLike() {
     if (!isLoggedIn) { navigate("/login"); return; }
-    const was = liked;
-    setLiked(!was);
-    setLikeCount(c => was ? c - 1 : c + 1);
-    try {
-      const res = await apiPost(`/chapters/${item.chapter._id}/like`);
-      setLiked(res.likedByMe);
-      setLikeCount(res.likeCount);
-    } catch {
-      setLiked(was);
-      setLikeCount(c => was ? c + 1 : c - 1);
-    }
+    await toggle();
   }
 
   return (
     <div style={c.card}>
+      {likeError && <p role="alert">{likeError}</p>}
       <div style={c.cardTop}>
         <button
           style={c.authorBtn}
@@ -227,6 +213,8 @@ function ChapterCard({ item }) {
         <button
           style={{ ...c.likeBtn, color: liked ? "#e24b4a" : "#a8a29e" }}
           onClick={handleLike}
+          disabled={liking}
+          aria-pressed={liked}
           aria-label={liked ? "Beğeniyi kaldır" : "Beğen"}
         >
           <svg width="14" height="14" viewBox="0 0 24 24"
@@ -373,6 +361,7 @@ export default function Feed() {
   const navigate   = useNavigate();
   const isLoggedIn = useSession().status === "authenticated";
 
+  const feedRequestRef = useRef(0);
   const [items,       setItems]       = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [hasMore,     setHasMore]     = useState(false);
@@ -389,9 +378,11 @@ export default function Feed() {
   }, [isLoggedIn]);
 
   async function loadFeed(p = 1, reset = false) {
+    const requestId = ++feedRequestRef.current;
     try {
       setLoading(true);
       const res = await apiGet(`/feed?page=${p}`);
+      if (requestId !== feedRequestRef.current) return;
       setItems(prev => reset ? res.items : [...prev, ...res.items]);
       setHasMore(res.hasMore);
       setIsEmpty(res.isEmpty);
@@ -399,7 +390,7 @@ export default function Feed() {
     } catch {
       // TODO: kullanıcıya hata bildirimi ekle (toast)
     } finally {
-      setLoading(false);
+      if (requestId === feedRequestRef.current) setLoading(false);
     }
   }
 
@@ -426,10 +417,11 @@ export default function Feed() {
     <div style={{ minHeight: "100vh", background: "#f7f5f0", fontFamily: "'DM Sans', sans-serif" }}>
       <TopBar />
 
-      <main style={layout.main}>
+      <main className="feed-main" style={layout.main}>
         {/* ── Sol: Feed ── */}
         <section style={layout.feed}>
           <h2 style={layout.feedTitle}>Akış</h2>
+          <FeedComposer onPost={() => loadFeed(1, true)} />
 
           {loading && items.length === 0 ? (
             <div style={c.loadingWrap}><div style={c.spinner} /></div>
@@ -459,7 +451,7 @@ export default function Feed() {
         </section>
 
         {/* ── Sağ: Keşfet ── */}
-        <aside style={layout.sidebar}>
+        <aside className="feed-sidebar" style={layout.sidebar}>
           <div style={dc.box}>
             <h3 style={dc.boxTitle}>Öne Çıkan Eserler</h3>
             {discLoading ? (

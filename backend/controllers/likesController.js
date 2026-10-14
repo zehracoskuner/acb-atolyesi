@@ -1,66 +1,28 @@
-// controllers/likesController.js
 import Like from "../models/Likes.js";
-import Work from "../models/Work.js";
 import { notifyLike } from "../services/notificationService.js";
+import { changeWorkLike, desiredLike, likeTarget } from "../services/likes.js";
 
-export const toggleLike = async (req, res) => {
+async function change(req, res, liked) {
   try {
-    const userId = req.user.id;
-    const { workId } = req.body;
-
-    if (!workId) return res.status(400).json({ error: "workId gerekli" });
-
-    const existing = await Like.findOne({ user: userId, work: workId });
-
-    if (existing) {
-      await Like.deleteOne({ _id: existing._id });
-      const updated = await Work.findByIdAndUpdate(
-        workId,
-        { $inc: { likeCount: -1 } },
-        { new: true, select: "likeCount" }
-      );
-      return res.json({ liked: false, likeCount: Math.max(0, updated?.likeCount ?? 0) });
-    }
-
-    await Like.create({ user: userId, work: workId });
-    const updated = await Work.findByIdAndUpdate(
-      workId,
-      { $inc: { likeCount: 1 } },
-      { new: true, select: "likeCount" }
-    );
-
-    notifyLike({ senderId: userId, workId }).catch(console.error);
-
-    return res.json({ liked: true, likeCount: updated?.likeCount ?? 1 });
+    const result = await changeWorkLike({ userId: req.user.id, workId: req.params.workId || req.body?.workId, liked });
+    if (result.added) notifyLike({ senderId: req.user.id, workId: result.workId }).catch(console.error);
+    res.json({ liked: result.liked, likeCount: result.likeCount });
   } catch (err) {
-    if (err.code === 11000) return res.json({ liked: true });
-    console.error("toggleLike error:", err);
-    res.status(500).json({ error: "Sunucu hatası" });
+    if (!err.status) console.error("work like:", err);
+    res.status(err.status || 500).json({ message: err.status ? err.message : "Beğeni işlemi başarısız." });
   }
+}
+export const toggleLike = (req, res) => {
+  try { return change(req, res, desiredLike(req.body)); }
+  catch (err) { return res.status(err.status).json({ message: err.message }); }
 };
-
+export const unlike = (req, res) => change(req, res, false);
 export const checkLike = async (req, res) => {
   try {
-    const like = await Like.exists({ user: req.user.id, work: req.params.workId });
-    // ✅ Work'ten gerçek count'u çek
-    const work = await Work.findById(req.params.workId).select("likeCount");
-    res.json({ liked: !!like, likeCount: work?.likeCount ?? 0 });
+    const work = await likeTarget({ workId: req.params.workId });
+    const liked = req.user ? !!await Like.exists({ user: req.user.id, work: work._id }) : false;
+    res.json({ liked, likeCount: work.likeCount ?? 0 });
   } catch (err) {
-    res.status(500).json({ error: "Sunucu hatası" });
-  }
-};
-
-export const unlike = async (req, res) => {
-  try {
-    const { workId } = req.params;
-    await Like.deleteOne({ user: req.user.id, work: workId });
-    const updated = await Work.findByIdAndUpdate(
-      workId,
-      { $inc: { likeCount: -1 } },
-      { new: true, select: "likeCount" }
-    );
-    res.json({ liked: false, likeCount: Math.max(0, updated?.likeCount ?? 0) });
-  } catch (err) {
-    res.status(500).json({ error: "Sunucu hatası" });
+    res.status(err.status || 500).json({ message: err.status ? err.message : "Beğeni durumu alınamadı." });
   }
 };
