@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import DOMPurify from 'dompurify';
+import ChapterMedia from './ChapterMedia';
 import { apiGet, apiPost } from '../lib/api';
 import './ReportCase.css';
 import { API_BASE as API } from "../lib/apiBase";
@@ -59,6 +60,7 @@ export default function ContentModerationPanel({ caseId, onChanged }) {
       {detail.item.kind === 'chapter' && <>
         <h4>Şikâyet anındaki metin: {detail.item.snapshot?.title}</h4>
         <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(detail.item.snapshot?.content || '') }} />
+        <ChapterMedia media={detail.item.snapshot?.media} />
         <details><summary>Güncel bölümle karşılaştır</summary><h4>{detail.current?.title}</h4><div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(detail.current?.content || '') }} /></details>
       </>}
       {detail.complaints.map(c => <p key={c._id}>{c.reason}: {c.description || 'Açıklama yok'}</p>)}

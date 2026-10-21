@@ -20,5 +20,6 @@ export function persistDraft(storage, key, chapter) {
   if (!chapter._dirty) { storage.removeItem(key); return; }
   storage.setItem(key, JSON.stringify({ title: chapter.title,
     content: chapter.content,
+    media: chapter.media || [],
     baseRevision: chapter.revision ?? 0, localAt: new Date().toISOString() }));
 }

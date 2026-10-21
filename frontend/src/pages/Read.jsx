@@ -1,4 +1,5 @@
 import ReportActions from "../components/ReportActions";
+import ChapterMedia from "../components/ChapterMedia";
 import { useLike } from "../hooks/useLike";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../lib/api";
 import { useMembership } from "../lib/membershipContext";
@@ -1526,6 +1527,8 @@ export default function ReadPage() {
                   }}
                 />
               </div>
+
+              <ChapterMedia key={chapter._id} media={chapter.media} />
 
               <InlineCommentDrawer
                 open={drawerOpen} onClose={() => setDrawerOpen(false)}

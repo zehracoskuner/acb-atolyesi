@@ -1,5 +1,6 @@
 // backend/models/Chapter.js
 import mongoose from "mongoose";
+import { chapterMediaSchema } from "./chapterMediaSchema.js";
 import { matureFilter } from "../services/matureAccess.js";
 import Work from "./Work.js";
 import { databaseNow } from "../services/databaseClock.js";
@@ -12,10 +13,11 @@ const chapterSchema = new mongoose.Schema(
     revision: { type: Number, default: 0 },
     // Reader-facing title/content stay unchanged while the owner edits privately.
     draftContent: {
-      type: new mongoose.Schema({ title: String, content: String }, { _id: false }),
+      type: new mongoose.Schema({ title: String, content: String, media: { type: [chapterMediaSchema], default: undefined } }, { _id: false }),
       select: false,
     },
     hasUnpublishedChanges: { type: Boolean, default: false },
+    media: { type: [chapterMediaSchema], default: [] },
     publishedRevision: Number,
     moderationHold: { type: Boolean, default: false },
     reviewHistory: [{ revision: Number, by: mongoose.Schema.Types.ObjectId, at: Date, action: String, reason: String }],

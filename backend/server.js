@@ -84,7 +84,9 @@ if (!adminPath) {
 app.set("trust proxy", 1);
 
 // ── Güvenlik başlıkları ──
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: { directives: {
+  frameSrc: ["'self'", "https://www.youtube.com", "https://open.spotify.com"],
+} } }));
 app.use(helmet.hsts({ maxAge: 31536000, includeSubDomains: true }));
 
 // ── CORS ──

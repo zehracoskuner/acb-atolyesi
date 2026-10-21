@@ -7,6 +7,14 @@ function storage() {
 }
 const chapter = { title: "Offline", content: "recover me", revision: 3, _dirty: true };
 describe("local chapter drafts", () => {
+  it("recovers media-only edits including an empty media list", () => {
+    const store = storage(), key = draftKey("a", "w", "c", "t");
+    const media = [{ type: "youtube", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", caption: "Song" }];
+    persistDraft(store, key, { ...chapter, media });
+    expect(readDrafts(store, "a", "w", "c")[0].media).toEqual(media);
+    persistDraft(store, key, { ...chapter, media: [] });
+    expect(readDrafts(store, "a", "w", "c")[0].media).toEqual([]);
+  });
   it("survives a failed save and is isolated by user, work, chapter and tab", () => {
     const store = storage();
     persistDraft(store, draftKey("alice", "book", "chapter", "tab1"), chapter);

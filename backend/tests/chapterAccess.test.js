@@ -276,11 +276,22 @@ describe("Direct HTTP reader access", () => {
       const result = await request(user, "GET", textPath);
       expect(result.status).toBe(200);
       expect(result.body.item.content).toBe(db.chapters[CA].content);
-      expect(Object.keys(result.body.item).sort()).toEqual(["_id", "content", "order", "title"]);
+      expect(Object.keys(result.body.item).sort()).toEqual(["_id", "content", "media", "order", "title"]);
       expect(result.headers.get("cache-control")).toBe("private, no-store");
       expect(result.headers.get("vary")).toContain("Authorization");
       expect(result.headers.get("vary")).toContain("Cookie");
     }
+  });
+
+  it("serves only published media and excludes private draft media from the reader response", async () => {
+    const published = [{ type: "youtube", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", caption: "Yayındaki" }];
+    db.chapters[CA].media = published;
+    db.chapters[CA].draftContent = { title: "Private", content: "Private text", media: [] };
+    const result = await request(B, "GET", textPath);
+    expect(result.status).toBe(200);
+    expect(result.body.item.media).toEqual(published);
+    expect(result.body.item).not.toHaveProperty("draftContent");
+    expect((await request(null, "GET", textPath)).status).toBe(401);
   });
 
   it("accepts cookie sessions and rejects invalid or expired tokens directly over HTTP", async () => {

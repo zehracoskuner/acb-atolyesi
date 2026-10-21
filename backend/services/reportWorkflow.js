@@ -31,10 +31,10 @@ export async function captureEvidence(targetType, targetId) {
   if (targetType === 'work') {
     work = await Work.findById(targetId).select('title description preface user status publishedChapterIds updatedAt').lean();
     if (!work || work.status !== 'published') fail(404, 'Yayındaki içerik bulunamadı.');
-    const chapters = await Chapter.find({ _id: { $in: work.publishedChapterIds || [] }, work: work._id, status: 'published' }).select('title content order revision publishedRevision updatedAt').lean();
+    const chapters = await Chapter.find({ _id: { $in: work.publishedChapterIds || [] }, work: work._id, status: 'published' }).select('title content media order revision publishedRevision updatedAt').lean();
     target = { ...work, chapters };
   } else if (targetType === 'chapter') {
-    target = await Chapter.findById(targetId).select('title content work status revision publishedRevision updatedAt').lean();
+    target = await Chapter.findById(targetId).select('title content media work status revision publishedRevision updatedAt').lean();
     work = target && await Work.findById(target.work).select('user status publishedChapterIds').lean();
     if (!target || target.status !== 'published' || work?.status !== 'published' || !work.publishedChapterIds.some(id => same(id, targetId))) fail(404, 'Yayındaki içerik bulunamadı.');
   } else if (targetType === 'comment') {

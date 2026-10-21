@@ -1,4 +1,5 @@
 import ContentModerationPanel from "../components/ContentModerationPanel";
+import ChapterMedia from "../components/ChapterMedia";
 import ReportReviewList from "../components/ReportReviewList";
 // src/pages/ModeratorPanel.jsx
 import { useState, useEffect, useCallback } from "react";
@@ -345,6 +346,7 @@ function ChapterQueue({ onRefresh }) {
                     {!isExp && <div className="mod-preview-fade" />}
                   </div>
                 )}
+                <ChapterMedia media={item.media} />
                 <div className="mod-actions">
                   <button className="mod-btn mod-btn--approve" disabled={busy[item._id]} onClick={() => approve(item._id)}>
                     {busy[item._id] ? "…" : "Onayla"}

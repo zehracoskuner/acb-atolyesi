@@ -21,7 +21,7 @@ router.get('/cases/:id', staffOnly, handle(async (req, res) => {
   if (!item) return res.status(404).json({ message: 'İnceleme bulunamadı.' });
   const complaints = await Report.find({ contentCase: item._id }).select('reason description createdAt').limit(100).lean();
   const asset = item.asset ? await ImageAsset.findById(item.asset).lean() : null;
-  const current = item.kind === 'chapter' ? await Chapter.findById(item.target).select('title content revision status moderationHold').lean() : null;
+  const current = item.kind === 'chapter' ? await Chapter.findById(item.target).select('title content media revision status moderationHold').lean() : null;
   const involved = String(item.owner) === String(req.user.id) || !!await Report.exists({ contentCase: item._id, reporter: req.user.id });
   res.json({ item, complaints, asset, current, canDecide: !involved });
 }));

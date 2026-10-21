@@ -5,6 +5,7 @@ import Work from "../models/Work.js";
 import ChapterVersion from "../models/ChapterVersion.js";
 import { sanitizeChapterHtml } from "../utils/sanitizeHtml.js";
 import { ownerChapter } from "./chapterPublication.js";
+import { validateChapterMedia } from "./chapterMedia.js";
 
 import { initializeDevelopment, advanceDevelopment, developmentStatus } from "./developmentProgress.js";
 
@@ -20,7 +21,7 @@ export async function markChapterCheckpoint({ id, userId, expectedRevision, labe
     // without changing the chapter, revision, publication state or save timestamp.
     let item = await ChapterVersion.findOne({ chapter: id, revision }).session(session);
     if (!item) [item] = await ChapterVersion.create([{
-      chapter: id, work: chapter.work, revision, title: ownerChapter(chapter).title, content: ownerChapter(chapter).content,
+      chapter: id, work: chapter.work, revision, title: ownerChapter(chapter).title, content: ownerChapter(chapter).content, media: ownerChapter(chapter).media || [],
       savedAt: chapter.savedAt || chapter.updatedAt,
     }], { session });
     item.isCheckpoint = true;
@@ -72,7 +73,7 @@ export async function updateChapterOrder({ id, userId, order }) {
   }, { readConcern: { level: "snapshot" }, writeConcern: { w: "majority" }, readPreference: "primary" });
 }
 
-export async function saveChapterVersion({ id, userId, expectedRevision, title, content, restoreRevision, eligibleWordDelta = 0 }) {
+export async function saveChapterVersion({ id, userId, expectedRevision, title, content, media, restoreRevision, eligibleWordDelta = 0 }) {
   if (!Number.isSafeInteger(eligibleWordDelta) || eligibleWordDelta < 0) throw fail(400, "Geçersiz kelime artışı.");
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)
     throw fail(400, "Güncel kayıt bilgisi gerekli. Bölümü yeniden açın.");
@@ -95,12 +96,14 @@ export async function saveChapterVersion({ id, userId, expectedRevision, title, 
       if (!source) throw fail(404, "Kayıt bulunamadı.");
       title = source.title;
       content = source.content;
+      media = source.media || [];
     }
     const current = ownerChapter(chapter);
     const nextTitle = title === undefined ? current.title : title.trim() || current.title;
     const nextContent = content === undefined ? current.content : sanitizeChapterHtml(content);
+    const nextMedia = media === undefined ? (current.media || []) : await validateChapterMedia(media, userId, session, current.media || []);
     const contentChanged = nextContent !== current.content;
-    const changed = nextTitle !== current.title || nextContent !== current.content;
+    const changed = nextTitle !== current.title || nextContent !== current.content || JSON.stringify(nextMedia) !== JSON.stringify(current.media || []);
     if (!changed && source) throw fail(400, "Seçilen metin mevcut metinle aynı; geri yükleme gerekmiyor.");
     if (!changed && !source) {
       if (work.isModified()) await work.save({ session });
@@ -110,7 +113,7 @@ export async function saveChapterVersion({ id, userId, expectedRevision, title, 
     // Capture legacy/current text before replacing it. This is lazy, never a bulk migration.
     const previous = await ChapterVersion.exists({ chapter: id, revision }).session(session);
     if (!previous) await ChapterVersion.create([{
-      chapter: id, work: chapter.work, revision, title: current.title, content: current.content,
+      chapter: id, work: chapter.work, revision, title: current.title, content: current.content, media: current.media || [],
       savedAt: chapter.savedAt || chapter.updatedAt || new Date(),
     }], { session });
     const acceptedWords = await captureDevelopmentWriting({ chapter, work, beforeContent: current.content, nextContent, claimed: eligibleWordDelta, excluded: !!source || !contentChanged, session });
@@ -120,18 +123,18 @@ export async function saveChapterVersion({ id, userId, expectedRevision, title, 
     if (["pending_review", "rejected"].includes(chapter.status)) chapter.moderationHold = true;
     if (keepPublished) {
       chapter.publishedRevision ??= revision;
-      chapter.hasUnpublishedChanges = nextTitle !== chapter.title || nextContent !== chapter.content;
-      chapter.draftContent = chapter.hasUnpublishedChanges ? { title: nextTitle, content: nextContent } : undefined;
+      chapter.hasUnpublishedChanges = nextTitle !== chapter.title || nextContent !== chapter.content || JSON.stringify(nextMedia) !== JSON.stringify(chapter.media || []);
+      chapter.draftContent = chapter.hasUnpublishedChanges ? { title: nextTitle, content: nextContent, media: nextMedia } : undefined;
       chapter.set({ revision: revision + 1, savedAt });
     } else {
-      chapter.set({ title: nextTitle, content: nextContent, revision: revision + 1, savedAt,
+      chapter.set({ title: nextTitle, content: nextContent, media: nextMedia, revision: revision + 1, savedAt,
         draftContent: undefined, hasUnpublishedChanges: false, publishedRevision: undefined,
         status: "draft", ...(chapter.moderationHold ? {} : { reviewNote: "", reviewedAt: null, reviewedBy: null }) });
     }
     await chapter.save({ session });
     await ChapterVersion.create([{
       chapter: id, work: chapter.work, revision: chapter.revision, title: nextTitle,
-      content: nextContent, savedAt, ...(source ? { restoredFrom: source.revision, restoredFromRevision: source.revision } : {}),
+      content: nextContent, media: nextMedia, savedAt, ...(source ? { restoredFrom: source.revision, restoredFromRevision: source.revision } : {}),
     }], { session });
     advanceDevelopment(work, acceptedWords);
     if (!keepPublished) work.publishedChapterIds = (work.publishedChapterIds || []).filter(value => String(value) !== String(id));

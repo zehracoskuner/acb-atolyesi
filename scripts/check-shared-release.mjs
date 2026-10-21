@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const files = ['shared/features.js', 'shared/drawingProtocol.js'];
+const files = ['shared/features.js', 'shared/drawingProtocol.js', 'shared/chapterMedia.js'];
 const hashes = {};
 const imports = { frontend: [], backend: [] };
 async function scan(directory, side) {

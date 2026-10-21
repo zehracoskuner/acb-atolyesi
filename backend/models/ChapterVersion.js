@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { chapterMediaSchema } from "./chapterMediaSchema.js";
 
 // Text snapshots are immutable; only checkpoint metadata can be updated.
 const schema = new mongoose.Schema({
@@ -9,6 +10,7 @@ const schema = new mongoose.Schema({
   revision: { type: Number, required: true, immutable: true },
   title: { type: String, required: true, immutable: true },
   content: { type: String, default: "", immutable: true },
+  media: { type: [chapterMediaSchema], default: [], immutable: true },
   savedAt: { type: Date, required: true, immutable: true },
   restoredFromRevision: { type: Number, immutable: true },
   restoredFrom: { type: Number, immutable: true },

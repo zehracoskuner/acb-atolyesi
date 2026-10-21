@@ -312,7 +312,7 @@ router.get("/review-queue", async (req, res) => {
 
     const [bolumler, toplam] = await Promise.all([
       Chapter.find({ status: "pending_review" })
-        .select("title content revision reviewNote status createdAt work")
+        .select("title content media revision reviewNote status createdAt work")
         .populate("work", "title user")
         .populate({ path: "work", populate: { path: "user", select: "kullaniciAdi email avatarUrl" } })
         .sort({ createdAt: -1 })

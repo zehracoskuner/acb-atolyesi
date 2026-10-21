@@ -53,7 +53,7 @@ router.get("/chapters", async (req, res) => {
 
     const [bolumler, toplam] = await Promise.all([
       Chapter.find(filtre)
-        .select("title content revision reviewNote status createdAt work")
+        .select("title content media revision reviewNote status createdAt work")
         .populate({
           path:     "work",
           select:   "title user",

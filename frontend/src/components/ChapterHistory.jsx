@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import DOMPurify from "dompurify";
 import { apiGet } from "../lib/api";
+import ChapterMedia from "./ChapterMedia";
 
-export function ChapterPreview({ title, content }) {
-  return <section className="chapter-preview"><h3>{title}</h3><div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content || "") }} /></section>;
+export function ChapterPreview({ title, content, media }) {
+  return <section className="chapter-preview"><h3>{title}</h3><div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content || "") }} /><ChapterMedia media={media} /></section>;
 }
 
 export default function ChapterHistory({ chapter, onClose, onRestore, onCheckpoint, renderCurrent }) {
@@ -94,8 +95,8 @@ export default function ChapterHistory({ chapter, onClose, onRestore, onCheckpoi
         <button disabled={busy} onClick={() => { setSelected(null); setComparing(false); }}>← Kayıtlara dön</button>
         <p className="chapter-history-subtitle">{historyDate(selected.savedAt)}{selected.label ? " · ⭐ " + selected.label : ""}</p>
         {comparing ? <><button onClick={() => setComparing(false)}>Karşılaştırmayı kapat</button>
-          <div className="chapter-comparison">{renderCurrent({ readOnly: busy || chapter._deleting })}<ChapterPreview title="Geçmişteki metin" content={selected.content} /></div>
-        </> : <ChapterPreview title={selected.title} content={selected.content} />}
+          <div className="chapter-comparison">{renderCurrent({ readOnly: busy || chapter._deleting })}<ChapterPreview title="Geçmişteki metin" content={selected.content} media={selected.media} /></div>
+        </> : <ChapterPreview title={selected.title} content={selected.content} media={selected.media} />}
         <div className="chapter-history-actions">
           {!comparing && <button disabled={busy} onClick={() => setComparing(true)}>Karşılaştır</button>}
           <button className="acb-action--primary" disabled={blocked} onClick={restore}>{busy ? "İşleniyor…" : "Bu metinden devam et"}</button>

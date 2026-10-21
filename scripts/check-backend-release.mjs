@@ -34,6 +34,7 @@ async function scan(directory) {
 await scan(backend);
 await import(new URL('../shared/features.js', import.meta.url));
 await import(new URL('../shared/drawingProtocol.js', import.meta.url));
+await import(new URL('../shared/chapterMedia.js', import.meta.url));
 // Sharp's native runtime is required by image validation.
 requireBackend('sharp');
-console.log(`Backend release source OK: ${Object.keys(manifest.dependencies).length} production dependencies, ${references} relative imports, 2 shared modules.`);
+console.log(`Backend release source OK: ${Object.keys(manifest.dependencies).length} production dependencies, ${references} relative imports, 3 shared modules.`);

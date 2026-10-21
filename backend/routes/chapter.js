@@ -150,7 +150,7 @@ router.put("/:id", ensureAuth, async (req, res) => {
         userId: req.user?.id || req.userId, order: req.body.order }));
     }
     res.json(await saveChapterVersion({ id: req.params.id, userId: req.user?.id || req.userId,
-      expectedRevision: req.body.expectedRevision, title: req.body.title, content: req.body.content, eligibleWordDelta: req.body.eligibleWordDelta }));
+      expectedRevision: req.body.expectedRevision, title: req.body.title, content: req.body.content, media: req.body.media, eligibleWordDelta: req.body.eligibleWordDelta }));
   } catch (err) { historyError(res, err); }
 });
 router.post("/:id/checkpoint", ensureAuth, async (req, res) => {

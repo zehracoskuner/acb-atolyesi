@@ -54,6 +54,19 @@ const deferred = () => { let resolve, reject; const promise = new Promise((a,b) 
 const result = (id, revision = 1) => ({ revision, savedAt: "2026-09-20T00:00:00.000Z", item: { _id: id, revision, status: "draft", reviewNote: "" } });
 
 describe("chapter save flow", () => {
+  it("saves media-only edits and preserves media added while a save is pending", async () => {
+    const h = harness(), d = deferred();
+    const song = { type: "youtube", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", caption: "Song" };
+    h.dispatch({ type: "UPDATE_MEDIA", id: "a", update: () => [song] });
+    h.request.mockReturnValueOnce(d.promise);
+    const saving = h.save("a");
+    expect(h.request.mock.calls[0][1].media).toEqual([song]);
+    h.dispatch({ type: "UPDATE_MEDIA", id: "a", update: () => [] });
+    d.resolve(result("a")); await saving;
+    expect(h.chaptersRef.current[0]).toMatchObject({ media: [], _dirty: true });
+    h.request.mockResolvedValueOnce(result("a", 2)); await h.save("a");
+    expect(h.request.mock.calls[1][1].media).toEqual([]);
+  });
   it("clears eligibility after analysis and ignores older save receipts", async () => {
     const h = harness();
     h.dispatch({ type: "DEVELOPMENT_STATUS", development: { analysisCount: 1, eligibleForDevelopmentReview: false } });

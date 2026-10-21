@@ -5,6 +5,8 @@ import { beforeAll, afterAll, afterEach, describe, it, expect, vi } from "vitest
 import Chapter from "../models/Chapter.js";
 import ChapterVersion from "../models/ChapterVersion.js";
 import Work from "../models/Work.js";
+import ImageAsset from "../models/ImageAsset.js";
+import { applyChapterDraft } from "../services/chapterPublication.js";
 import { saveChapterVersion, createChapterVersion, markChapterCheckpoint, updateChapterOrder } from "../services/chapterHistory.js";
 
 // Opt-in, loopback only, never reads .env or the application's MONGO_URI.
@@ -27,6 +29,42 @@ describe.skipIf(!uri)("MongoDB replica-set chapter history integration", () => {
     const chapter = await Chapter.create({ work: work._id, title: "Test chapter", content: "original" });
     return { id: chapter._id, userId, expectedRevision: 0 };
   }
+  it("persists media-only revisions privately, publishes, removes and restores media with text", async () => {
+    const base = await fixture();
+    const chapter = await Chapter.findById(base.id);
+    chapter.status = "published"; await chapter.save();
+    await Work.updateOne({ _id: chapter.work }, { $set: { status: "published", publishedChapterIds: [chapter._id] } });
+    const media = [{ type: "spotify", url: "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", caption: "Şarkı" }];
+    const saved = await saveChapterVersion({ ...base, media });
+    expect(saved.item.media).toEqual(media);
+    expect(saved.item.hasUnpublishedChanges).toBe(true);
+    expect(saved.revision).toBe(1);
+    expect((await Chapter.findById(base.id)).media.toObject()).toEqual([]);
+    expect((await ChapterVersion.findOne({ chapter: base.id, revision: 1 })).media.toObject()).toEqual(media);
+    const publish = await Chapter.findById(base.id).select("+draftContent");
+    applyChapterDraft(publish); await publish.save();
+    expect((await Chapter.findById(base.id)).media.toObject()).toEqual(media);
+    const removed = await saveChapterVersion({ ...base, expectedRevision: 1, media: [] });
+    expect(removed.item.media).toEqual([]);
+    expect((await Chapter.findById(base.id)).media.toObject()).toEqual(media);
+    const restored = await saveChapterVersion({ ...base, expectedRevision: 2, restoreRevision: 1 });
+    expect(restored.item.media).toEqual(media);
+    expect(restored.item.content).toBe("original");
+    expect(restored.item.hasUnpublishedChanges).toBe(false);
+    expect((await Work.findById(chapter.work)).developmentNewWords).toBe(0);
+  });
+  it("rejects foreign, removed and arbitrary images without changing the chapter", async () => {
+    const base = await fixture();
+    const image = { type: "image", url: "https://res.cloudinary.com/test/image/upload/v1/media.jpg", caption: "Görsel" };
+    await ImageAsset.create({ owner: new mongoose.Types.ObjectId(), url: image.url, state: "active" });
+    await expect(saveChapterVersion({ ...base, media: [image] })).rejects.toMatchObject({ status: 400 });
+    await ImageAsset.updateOne({ url: image.url }, { $set: { owner: base.userId } });
+    expect((await saveChapterVersion({ ...base, media: [image] })).item.media).toEqual([image]);
+    await ImageAsset.updateOne({ url: image.url }, { $set: { state: "removed" } });
+    await expect(saveChapterVersion({ ...base, expectedRevision: 1, media: [image] })).rejects.toMatchObject({ status: 400 });
+    await expect(saveChapterVersion({ ...base, expectedRevision: 1, media: [{ ...image, url: "https://example.com/image.png" }] })).rejects.toMatchObject({ status: 400 });
+    expect((await Chapter.findById(base.id)).revision).toBe(1);
+  });
   it("counts committed organic words across chapters, excludes import/restore, and stays eligible after deletion", async () => {
     const base = await fixture();
     const chapter = await Chapter.findById(base.id);

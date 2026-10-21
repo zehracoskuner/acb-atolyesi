@@ -133,9 +133,9 @@ router.get("/works/:id/chapters/:chapterId", ensureAuth, async (req, res) => {
       return res.status(428).json({ code: "MATURE_ACKNOWLEDGEMENT_REQUIRED", workId: String(work._id) });
     }
     const chapter = await Chapter.findOne({ _id: chapterId, work: work._id, status: "published" })
-      .select("_id title order content");
+      .select("_id title order content media");
     if (!chapter) return res.status(404).json({ message: "Bölüm bulunamadı." });
-    return res.json({ item: { _id: chapter._id, title: chapter.title, order: chapter.order, content: chapter.content } });
+    return res.json({ item: { _id: chapter._id, title: chapter.title, order: chapter.order, content: chapter.content, media: chapter.media || [] } });
   } catch {
     return res.status(500).json({ message: "Bölüm yüklenemedi." });
   }

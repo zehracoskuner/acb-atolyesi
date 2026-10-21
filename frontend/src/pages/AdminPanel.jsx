@@ -1,4 +1,5 @@
 import ContentModerationPanel from "../components/ContentModerationPanel";
+import ChapterMedia from "../components/ChapterMedia";
 import ReportCase from "../components/ReportCase";
 import AdminFeedback from "../components/AdminFeedback";
 // src/pages/AdminPanel.jsx
@@ -362,6 +363,7 @@ function ChapterContentModal({ item, onClose }) {
         </div>
         <div style={{ flex:1, overflowY:"auto", background:"var(--adm-surface3)", border:"1px solid var(--adm-border)", borderRadius:4, padding:"1rem 1.2rem", fontFamily:"'Cormorant Garamond',serif", fontSize:"1rem", lineHeight:1.8, color:"var(--adm-ink-dim)", whiteSpace:"pre-wrap", wordBreak:"break-word" }}>
           {item.content || <em style={{ color:"var(--adm-ink-ghost)" }}>İçerik yüklenemedi.</em>}
+          <ChapterMedia media={item.media} />
         </div>
         <div className="adm-modal-foot">
           <span style={{ fontSize:".68rem", color:"var(--adm-ink-ghost)" }}>

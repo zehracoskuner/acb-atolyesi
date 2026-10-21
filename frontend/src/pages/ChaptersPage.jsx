@@ -18,6 +18,7 @@ import AtelierTab from "../components/AtelierTab";
 import ChapterHistory, { ChapterPreview } from "../components/ChapterHistory";
 import { draftKey, readDrafts, persistDraft } from "../lib/chapterDrafts";
 import DOMPurify from "dompurify";
+import ChapterMediaEditor from "../components/ChapterMediaEditor";
 import { setWritingFocus } from "../lib/writingFocus";
 import { chapterClipboardHtml, insertChapterHtml } from "../lib/chapterClipboard";
 
@@ -69,6 +70,7 @@ function normalizeChapter(ch) {
   const fullContent = htmlify(raw);
   return {
     ...ch,
+    media: ch.media || [],
     content:    fullContent,
     title:      ch.title       || "",
     status:     ch.status      || "draft",
@@ -106,6 +108,10 @@ function chaptersReducer(state, action) {
     case "DELETE": return state.filter((c) => c._id !== action.id);
     case "UPDATE_TITLE":
       return state.map((c) => c._id === action.id && !c._deleting ? { ...c, title: action.title, _dirty: true, _edit: c._edit + 1, _saveError: false } : c);
+    case "UPDATE_MEDIA":
+      return state.map(c => c._id === action.id && !c._deleting ? { ...c, media: action.update(c.media || []), _dirty: true, _edit: c._edit + 1, _saveError: false } : c);
+    case "MEDIA_UPLOADING":
+      return state.map(c => c._id === action.id ? { ...c, _mediaUploading: action.value } : c);
     case "UPDATE_CHAPTER_CONTENT":
     case "UNDO_CONTENT":
       return state.map((ch) => {
@@ -137,7 +143,7 @@ function chaptersReducer(state, action) {
       return state.map(c => c._id === action.id && c._request === action.request ? { ...c, _saving: false, _saveError: true, _conflict: action.current || c._conflict } : c);
     case "RESOLVE":
       return state.map(c => c._id !== action.id ? c : { ...c,
-        title: action.title, content: action.content, revision: action.revision,
+        title: action.title, content: action.content, media: action.media ?? c.media ?? [], revision: action.revision,
         _savedEligibleWords: c._eligibleWords || 0,
         _resolvedDraftKeys: [...(c._resolvedDraftKeys || []), ...(action.draftKey ? [action.draftKey] : [])],
         _dirty: true, _edit: c._edit + 1, _saveError: false, _conflict: null, _recovery: null });
@@ -389,7 +395,7 @@ function AnnounceModal({ chapterTitle, workId, onClose }) {
   );
 }
 
-function ChapterDocument({ chapter, chapterIndex, onContentChange, onTitleChange }) {
+function ChapterDocument({ chapter, chapterIndex, onContentChange, onTitleChange, onMediaChange, onMediaUploading, publishing }) {
   const count = useMemo(() => wcFromHtml(chapter.content), [chapter.content]);
   return <article className="chapter-document" data-chapter-id={chapter._id}>
     <header className="chapter-document-head">
@@ -408,6 +414,8 @@ function ChapterDocument({ chapter, chapterIndex, onContentChange, onTitleChange
     <RichEditor readOnly={chapter._deleting} value={chapter.content}
       onChange={(html, eligible) => onContentChange(chapter._id, html, eligible)} placeholder="Yazmaya başla…" />
     <footer className="chapter-document-note">{count.toLocaleString("tr-TR")} kelime · {readTime(count)}</footer>
+    <ChapterMediaEditor media={chapter.media} disabled={chapter._deleting || chapter._mediaUploading || publishing || !!chapter._conflict || !!chapter._recovery}
+      onChange={update => onMediaChange(chapter._id, update)} onUploading={value => onMediaUploading(chapter._id, value)} />
   </article>;
 }
 
@@ -626,7 +634,7 @@ function ChapterEditor({ userId }) {
   const deskRef     = useRef(null);
 
   useEffect(() => {
-    const h = (e) => { if (chaptersRef.current.some(c=>c._dirty)) { e.preventDefault(); e.returnValue=""; } };
+    const h = (e) => { if (chaptersRef.current.some(c=>c._dirty || c._mediaUploading)) { e.preventDefault(); e.returnValue=""; } };
     window.addEventListener("beforeunload", h);
     return () => window.removeEventListener("beforeunload", h);
   }, []);
@@ -645,7 +653,7 @@ function ChapterEditor({ userId }) {
       if (!mounted.current || generation !== fetchGeneration.current) return;
       const items = sorted.map((ch) => {
         const item = normalizeChapter(ch);
-        try { item._recovery = readDrafts(localStorage, userId, workId, ch._id).filter(d => d.title !== item.title || d.content !== item.content); }
+        try { item._recovery = readDrafts(localStorage, userId, workId, ch._id).filter(d => d.title !== item.title || d.content !== item.content || JSON.stringify(d.media || []) !== JSON.stringify(item.media)); }
         catch { setLocalError("Yerel taslaklar okunamadı."); }
         if (!item._recovery?.length) item._recovery = null;
         return item;
@@ -689,7 +697,7 @@ useEffect(() => {
     const request = (async () => {
       try {
         const result = await apiPut(`/chapters/${chapterId}`, {
-          title: ch.title, content: ch.content, expectedRevision: ch.revision ?? 0,
+          title: ch.title, content: ch.content, media: ch.media, expectedRevision: ch.revision ?? 0,
           eligibleWordDelta: Math.max(0, (ch._eligibleWords || 0) - (ch._savedEligibleWords || 0)),
         });
         if (!isChapterSaveReceipt(result, chapterId, ch.revision ?? 0)) throw new Error("Geçersiz kayıt yanıtı.");
@@ -762,7 +770,7 @@ useEffect(() => {
 
   const handlePublish = async ({ unpublish = false } = {}) => {
     const ch = chaptersRef.current.find(c => c._id === activeChapterId);
-    if (!ch || ch._deleting || publishingIds.current.has(ch._id)) return;
+    if (!ch || ch._deleting || ch._mediaUploading || publishingIds.current.has(ch._id)) return;
     const updatePublished = ch.status === "published" && !unpublish && (ch.hasUnpublishedChanges || ch._dirty);
     const toDraft = !updatePublished && (ch.status === "published" || ch.status === "pending_review");
     if (!toDraft && !ch.content) { alert("Bölüm içeriği boş."); return; }
@@ -851,7 +859,7 @@ useEffect(() => {
       if (current._edit !== chapter._edit) { setError("Karşılaştırma sırasında metin değişti. Tekrar kontrol edin."); return; }
       dispatch({ type: "RESOLVE", id: chapter._id, revision: item.revision ?? 0,
         draftKey: draft?.key,
-        title: draft?.title ?? current.title, content: DOMPurify.sanitize(draft?.content ?? current.content) });
+        title: draft?.title ?? current.title, content: DOMPurify.sanitize(draft?.content ?? current.content), media: draft ? (draft.media || []) : (current.media || []) });
     } catch (err) { setError(err.message); }
   };
 
@@ -998,7 +1006,7 @@ useEffect(() => {
                 {activeChapter&&(
                   <button className={publishBtnClass()} onClick={handlePublish}
                   data-tour="write-yayinla-btn"
-                   disabled={saveStatus==="saving"||publishing}>
+                   disabled={saveStatus==="saving"||publishing||activeChapter._mediaUploading}>
                     {publishing&&<span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",border:"1.5px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",animation:"spin 0.6s linear infinite",marginRight:5,verticalAlign:"middle"}}/>}
                     {publishBtnLabel()}
                   </button>
@@ -1014,11 +1022,11 @@ useEffect(() => {
           <h2>{ch.title}: {ch._conflict ? "Başka bir cihazda değişiklik var" : "Kurtarılabilir yerel taslak var"}</h2>
           <p>Otomatik kayıt durduruldu. Metinleri karşılaştırın; düzenleyicideki metni değiştirebilir, gerekli parçaları kopyalayabilirsiniz.</p>
           <div className="chapter-comparison">
-            <ChapterPreview title="Düzenleyicideki metin" content={ch.content} />
-            {ch._conflict && <ChapterPreview title={"Sunucudaki metin: " + ch._conflict.title} content={ch._conflict.content} />}
+            <ChapterPreview title="Düzenleyicideki metin" content={ch.content} media={ch.media} />
+            {ch._conflict && <ChapterPreview title={"Sunucudaki metin: " + ch._conflict.title} content={ch._conflict.content} media={ch._conflict.media} />}
             {ch._recovery?.map(draft => <section key={draft.key}>
               <p>Yerel: {new Date(draft.localAt).toLocaleString("tr-TR")}</p>
-              <ChapterPreview title={draft.title} content={draft.content} />
+              <ChapterPreview title={draft.title} content={draft.content} media={draft.media} />
               <button onClick={() => resolveLocal(ch, draft)}>Bu yerel metinle devam et</button>
               <button onClick={() => {
                 if (!window.confirm("Bu yerel kopya silinecek. Sunucu metni ve diğer taslaklar korunur. Devam edilsin mi?")) return;
@@ -1042,7 +1050,9 @@ useEffect(() => {
               ):activeChapter ? (
                 <ChapterDocument key={activeChapter._id} chapter={activeChapter}
                   chapterIndex={chapters.findIndex(ch => ch._id === activeChapterId)}
-                  onContentChange={handleContentChange} onTitleChange={handleTitleChange} />
+                  onContentChange={handleContentChange} onTitleChange={handleTitleChange} publishing={publishing}
+                  onMediaChange={(id, update) => dispatch({ type: "UPDATE_MEDIA", id, update })}
+                  onMediaUploading={(id, value) => dispatch({ type: "MEDIA_UPLOADING", id, value })} />
               ):null}
 
             </div>
