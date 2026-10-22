@@ -25,7 +25,7 @@ export const getNotifications = async (req, res) => {
     const contexts = new Map();
     await Promise.all(logs.map(async log => {
       if (await canReadLog(log, userId)) contexts.set(String(log._id), {
-        preview: log.content.slice(0, 160), createdAt: log.createdAt,
+        preview: log.content.slice(0, 160), createdAt: log.createdAt, author: String(log.author),
       });
     }));
     res.json({ items: notifications.map(n => ({ ...n,

@@ -36,7 +36,7 @@ it("feed deep link includes both scopes and the writing desk with the requested 
 it("log profile, related work, shelf and social actions are independent links/controls", () => {
   const html = render(<LogCard item={{ _id: "log", type: "log", author, content: "Bir cümle daha.", createdAt: new Date().toISOString(), visibility: "followers", relatedWork: work, authorShelf: { works: [{ _id: "other", title: "Diğer Kitap" }], total: 1 } }} />);
   for (const href of ["/profile/writer", "/story/book", "/story/other"]) expect(html).toContain(`href="${href}"`);
-  expect(html).toContain("Takipçilere özel"); expect(html).toContain("Beğen"); expect(html).toContain("Henüz yorum yok");
+  expect(html).toContain("Takipçilere özel"); expect(html).toContain("Beğen"); expect(html).toContain("Yorumlar");
   expect(html).not.toMatch(/<a\b[^>]*>(?:(?!<\/a>)[\s\S])*<(?:a|button)\b/);
 });
 it("unlinked logs and writers with no books remain readable without broken routes", () => {

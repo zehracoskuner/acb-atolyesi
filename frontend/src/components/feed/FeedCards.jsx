@@ -1,3 +1,4 @@
+import "../../styles/FeedCards.css";
 import { useLike } from "../../hooks/useLike";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -81,7 +82,6 @@ function InlineComments({ logId, isLoggedIn, onCountChange }) {
 
   return (
     <section className="feed-comments-wrap" aria-label="Günlük yorumları">
-      <div className="feed-comments-heading"><MessageCircle size={16} aria-hidden="true" /><h3>Satır arası sohbet</h3>{loaded && <span>{comments.length} yorum</span>}</div>
       {loading ? (
         <p className="feed-comments-muted">Yükleniyor…</p>
       ) : loaded && comments.length === 0 ? (
@@ -121,7 +121,7 @@ function InlineComments({ logId, isLoggedIn, onCountChange }) {
         <form className="feed-comments-form" onSubmit={handlePost}>
           <textarea
             className="feed-comments-input"
-            rows={2}
+            rows={1}
             placeholder="Yorum yaz…"
             value={text}
             onChange={e => setText(e.target.value)}
@@ -171,7 +171,16 @@ export function LogCard({ item, initiallyShowComments = false }) {
     path: `/logs/${item._id}/like`, initialLiked: item.likedByMe, initialCount: item.likeCount,
   });
   const [showComments, setShowComments] = useState(initiallyShowComments);
-  const [commentCount, setCommentCount] = useState(item.commentCount ?? 0);
+  const [commentCount, setCommentCount] = useState(item.commentCount ?? null);
+  useEffect(() => {
+    if (item.commentCount != null || showComments) return;
+    let active = true;
+    // Older API releases omit commentCount; do not show a false zero.
+    apiGet(`/logs/${item._id}/comments`).then(res => {
+      if (active) setCommentCount((res.items || []).length);
+    }).catch(() => { /* Keep the neutral label when the count is unavailable. */ });
+    return () => { active = false; };
+  }, [item._id, item.commentCount, showComments]);
   async function handleLike() {
     if (!requireMember()) return;
     await toggle();
@@ -185,7 +194,7 @@ export function LogCard({ item, initiallyShowComments = false }) {
       </Link>}
       <footer className="feed-card-actions">
         <button type="button" aria-pressed={liked} aria-label={liked ? "Beğeniyi kaldır" : "Beğen"} disabled={liking} onClick={handleLike} className={liked ? "is-liked" : ""}><Heart size={16} fill={liked ? "currentColor" : "none"} aria-hidden="true" /><span>{likeCount || "Beğen"}</span></button>
-        <button type="button" className={`feed-comment-toggle${commentCount > 0 ? " has-comments" : ""}`} aria-expanded={showComments} aria-controls={`feed-comments-${item._id}`} onClick={() => setShowComments(value => !value)}><MessageCircle size={16} aria-hidden="true" /><span>{showComments ? "Yorumları kapat" : commentCount > 0 ? "Yorumlar" : "Henüz yorum yok"}</span>{commentCount > 0 && <span className="feed-comment-count">{commentCount}</span>}</button>
+        <button type="button" className={`feed-comment-toggle${commentCount > 0 ? " has-comments" : ""}`} aria-expanded={showComments} aria-controls={`feed-comments-${item._id}`} onClick={() => setShowComments(value => !value)}><MessageCircle size={16} aria-hidden="true" /><span>{showComments ? "Yorumları kapat" : commentCount === null || commentCount > 0 ? "Yorumlar" : "Henüz yorum yok"}</span>{commentCount > 0 && <span className="feed-comment-count">{commentCount}</span>}</button>
         {item.visibility === "followers" && <span className="feed-visibility"><LockKeyhole size={11} aria-hidden="true" />Takipçilere özel</span>}
       </footer>
       {error && <p className="feed-error" role="alert">{error}</p>}

@@ -1454,7 +1454,7 @@ export default function ProfilePage() {
         </div>
 
         {activeTab === "log" && (
-          <LogTab userId={targetId} isOwner={isOwner} works={works} />
+          <LogTab key={targetId} userId={targetId} isOwner={isOwner} works={works} targetLogId={searchParams.get("log")} />
         )}
 
         {activeTab === "works" && (

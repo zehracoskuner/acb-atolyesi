@@ -36,7 +36,7 @@ describe("notification context", () => {
     expect(notificationTarget({ type: "like", work: { _id: "w" } }).path).toBe("/story/w");
   });
   it("opens a specific log regardless of its position in the feed", () => {
-    expect(notificationTarget({ type: "log_comment", log: "l", logContext: { preview: "Bugün" } })).toMatchObject({ path: "/gunluk/l", title: "Bugün" });
+    expect(notificationTarget({ type: "log_comment", log: "l", logContext: { preview: "Bugün" } })).toMatchObject({ path: "/profile/me?tab=log&log=l", title: "Bugün" });
   });
   it("retains report and profile destinations and tolerates deleted targets", () => {
     expect(notificationTarget({ type: "report_update", report: "r" }).path).toBe("/basvurular/r");

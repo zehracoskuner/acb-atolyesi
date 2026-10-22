@@ -4,6 +4,8 @@
 ══════════════════════════════════════════════ */
 
 .log-tab {
+  width:          100%;
+  min-width:      0;
   max-width:      600px;
   display:        flex;
   flex-direction: column;
@@ -176,6 +178,8 @@
   align-items:     center;
   justify-content: space-between;
   margin-bottom:   8px;
+  gap:             10px;
+  flex-wrap:       wrap;
 }
 
 .log-entry-time {
@@ -185,7 +189,7 @@
   letter-spacing: .03em;
 }
 
-.log-entry-actions { display: flex; align-items: center; gap: 6px; }
+.log-entry-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 .log-vis-badge {
   display:     inline-flex;
@@ -380,6 +384,7 @@
   align-items: center;
   gap:         6px;
   margin-bottom: 3px;
+  flex-wrap:   wrap;
 }
 
 .log-comment-author {
@@ -430,6 +435,7 @@
 }
 
 .log-comment-input {
+  min-width:     0;
   flex:          1;
   padding:       7px 12px;
   border:        1px solid var(--border-2);
@@ -481,3 +487,139 @@
 }
 .log-comment-login-hint a { color: var(--gold); text-decoration: none; font-weight: 500; }
 .log-comment-login-hint a:hover { text-decoration: underline; }
+
+/* Bildirimden açılan girdi */
+.log-entry--highlighted {
+  scroll-margin-top: 100px;
+  outline: none;
+}
+
+.log-entry--highlighted .log-entry-dot {
+  background: #8b4029;
+  box-shadow: 0 0 0 4px #f3e7dc;
+}
+
+.log-entry--highlighted .log-entry-card {
+  padding: 22px;
+  border-color: #d8bca5;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #fffaf3 0%, #fff 65%);
+  box-shadow: 0 6px 24px rgba(83, 53, 29, .06);
+}
+
+.log-entry--highlighted:focus-visible .log-entry-card {
+  outline: 2px solid #8b4029;
+  outline-offset: 4px;
+}
+
+.log-notification-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 18px;
+  padding: 5px 10px;
+  border: 1px solid #e9d9c9;
+  border-radius: 20px;
+  background: #f7ede1;
+  color: #813e28;
+  font: 500 11px/1.5 'DM Sans', sans-serif;
+}
+
+.log-notification-label::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.log-entry--highlighted .log-entry-content {
+  margin-bottom: 18px;
+  font-size: 1rem;
+  line-height: 1.85;
+}
+
+.log-entry--highlighted .log-comments {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-color: #ece2d7;
+}
+
+.log-entry--highlighted .log-comment-toggle {
+  color: #754a32;
+  background: #f3ece3;
+}
+
+.log-entry--highlighted .log-comment-list {
+  gap: 16px;
+  padding: 16px 0 8px;
+}
+
+.log-entry--highlighted .log-comment-input {
+  min-height: 42px;
+  box-sizing: border-box;
+  background: #fff;
+  border-color: #e2d7ca;
+}
+
+.log-entry--highlighted .log-comment-submit {
+  width: 40px;
+  height: 40px;
+  background: #813e28;
+}
+
+.log-entry--highlighted .log-comment-submit:hover:not(:disabled) {
+  background: #65301f;
+}
+
+.log-target-notice,
+.log-tab > .log-error {
+  margin: 0 0 24px;
+  padding: 16px 18px;
+  border: 1px solid #e3d6c6;
+  border-left: 3px solid #ab8057;
+  border-radius: 10px;
+  background: #fbf7f0;
+  color: #665342;
+  font: 400 13px/1.75 'DM Sans', sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.log-tab > .log-error {
+  border-color: #edccc6;
+  border-left-color: #a24736;
+  background: #fff7f5;
+  color: #853d30;
+}
+
+.log-tab > .log-error button {
+  display: block;
+  margin-top: 10px;
+  padding: 7px 12px;
+  border: 1px solid #dbb9b0;
+  border-radius: 7px;
+  background: #fff;
+  color: inherit;
+  font: 500 12px/1.5 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+
+.log-tab > .log-error button:hover { background: #f9e9e4; }
+.log-tab > .log-error button:focus-visible { outline: 2px solid #853d30; outline-offset: 3px; }
+
+@media (max-width: 480px) {
+  .log-entry--highlighted .log-entry-card { padding: 16px; }
+  .log-entry--highlighted .log-entry-content { font-size: .92rem; }
+  .log-notification-label { font-size: 10px; margin-bottom: 14px; }
+  .log-comment-author { overflow-wrap: anywhere; }
+  .log-work-tag { max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; }
+  .log-target-notice, .log-tab > .log-error { padding: 13px 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .log-entry { animation: none; }
+  .log-entry-card { transition: none; }
+}

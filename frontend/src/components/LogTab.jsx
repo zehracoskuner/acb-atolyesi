@@ -1,3 +1,4 @@
+import { loadLogTarget } from "../lib/loadLogTarget";
 import { useLike } from "../hooks/useLike";
 import { useMembership } from "../lib/membershipContext";
 // src/components/LogTab.jsx
@@ -25,16 +26,27 @@ const VIS = {
 };
 
 /* ── Yorum bölümü ── */
-export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 0 }) {
+export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 0, initiallyOpen = false }) {
   const [loaded, setLoaded] = useState(false);
   const [comments,  setComments]  = useState([]);
   const [loading,   setLoading]   = useState(false);
-  const [open,      setOpen]      = useState(false);
+  const [open,      setOpen]      = useState(initiallyOpen);
   const [text,      setText]      = useState("");
   const [posting,   setPosting]   = useState(false);
   const [error,     setError]     = useState("");
   const { user: currentUser, requireMember } = useMembership();
   const myId = currentUser?._id || currentUser?.id;
+
+  useEffect(() => {
+    if (!initiallyOpen) return;
+    let active = true;
+    setOpen(true); setLoading(true);
+    apiGet(`/logs/${logId}/comments`).then(res => {
+      if (active) { setComments(res.items || []); setLoaded(true); setError(""); }
+    }).catch(() => { if (active) setError("Yorumlar yüklenemedi. Kapatıp yeniden deneyebilirsin."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [initiallyOpen, logId]);
 
   async function loadComments() {
     if (loading) return;
@@ -161,7 +173,7 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
 }
 
 /* ── Tek girdi ── */
-function LogEntry({ log, isOwner, onDelete, isLoggedIn }) {
+function LogEntry({ log, isOwner, onDelete, isLoggedIn, highlighted }) {
   const { requireMember } = useMembership();
   const { likeCount, liked: likedByMe, busy: liking, error: likeError, toggle } = useLike({
     path: `/logs/${log._id}/like`, initialLiked: log.likedByMe, initialCount: log.likeCount,
@@ -174,10 +186,11 @@ function LogEntry({ log, isOwner, onDelete, isLoggedIn }) {
   const vis = VIS[log.visibility] ?? VIS.public;
 
   return (
-    <div className="log-entry">
+    <div id={`log-${log._id}`} tabIndex={-1} className={`log-entry${highlighted ? " log-entry--highlighted" : ""}`}>
       {likeError && <p role="alert">{likeError}</p>}
       <div className="log-entry-dot" />
       <div className="log-entry-card">
+        {highlighted && <span className="log-notification-label">Bildirimdeki günlük girdisi</span>}
         <div className="log-entry-top">
           <span className="log-entry-time">{timeAgo(log.createdAt)}</span>
           <div className="log-entry-actions">
@@ -226,6 +239,7 @@ function LogEntry({ log, isOwner, onDelete, isLoggedIn }) {
         <CommentSection
           logId={log._id}
           initialCount={log.commentCount}
+          initiallyOpen={highlighted}
           isLoggedIn={isLoggedIn}
           logAuthorId={log.author?._id || log.author}
         />
@@ -314,34 +328,67 @@ function LogComposer({ works, onPost }) {
 }
 
 /* ══ Ana bileşen ══ */
-export default function LogTab({ userId, isOwner, works }) {
+export default function LogTab({ userId, isOwner, works, targetLogId }) {
   const [logs,    setLogs]    = useState([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
   const [page,    setPage]    = useState(1);
+  const [error, setError] = useState("");
+  const [targetMissing, setTargetMissing] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const requestVersion = useRef(0);
+  const scrolledTarget = useRef(null);
 
   const isLoggedIn = useMembership().status === "authenticated";
 
   const loadLogs = useCallback(async (p = 1, reset = false) => {
+    const version = requestVersion.current;
     try {
+      setError("");
       setLoading(true);
       const res = await apiGet(`/logs/${userId}?page=${p}&limit=10`);
-      setLogs(prev => reset ? res.items : [...prev, ...res.items]);
+      if (version !== requestVersion.current) return;
+      setLogs(prev => reset ? res.items : [...new Map([...prev, ...res.items].map(log => [log._id, log])).values()]);
       setHasMore(res.hasMore);
       setPage(p);
-    } catch { /* sessizce geç */ }
-    finally { setLoading(false); }
+    } catch { if (version === requestVersion.current) setError("Günlük yüklenemedi. Lütfen yeniden dene."); }
+    finally { if (version === requestVersion.current) setLoading(false); }
   }, [userId]);
 
   useEffect(() => {
-    setLogs([]); setPage(1); loadLogs(1, true);
-  }, [loadLogs]);
+    scrolledTarget.current = null;
+    const version = ++requestVersion.current;
+    const active = () => requestVersion.current === version;
+    setLogs([]); setPage(1); setLoading(true); setError(""); setTargetMissing(false); setHasMore(false);
+    loadLogTarget(p => apiGet(`/logs/${userId}?page=${p}&limit=10`), targetLogId, active)
+      .then(result => {
+        if (!active() || !result) return;
+        setLogs(result.items); setPage(result.page); setHasMore(result.hasMore);
+        setTargetMissing(!result.found);
+      })
+      .catch(() => { if (active()) setError("Günlük yüklenemedi. Lütfen yeniden dene."); })
+      .finally(() => { if (active()) setLoading(false); });
+    return () => { requestVersion.current = version + 1; };
+  }, [userId, targetLogId, retry]);
+
+  useEffect(() => {
+    if (loading || !targetLogId || targetMissing || error || scrolledTarget.current === targetLogId) return;
+    const frame = requestAnimationFrame(() => {
+      const element = document.getElementById(`log-${targetLogId}`);
+      if (!element) return;
+      scrolledTarget.current = targetLogId;
+      element.scrollIntoView({ block: "center", behavior: "auto" });
+      element?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [loading, targetLogId, targetMissing, error]);
 
   async function handleDelete(logId) {
     if (!window.confirm("Bu girdiyi silmek istiyor musun?")) return;
     try {
       await apiDelete(`/logs/${logId}`);
       setLogs(p => p.filter(l => l._id !== logId));
+      if (String(logId) === targetLogId) setTargetMissing(true);
     } catch (e) { alert("Silinemedi: " + e.message); }
   }
 
@@ -349,11 +396,13 @@ export default function LogTab({ userId, isOwner, works }) {
     <div className="log-tab">
       {isOwner && <LogComposer works={works} onPost={log => setLogs(p => [log, ...p])} />}
 
+      {error && <p role="alert" className="log-error">{error} <button onClick={() => setRetry(v => v + 1)}>Yeniden dene</button></p>}
+      {targetMissing && <p role="status" className="log-target-notice">Bildirimdeki girdi bu günlükte bulunamadı. Silinmiş veya görünürlüğü değişmiş olabilir. Diğer girdilerini aşağıda görebilirsin.</p>}
       {loading && logs.length === 0 ? (
         <div className="log-empty">
           <div className="pf-splash-ring" style={{ width: 26, height: 26, borderWidth: 2 }} />
         </div>
-      ) : logs.length === 0 ? (
+      ) : error ? null : logs.length === 0 ? (
         <div className="log-empty">
           <span className="log-empty-icon">✒</span>
           <p>{isOwner ? "Henüz bir şey paylaşmadın. Yaratım sürecini yazarlarla paylaş!" : "Bu yazar henüz bir günlük girdisi paylaşmamış."}</p>
@@ -365,6 +414,7 @@ export default function LogTab({ userId, isOwner, works }) {
               <LogEntry
                 key={log._id}
                 log={log}
+                highlighted={String(log._id) === targetLogId}
                 isOwner={isOwner}
                 isLoggedIn={isLoggedIn}
                 onDelete={handleDelete}

@@ -1,3 +1,4 @@
+import "../../styles/FeedCards.css";
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { BookOpen } from "lucide-react";
