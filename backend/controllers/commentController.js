@@ -190,13 +190,13 @@ export async function createComment(req, res) {
     const parentAuthor = parentComment?.author?.toString() || null;
 
     if (parentAuthor && parentAuthor !== me) {
-      notifyReply({ senderId: me, recipientId: parentComment.author, workId: resolvedWorkId })
+      notifyReply({ senderId: me, recipientId: parentComment.author, workId: resolvedWorkId, chapterId: resolvedChapterId })
         .catch((e) => console.error("notifyReply:", e.message));
     }
 
     const workOwner = work?.user?.toString() || null;
     if (workOwner && workOwner !== me && workOwner !== parentAuthor) {
-      notifyComment({ senderId: me, workId: resolvedWorkId, commentPreview: body })
+      notifyComment({ senderId: me, workId: resolvedWorkId, commentPreview: body, chapterId: resolvedChapterId })
         .catch((e) => console.error("notifyComment:", e.message));
     }
 

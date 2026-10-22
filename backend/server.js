@@ -30,6 +30,8 @@ import {
 
 // ── Routes ──
 import authRoutes           from "./routes/auth.js";
+import mobileRoutes from "./routes/mobile.js";
+import mobileLinkRoutes from './routes/mobileLinks.js';
 import adminRoutes from "./routes/admin.js";
 import requireRole from "./middlewares/requireRole.js";
 import userRoutes           from "./routes/user.js";
@@ -88,6 +90,7 @@ app.use(helmet({ contentSecurityPolicy: { directives: {
   frameSrc: ["'self'", "https://www.youtube.com", "https://open.spotify.com"],
 } } }));
 app.use(helmet.hsts({ maxAge: 31536000, includeSubDomains: true }));
+app.use(mobileLinkRoutes);
 
 // ── CORS ──
 // Üretimde localhost'a asla fallback yapılmaz; CLIENT_URL/SITE_URL prod domain'i tutmalı.
@@ -193,6 +196,7 @@ app.use("/api/public", publicRouter);
 
 // ── Auth ──
 app.use("/api/auth", authRoutes);
+app.use("/api/mobile", mobileRoutes);
 app.use("/api/admin/reports", ensureAuth, requireRole("admin", "moderator"), adminReportsRouter);
 app.use(`/api/${adminPath}`, ensureAuth, requireRole("admin"), adminRoutes);
 

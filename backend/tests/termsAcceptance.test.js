@@ -193,6 +193,7 @@ describe("explicit consent over HTTP (real routes/auth, isolated storage and ext
     const google = await googleUpsert({ email: "google@example.test", googleId: "google-id" });
     token = await createNativeSession(google);
     expect(google.profileComplete).toBe(false);
+    expect((await request('/auth/me', undefined, token, 'GET')).body.user.canChooseUsername).toBe(true);
     expect(google.termsAcceptedAt).toBeNull();
     expect(google.termsVersion).toBeNull();
     expect((await request("/member-action", {})).body.code).toBe("PROFILE_INCOMPLETE");
@@ -214,7 +215,7 @@ describe("explicit consent over HTTP (real routes/auth, isolated storage and ext
     const before = Date.now();
     const result = await request("/auth/complete-profile", { kullaniciAdi: "newname", birthYear: 2008, ...valid, termsAcceptedAt: "1990-01-01" });
     expect(result.status).toBe(200);
-    expect(result.body.user).toMatchObject({ profileComplete: true, termsVersion: TERMS_VERSION, requiresTermsAcceptance: false });
+    expect(result.body.user).toMatchObject({ profileComplete: true, canChooseUsername: false, termsVersion: TERMS_VERSION, requiresTermsAcceptance: false });
     expect(writes).toHaveLength(1);
     expect(writes[0]).toMatchObject({ kullaniciAdi: "newname", birthYear: 2008, profileComplete: true, termsVersion: TERMS_VERSION });
     expect(user.termsAcceptedAt.getTime()).toBeGreaterThanOrEqual(before);
@@ -263,6 +264,7 @@ it("retrying an already completed profile with the same year succeeds without ex
 
 it("legacy accounts with an absent birthYear preserve their completed profile and username", async () => {
   user.birthYear = undefined;
+  expect((await request('/auth/me', undefined, token, 'GET')).body.user.canChooseUsername).toBe(false);
   // Match MongoDB's null filter semantics for a legacy missing field.
   User.updateOne.mockImplementationOnce(async (_filter, update) => {
     writes.push(update.$set); Object.assign(user, update.$set); return { modifiedCount: 1 };

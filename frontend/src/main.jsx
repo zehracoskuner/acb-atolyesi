@@ -30,6 +30,7 @@ const StoryHomePage         = lazy(() => import("./pages/StoryDetailsPage"));
 const ProfilePage           = lazy(() => import("./pages/ProfilePage"));
 const StudioHub             = lazy(() => import("./pages/StudioPage"));
 const AuthCallback          = lazy(() => import("./pages/AuthCallBack"));
+const LogDetail = lazy(() => import("./pages/LogDetail"));
 const Bildirimler           = lazy(() => import("./pages/Bildirimler"));
 const Ayarlar               = lazy(() => import("./pages/Ayarlar"));
 const SifremiUnuttum        = lazy(() => import("./pages/SifremiUnuttum"));
@@ -76,6 +77,7 @@ createRoot(document.getElementById("root")).render(
           <Route path="/dashboard"                   element={<Dashboard />} />
           <Route path="/home"                        element={<Home />} />
           <Route path="/notes"                       element={<NotesPad />} />
+          <Route path="/gunluk/:id" element={<LogDetail />} />
           <Route path="/bildirimler"                 element={<Bildirimler />} />
           <Route path="/ayarlar"                     element={<Ayarlar />} />
           <Route path="/beginner"                    element={<Beginner />} />

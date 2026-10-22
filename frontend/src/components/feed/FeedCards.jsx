@@ -29,44 +29,38 @@ export function Avatar({ user, size = 36 }) {
 }
 
 /* ── Akış yorumları ── */
-const cmnt = {
-  wrap:    { borderTop: "1px solid rgba(0,0,0,.05)", marginTop: 10, paddingTop: 10 },
-  muted:   { fontFamily: "'DM Sans',sans-serif", fontSize: ".72rem", color: "#756958", fontStyle: "italic", margin: "0 0 8px" },
-  item:    { display: "flex", gap: 8, alignItems: "flex-start" },
-  author:  { fontFamily: "'DM Sans',sans-serif", fontSize: ".72rem", fontWeight: 500, color: "#1a1209" },
-  time:    { fontFamily: "'DM Sans',sans-serif", fontSize: ".62rem", color: "#756958" },
-  delBtn:  { marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#756958", padding: 0, display: "flex", alignItems: "center", transition: "color .15s" },
-  text:    { fontFamily: "'Lora',serif", fontSize: ".82rem", color: "#44403c", lineHeight: 1.6, margin: 0 },
-  error:   { fontFamily: "'DM Sans',sans-serif", fontSize: ".72rem", color: "#c0392b", margin: "6px 0 0" },
-  form:    { display: "flex", gap: 6, alignItems: "center", marginTop: 6 },
-  input:   { flex: 1, minWidth: 0, padding: "6px 12px", border: "1px solid #e2ddd6", borderRadius: 20, fontFamily: "'DM Sans',sans-serif", fontSize: ".82rem", color: "#1a1209", background: "#faf8f4" },
-  sendBtn: { width: 30, height: 30, borderRadius: "50%", background: "#1a1209", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", flexShrink: 0 },
-};
-
-/* ── Inline yorum bölümü ── */
-function InlineComments({ logId, isLoggedIn }) {
+function InlineComments({ logId, isLoggedIn, onCountChange }) {
   const [comments, setComments] = useState([]);
   const [loading,  setLoading]  = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [text,     setText]     = useState("");
   const [posting,  setPosting]  = useState(false);
   const [error,    setError]    = useState("");
   const { user: currentUser, requireMember } = useMembership();
   const myId = currentUser?._id || currentUser?.id;
   useEffect(() => {
+    let active = true;
     apiGet(`/logs/${logId}/comments`)
-      .then(res => setComments(res.items || []))
-      .catch(() => setError("Yorumlar yüklenemedi. Kapatıp yeniden deneyebilirsin."))
-      .finally(() => setLoading(false));
-  }, [logId]);
+      .then(res => {
+        if (!active) return;
+        setComments(res.items || []);
+        onCountChange((res.items || []).length);
+        setLoaded(true);
+      })
+      .catch(() => { if (active) setError("Yorumlar yüklenemedi. Kapatıp yeniden deneyebilirsin."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [logId, onCountChange]);
 
   async function handlePost(e) {
     e.preventDefault();
-    if (!text.trim() || posting) return;
+    if (!text.trim() || posting || !loaded) return;
     setPosting(true);
     setError("");
     try {
       const res = await apiPost(`/logs/${logId}/comments`, { content: text.trim() });
       setComments(prev => [...prev, res.item]);
+      onCountChange(count => count + 1);
       setText("");
     } catch (err) {
       setError(err.status === 403 ? "Yorum yapma yetkiniz kısıtlanmış." : "Yorum gönderilemedi.");
@@ -79,31 +73,33 @@ function InlineComments({ logId, isLoggedIn }) {
     try {
       await apiDelete(`/logs/${logId}/comments/${commentId}`);
       setComments(prev => prev.filter(c => c._id !== commentId));
+      onCountChange(count => Math.max(0, count - 1));
     } catch {
       setError("Yorum silinemedi. Yeniden deneyebilirsin.");
     }
   }
 
   return (
-    <div style={cmnt.wrap}>
+    <section className="feed-comments-wrap" aria-label="Günlük yorumları">
+      <div className="feed-comments-heading"><MessageCircle size={16} aria-hidden="true" /><h3>Satır arası sohbet</h3>{loaded && <span>{comments.length} yorum</span>}</div>
       {loading ? (
-        <p style={cmnt.muted}>Yükleniyor…</p>
-      ) : comments.length === 0 ? (
-        <p style={cmnt.muted}>Henüz yorum yok.</p>
+        <p className="feed-comments-muted">Yükleniyor…</p>
+      ) : loaded && comments.length === 0 ? (
+        <p className="feed-comments-muted">Henüz yorum yok.</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+        <div className="feed-comments-list">
           {comments.map(c => {
             const isOwn = myId && (c.author?._id === myId || c.author?._id?.toString() === myId);
             return (
-              <div key={c._id} style={cmnt.item}>
-                <Avatar user={c.author} size={24} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                    <span style={cmnt.author}>{c.author?.kullaniciAdi}</span>
-                    <span style={cmnt.time}>{timeAgo(c.createdAt)}</span>
+              <div key={c._id} className="feed-comments-item">
+                <Avatar user={c.author} size={32} />
+                <div className="feed-comments-body">
+                  <div className="feed-comments-meta">
+                    <span className="feed-comments-author">{c.author?.kullaniciAdi}</span>
+                    <span className="feed-comments-time">{timeAgo(c.createdAt)}</span>
                     {isOwn && (
                       <button
-                        style={cmnt.delBtn}
+                        className="feed-comments-delBtn"
                         onClick={() => handleDelete(c._id)}
                         aria-label="Yorumu sil"
                       >
@@ -113,7 +109,7 @@ function InlineComments({ logId, isLoggedIn }) {
                       </button>
                     )}
                   </div>
-                  <p style={cmnt.text}>{c.content}</p>
+                  <p className="feed-comments-text">{c.content}</p>
                 </div>
               </div>
             );
@@ -122,21 +118,21 @@ function InlineComments({ logId, isLoggedIn }) {
       )}
 
       {isLoggedIn ? (
-        <form style={cmnt.form} onSubmit={handlePost}>
-          <input
-            style={cmnt.input}
-            type="text"
+        <form className="feed-comments-form" onSubmit={handlePost}>
+          <textarea
+            className="feed-comments-input"
+            rows={2}
             placeholder="Yorum yaz…"
             value={text}
             onChange={e => setText(e.target.value)}
             maxLength={500}
-            disabled={posting}
+            disabled={posting || !loaded}
             aria-label="Yorum yaz"
           />
           <button
-            style={{ ...cmnt.sendBtn, opacity: !text.trim() || posting ? .4 : 1 }}
+            className="feed-comments-send"
             type="submit"
-            disabled={!text.trim() || posting}
+            disabled={!text.trim() || posting || !loaded}
             aria-label="Yorumu gönder"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -146,14 +142,14 @@ function InlineComments({ logId, isLoggedIn }) {
         </form>
       ) : (
         <button type="button"
-          style={{ ...cmnt.muted, background: "none", border: 0, cursor: "pointer", color: "#8b2500" }}
+          className="feed-comments-login"
           onClick={() => requireMember()}
         >
           Yorum yapmak için giriş yap →
         </button>
       )}
-      {error && <p style={cmnt.error} role="alert">{error}</p>}
-    </div>
+      {error && <p className="feed-comments-error" role="alert">{error}</p>}
+    </section>
   );
 }
 
@@ -169,12 +165,13 @@ function AuthorLine({ item, shelf }) {
   </header>;
 }
 
-export function LogCard({ item }) {
+export function LogCard({ item, initiallyShowComments = false }) {
   const { status, requireMember } = useMembership();
   const { liked, likeCount, busy: liking, error, toggle } = useLike({
     path: `/logs/${item._id}/like`, initialLiked: item.likedByMe, initialCount: item.likeCount,
   });
-  const [showComments, setShowComments] = useState(false);
+  const [showComments, setShowComments] = useState(initiallyShowComments);
+  const [commentCount, setCommentCount] = useState(item.commentCount ?? 0);
   async function handleLike() {
     if (!requireMember()) return;
     await toggle();
@@ -188,11 +185,11 @@ export function LogCard({ item }) {
       </Link>}
       <footer className="feed-card-actions">
         <button type="button" aria-pressed={liked} aria-label={liked ? "Beğeniyi kaldır" : "Beğen"} disabled={liking} onClick={handleLike} className={liked ? "is-liked" : ""}><Heart size={16} fill={liked ? "currentColor" : "none"} aria-hidden="true" /><span>{likeCount || "Beğen"}</span></button>
-        <button type="button" aria-expanded={showComments} onClick={() => setShowComments(value => !value)}><MessageCircle size={16} aria-hidden="true" />{showComments ? "Yorumları kapat" : "Yorum"}</button>
+        <button type="button" className={`feed-comment-toggle${commentCount > 0 ? " has-comments" : ""}`} aria-expanded={showComments} aria-controls={`feed-comments-${item._id}`} onClick={() => setShowComments(value => !value)}><MessageCircle size={16} aria-hidden="true" /><span>{showComments ? "Yorumları kapat" : commentCount > 0 ? "Yorumlar" : "Henüz yorum yok"}</span>{commentCount > 0 && <span className="feed-comment-count">{commentCount}</span>}</button>
         {item.visibility === "followers" && <span className="feed-visibility"><LockKeyhole size={11} aria-hidden="true" />Takipçilere özel</span>}
       </footer>
       {error && <p className="feed-error" role="alert">{error}</p>}
-      {showComments && <InlineComments logId={item._id} isLoggedIn={status === "authenticated"} />}
+      {showComments && <div id={`feed-comments-${item._id}`}><InlineComments logId={item._id} isLoggedIn={status === "authenticated"} onCountChange={setCommentCount} /></div>}
     </div>
   </article>;
 }

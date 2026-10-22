@@ -25,7 +25,8 @@ const VIS = {
 };
 
 /* ── Yorum bölümü ── */
-function CommentSection({ logId, isLoggedIn, logAuthorId }) {
+export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 0 }) {
+  const [loaded, setLoaded] = useState(false);
   const [comments,  setComments]  = useState([]);
   const [loading,   setLoading]   = useState(false);
   const [open,      setOpen]      = useState(false);
@@ -41,12 +42,14 @@ function CommentSection({ logId, isLoggedIn, logAuthorId }) {
     try {
       const res = await apiGet(`/logs/${logId}/comments`);
       setComments(res.items || []);
-    } catch { /* sessizce geç */ }
+      setLoaded(true);
+      setError("");
+    } catch { setError("Yorumlar yüklenemedi. Kapatıp yeniden deneyebilirsin."); }
     finally { setLoading(false); }
   }
 
   function handleToggle() {
-    if (!open && comments.length === 0) loadComments();
+    if (!open && !loaded) loadComments();
     setOpen(v => !v);
   }
 
@@ -73,17 +76,20 @@ function CommentSection({ logId, isLoggedIn, logAuthorId }) {
     } catch (e) { alert("Silinemedi: " + e.message); }
   }
 
+  const count = loaded ? comments.length : initialCount;
   return (
     <div className="log-comments">
-      <button className="log-comment-toggle" onClick={handleToggle}>
+      <button type="button" className={`log-comment-toggle${count > 0 ? " has-comments" : ""}`} onClick={handleToggle} aria-expanded={open} aria-controls={`log-comments-${logId}`}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
-        {open ? "Yorumları gizle" : `Yorumlar${comments.length > 0 ? ` (${comments.length})` : ""}`}
+        <span>{open ? "Yorumları gizle" : count > 0 ? "Yorumlar" : "Henüz yorum yok"}</span>
+        {count > 0 && <span className="log-comment-count">{count}</span>}
       </button>
 
       {open && (
-        <div className="log-comment-section">
+        <div className="log-comment-section" id={`log-comments-${logId}`}>
+          {error && <p className="log-comment-error" role="alert">{error}</p>}
           {loading ? (
             <p className="log-comment-loading">Yükleniyor…</p>
           ) : comments.length === 0 ? (
@@ -133,9 +139,9 @@ function CommentSection({ logId, isLoggedIn, logAuthorId }) {
                   value={text}
                   onChange={e => setText(e.target.value)}
                   maxLength={500}
-                  disabled={posting}
+                  disabled={posting || loading || !loaded}
                 />
-                <button className="log-comment-submit" type="submit" disabled={!text.trim() || posting}>
+                <button className="log-comment-submit" type="submit" disabled={!text.trim() || posting || loading || !loaded}>
                   {posting ? "…" : (
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <line x1="22" y1="2" x2="11" y2="13"/>
@@ -144,7 +150,6 @@ function CommentSection({ logId, isLoggedIn, logAuthorId }) {
                   )}
                 </button>
               </div>
-              {error && <p className="log-comment-error">{error}</p>}
             </form>
           ) : (
             <p className="log-comment-login-hint">Yorum yapmak için <button onClick={() => requireMember()}>aramıza katıl</button></p>
@@ -220,6 +225,7 @@ function LogEntry({ log, isOwner, onDelete, isLoggedIn }) {
 
         <CommentSection
           logId={log._id}
+          initialCount={log.commentCount}
           isLoggedIn={isLoggedIn}
           logAuthorId={log.author?._id || log.author}
         />

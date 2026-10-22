@@ -8,10 +8,26 @@ import ensureAuth, { optionalAuth } from "../middlewares/ensureAuth.js";
 import { notifyLogLike, notifyLogComment } from "../services/notificationService.js";
 
 import { canReadLog } from "../services/logAccess.js";
+import { logCommentCounts } from "../services/logCommentCounts.js";
 import { arrayLikeUpdate, desiredLike, validateLikeId } from "../services/likes.js";
 
 const router = Router();
 router.use(readerAccess);
+
+router.get("/:id/detail", optionalAuth, async (req, res) => {
+  try {
+    validateLikeId(req.params.id);
+    const log = await Log.findById(req.params.id);
+    if (!await canReadLog(log, req.user?.id)) return res.status(404).json({ message: "Bu günlük girdisi silinmiş veya artık erişime kapalı." });
+    await log.populate("author", "kullaniciAdi avatarUrl");
+    await log.populate("relatedWork", "title coverImage");
+    const item = log.toObject();
+    res.json({ item: { ...item, likes: undefined, likeCount: item.likes.length,
+      likedByMe: item.likes.some(id => String(id) === String(req.user?.id)) } });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: "Günlük girdisi yüklenemedi." });
+  }
+});
 
 /* ═══════════════════════════════════════════
    GET /api/logs/:userId
@@ -58,9 +74,11 @@ router.get("/:userId", optionalAuth, async (req, res, next) => {
       Log.countDocuments(query),
     ]);
 
+    const counts = await logCommentCounts(logs);
     // Her log için viewerId beğenmiş mi?
     const items = logs.map(log => ({
       ...log,
+      commentCount: counts.get(String(log._id)) ?? 0,
       likeCount: log.likes?.length ?? 0,
       likedByMe: viewerId ? log.likes?.some(id => id.toString() === String(viewerId)) : false,
       likes:     undefined, // dizinin kendisini gönderme
@@ -93,8 +111,10 @@ router.get("/my", ensureAuth, async (req, res) => {
       Log.countDocuments({ author: req.user.id }),
     ]);
 
+    const counts = await logCommentCounts(logs);
     const items = logs.map((l) => ({
       _id:       l._id,
+      commentCount: counts.get(String(l._id)) ?? 0,
       content:   l.content,
       visibility: l.visibility,
       likeCount: l.likes?.length ?? 0,

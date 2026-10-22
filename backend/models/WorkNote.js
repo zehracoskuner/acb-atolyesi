@@ -10,6 +10,7 @@ const WorkNoteSchema = new mongoose.Schema(
     },
     title: { type: String, default: "" },
     body: { type: String, default: "" },
+    mobileRichBody: { html: String, plain: String },
     source: { type: String, default: "manual", index: true },
     meta: { type: mongoose.Schema.Types.Mixed, default: {} },
   },

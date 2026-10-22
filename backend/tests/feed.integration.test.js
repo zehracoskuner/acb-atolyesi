@@ -47,6 +47,33 @@ async function book(user, title, extras = {}) {
   return Work.create({ user: user._id, title, status: "published", ...extras });
 }
 
+it("log lists include comment counts before opening comments and reflect deletion", async () => {
+  const entry = await log(viewer, "public");
+  const empty = await log(viewer, "public", "No comments");
+  const comments = await LogComment.create([viewer, stranger].map(author => ({ log: entry._id, author: author._id, content: "A comment" })));
+  for (const path of ["/feed?scope=public", `/logs/${viewer._id}`, "/logs/my"]) {
+    const res = await request(path);
+    expect(res.status).toBe(200);
+    expect(res.body.items.find(item => item._id === String(entry._id)).commentCount).toBe(2);
+    expect(res.body.items.find(item => item._id === String(empty._id)).commentCount).toBe(0);
+  }
+  expect((await request(`/logs/${entry._id}/comments/${comments[0]._id}`, { method: "DELETE" })).status).toBe(200);
+  const res = await request("/feed?scope=public");
+  expect(res.body.items.find(item => item._id === String(entry._id)).commentCount).toBe(1);
+  const added = await request(`/logs/${entry._id}/comments`, { method: "POST", body: { content: "New comment" } });
+  expect(added.status).toBe(201);
+  for (const path of ["/feed?scope=public", `/logs/${viewer._id}`, "/logs/my"]) {
+    expect((await request(path)).body.items.find(item => item._id === String(entry._id)).commentCount).toBe(2);
+  }
+  const failed = await request(`/logs/${entry._id}/comments`, { method: "POST", body: { content: " " } });
+  expect(failed.status).toBe(400);
+  expect((await request("/feed?scope=public")).body.items.find(item => item._id === String(entry._id)).commentCount).toBe(2);
+  for (const id of [comments[1]._id, added.body.item._id]) {
+    expect((await request(`/logs/${entry._id}/comments/${id}`, { method: "DELETE" })).status).toBe(200);
+  }
+  expect((await request("/feed?scope=public")).body.items.find(item => item._id === String(entry._id)).commentCount).toBe(0);
+});
+
 it("public includes every author's public log, never followers/private, even for the owner", async () => {
   for (const author of [viewer, followed, stranger]) for (const visibility of ["public", "followers", "private"]) await log(author, visibility);
   const res = await request("/feed?scope=public");

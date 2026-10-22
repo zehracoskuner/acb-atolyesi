@@ -2,7 +2,7 @@ import { refreshSession } from "../lib/session";
 import { consumeLoginReturn } from "../lib/loginReturn";
 // src/pages/ProfilTamamla.jsx
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import TermsAcceptance from "../components/TermsAcceptance";
 import { TERMS_VERSION, membershipStep } from "../lib/terms";
@@ -15,13 +15,13 @@ export default function ProfilTamamla() {
 
   const [birthYear, setBirthYear] = useState("");
   const [existingUsername, setExistingUsername] = useState(false);
+  const [ownedUsername, setOwnedUsername] = useState("");
   const [username, setUsername] = useState("");
   const [status,   setStatus]   = useState(null);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [ready, setReady] = useState(false);
-  const debounceRef = useRef(null);
 
   useEffect(() => {
     document.title = "Profili Tamamla · ACB Atölyesi";
@@ -31,14 +31,20 @@ export default function ProfilTamamla() {
       if (!active) return;
       if (user.profileComplete !== false && Number.isInteger(user.birthYear)) {
         navigate(membershipStep(user) || consumeLoginReturn(), { replace: true });
-      } else { setReady(true); if (user.kullaniciAdi) { setUsername(user.kullaniciAdi); setExistingUsername(true); setStatus("ok"); } }
+      } else {
+        const canChoose = user.canChooseUsername ?? (user.profileComplete === false && ['google', 'both'].includes(user.authProvider));
+        setOwnedUsername(user.kullaniciAdi || '');
+        setExistingUsername(!canChoose && !!user.kullaniciAdi);
+        // Google creates an internal placeholder; the author chooses their public name here.
+        setUsername(canChoose && ['google', 'both'].includes(user.authProvider) ? '' : user.kullaniciAdi || '');
+        setReady(true);
+      }
     }).catch(() => { if (active) setError("Hesap bilgileri alınamadı. Sayfayı yenileyerek tekrar deneyin."); });
     return () => { active = false; };
   }, [navigate]);
 
   useEffect(() => {
     if (existingUsername) { setStatus("ok"); return; }
-    clearTimeout(debounceRef.current);
     if (username.length < 3) {
       setStatus(username.length > 0 ? "invalid" : null);
       return;
@@ -47,17 +53,21 @@ export default function ProfilTamamla() {
       setStatus("invalid");
       return;
     }
+    if (username === ownedUsername) { setStatus("ok"); return; }
     setStatus("checking");
-    debounceRef.current = setTimeout(async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
       try {
-        const res  = await fetch(`${API}/auth/check-username?q=${encodeURIComponent(username)}`);
+        const res  = await fetch(`${API}/auth/check-username?q=${encodeURIComponent(username)}`, { signal: controller.signal });
+        if (!res.ok) throw new Error('Username check failed');
         const data = await res.json();
-        setStatus(data.available ? "ok" : "taken");
+        if (!controller.signal.aborted) setStatus(data.available ? "ok" : "taken");
       } catch {
-        setStatus(null);
+        if (!controller.signal.aborted) setStatus("error");
       }
     }, 500);
-  }, [username, existingUsername]);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [username, existingUsername, ownedUsername]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -104,9 +114,10 @@ export default function ProfilTamamla() {
   };
   const statusMsg = {
     checking: "Kontrol ediliyor…",
-    ok:       "Kullanıcı adı müsait!",
+    ok:       existingUsername ? "Mevcut kullanıcı adın korunacak." : username === ownedUsername ? "Bu kullanıcı adı sana ait." : "Kullanıcı adı müsait!",
     taken:    "Bu kullanıcı adı alınmış.",
     invalid:  "3–30 karakter, sadece harf/rakam/_",
+    error:    "Kullanıcı adı kontrol edilemedi. Bağlantını kontrol edip tekrar yaz.",
   };
 
   return (
@@ -120,7 +131,7 @@ export default function ProfilTamamla() {
         <h1 style={s.title}>Profilini <em style={s.em}>tamamla.</em></h1>
         <p style={s.sub}>
           Doğum yılını paylaş. Gün ve ay bilgisi istemiyoruz.
-          Kullanıcı adın yoksa burada seçebilirsin.
+          {existingUsername ? 'Mevcut kullanıcı adın korunacak.' : 'Hikâyelerinde görünecek kullanıcı adını seç.'}
         </p>
 
         {error && <div style={s.errBox}>{error}</div>}
@@ -131,9 +142,10 @@ export default function ProfilTamamla() {
             <input id="birth-year" style={s.input} type="number" min="1900" max={new Date().getFullYear()} required value={birthYear} onChange={e => setBirthYear(e.target.value)} autoComplete="bday-year" />
           </div>
           <div style={s.group}>
-            <label style={s.label}>Kullanıcı Adı</label>
+            <label style={s.label} htmlFor="profile-username">Kullanıcı Adı</label>
             <div style={{ position: "relative" }}>
               <input
+                id="profile-username"
                 style={{
                   ...s.input,
                   borderColor: status === "ok" ? "#0f6e56"
@@ -141,7 +153,7 @@ export default function ProfilTamamla() {
                     : "#e2ddd6",
                   paddingRight: "2.2rem",
                 }}
-                disabled={existingUsername}
+                disabled={existingUsername || !ready || saving}
                 type="text"
                 placeholder="ornek_yazar_123"
                 value={username}

@@ -1,3 +1,5 @@
+import NotificationContext from "./NotificationContext";
+import { notificationTarget } from "../lib/notificationTarget";
 import { useSession, logoutSession } from "../lib/session";
 import { EXPLORE_PATH } from "../lib/routes";
 import { rememberLoginReturn } from "../lib/loginReturn";
@@ -383,19 +385,20 @@ export default function TopBar() {
                     <div className="notif-empty">Henüz bildirim yok.</div>
                   ) : (
                     notifications.slice(0, 8).map(n => (
-                      <div
+                      <button type="button"
                         key={n._id}
                         className={`notif-item ${!n.read ? "unread" : ""}`}
-                        onClick={() => { markRead(n._id); if (n.type === "report_update" && n.report) goTo(`/basvurular/${n.report}`); }}
+                        onClick={() => { if (!n.read) markRead(n._id); const target = notificationTarget(n); if (target) { setNotifOpen(false); goTo(target.path); } }}
                       >
                         <span className="notif-item-icon">
                           {NOTIF_ICON[n.type] ?? "📢"}
                         </span>
                         <div className="notif-item-body">
                           <p className="notif-item-text">{n.text}</p>
+                          <NotificationContext notification={n} />
                           <span className="notif-item-time">{timeAgo(n.createdAt)}</span>
                         </div>
-                      </div>
+                      </button>
                     ))
                   )}
                 </div>

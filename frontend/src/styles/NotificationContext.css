@@ -1,0 +1,10 @@
+.notification-context { margin: 10px 0; padding: 11px 13px; border: 1px solid rgba(139,37,0,.12); border-radius: 9px; background: rgba(139,37,0,.035); display: flex; flex-direction: column; gap: 5px; text-align: left; }
+.notification-context-label { color: #85715f; font: 600 10px/1.4 'DM Sans',sans-serif; letter-spacing: .12em; }
+.notification-context-title { color: #493b2e; font: 500 13px/1.6 'Lora',serif; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.notification-context-action { color: #8b2500; font: 600 11px/1.6 'DM Sans',sans-serif; }
+.notification-card { width: 100%; text-align: left; }
+.notification-card:hover .notification-context, .notif-item:hover .notification-context { background: rgba(139,37,0,.075); border-color: rgba(139,37,0,.25); }
+.notification-card:focus-visible, .notif-item:focus-visible { outline: 2px solid #8b2500; outline-offset: 3px; }
+button.notif-item { width: 100%; text-align: left; font: inherit; color: inherit; border: 0; background: transparent; cursor: pointer; }
+button.notif-item.unread { background: rgba(139,37,0,.035); }
+@media (prefers-reduced-motion: reduce) { .notification-card { animation: none !important; } }

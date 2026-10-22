@@ -1,6 +1,6 @@
 import { PLOTWORLD_SCENE_AI_ENABLED } from "../../../shared/features.js";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { apiGet, apiPatch, apiPost, describeAiError } from "../lib/api";
 import VoiceInputButton from "../components/VoiceInputButton";
 import {
@@ -266,6 +266,17 @@ function ConnectedScenes({ scene, allScenes, actMeta, onNavigate }) {
 export default function SceneDetailPage() {
   const { workId, sceneId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const plotPath = `/work/${workId}/plot`;
+
+  const returnToPlot = () => {
+    // Reuse the board's history entry so Back from it leads to the workshop.
+    if (location.state?.plotPath === plotPath) {
+      navigate(-1);
+    } else {
+      navigate(plotPath, { replace: true });
+    }
+  };
 
   const [scene,      setScene]      = useState(null);
   const [allScenes,  setAllScenes]  = useState([]);
@@ -399,7 +410,7 @@ export default function SceneDetailPage() {
     <div className="sd-error">
       <div className="sd-error-icon">⚠</div>
       <div>{error}</div>
-      <button onClick={() => navigate(`/work/${workId}/plot`)}>← Geri dön</button>
+      <button onClick={returnToPlot}>← Geri dön</button>
     </div>
   );
 
@@ -419,7 +430,7 @@ export default function SceneDetailPage() {
 
       {/* ─── ÜST BAR ─── */}
       <div className="sd-topbar">
-        <button className="sd-back" onClick={() => navigate(`/work/${workId}/plot`)}>
+        <button className="sd-back" onClick={returnToPlot}>
           ← Plot Board
         </button>
         <div className="sd-breadcrumb">
@@ -527,13 +538,16 @@ export default function SceneDetailPage() {
               scene={scene}
               allScenes={allScenes}
               actMeta={actMeta}
-              onNavigate={id => navigate(`/work/${workId}/scene/${id}`)}
+              onNavigate={id => navigate(`/work/${workId}/scene/${id}`, {
+                replace: true,
+                state: location.state,
+              })}
             />
           </div>
 
           <button
             className="sd-plotboard-btn"
-            onClick={() => navigate(`/work/${workId}/plot`)}
+            onClick={returnToPlot}
           >
             🗺 Plot Board'da Gör
           </button>

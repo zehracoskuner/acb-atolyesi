@@ -39,6 +39,7 @@ const notificationSchema = new mongoose.Schema(
       ref:     "Log",
       default: null,
     },
+    chapter: { type: mongoose.Schema.Types.ObjectId, ref: "Chapter", default: null },
     text: {
       type:     String,
       required: true,

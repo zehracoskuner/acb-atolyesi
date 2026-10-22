@@ -1,3 +1,5 @@
+import NotificationContext from "../components/NotificationContext";
+import { notificationTarget } from "../lib/notificationTarget";
 // src/pages/Bildirimler.jsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -19,8 +21,8 @@ const NOTIF_ICON = {
   like:    { emoji: "❤️", bg: "rgba(239,68,68,.1)" },
   follow:  { emoji: "👤", bg: "rgba(59,130,246,.1)" },
   comment: { emoji: "💬", bg: "rgba(34,197,94,.1)"  },
-  log_like:    "✨",
-  log_comment: "💬",
+  log_like:    { emoji: "❤️", bg: "rgba(239,68,68,.1)" },
+  log_comment: { emoji: "💬", bg: "rgba(34,197,94,.1)" },
   system:  { emoji: "📢", bg: "rgba(200,191,173,.3)" },
 };
 
@@ -133,9 +135,9 @@ export default function Bildirimler() {
             {displayed.map((n, i) => {
               const { emoji, bg } = NOTIF_ICON[n.type] ?? NOTIF_ICON.system;
               return (
-                <div
+                <button type="button" className="notification-card"
                   key={n._id}
-                  onClick={() => { if (!n.read) markRead(n._id); if (n.type === "report_update" && n.report) navigate(`/basvurular/${n.report}`); }}
+                  onClick={() => { if (!n.read) markRead(n._id); const target = notificationTarget(n); if (target) navigate(target.path); }}
                   style={{
                     display:       "flex",
                     alignItems:    "flex-start",
@@ -145,7 +147,7 @@ export default function Bildirimler() {
                     border:        "1px solid",
                     borderColor:   n.read ? "rgba(0,0,0,.06)" : "rgba(139,37,0,.12)",
                     borderRadius:  10,
-                    cursor:        n.read ? "default" : "pointer",
+                    cursor:        "pointer",
                     transition:    "background .15s, border-color .15s",
                     animation:     `fadeUp .35s ease ${i * 0.03}s both`,
                     position:      "relative",
@@ -181,11 +183,12 @@ export default function Bildirimler() {
                     }}>
                       {n.text}
                     </p>
+                    <NotificationContext notification={n} />
                     <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: ".68rem", color: "#a8a29e" }}>
                       {timeAgo(n.createdAt)}
                     </span>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

@@ -44,6 +44,7 @@
   --rd-border:      rgba(255,255,255,.07);
   --rd-border-med:  rgba(255,255,255,.12);
   --rd-text:        #e4e0d8;
+  --rd-prose:       #e8dfd2;
   --rd-text-soft:   #b0aaa2;
   --rd-text-muted:  #7a746c;
   --rd-accent:      #c4773a;
@@ -65,6 +66,7 @@
   --rd-border:      rgba(101,78,45,.1);
   --rd-border-med:  rgba(101,78,45,.16);
   --rd-text:        #3b2f1e;
+  --rd-prose:       #403022;
   --rd-text-soft:   #5a4633;
   --rd-text-muted:  #8a7a66;
   --rd-accent:      #8b4513;
@@ -86,6 +88,7 @@
   --rd-border:      var(--sdp-border);
   --rd-border-med:  var(--sdp-border-med);
   --rd-text:        var(--sdp-ink);
+  --rd-prose:       #302923;
   --rd-text-soft:   var(--sdp-ink-soft);
   --rd-text-muted:  var(--sdp-ink-muted);
   --rd-accent:      var(--sdp-accent);
@@ -568,15 +571,28 @@
 
 .rd-paragraph {
   font-family: var(--rd-font-display);
-  font-size: calc(1.05rem * var(--rd-font-scale, 1));
-  line-height: 1.85;
-  color: var(--rd-text-soft);
+  font-size: calc(1.375rem * var(--rd-font-scale, 1));
+  font-weight: 600;
+  line-height: 1.75;
+  color: var(--rd-prose);
   margin: 0 0 1.5em;
-  text-align: justify;
+  text-align: start;
   hyphens: auto;
   -webkit-hyphens: auto;
   hanging-punctuation: first last;
 }
+
+/* Saved editor styles must not override the reader's theme or text size. */
+.rd-paragraph :where(p, div, span, b, strong, i, em, u, s, strike, del, h1, h2, h3, ul, ol, li, blockquote) {
+  color: inherit !important;
+  background-color: transparent !important;
+  font-family: inherit !important;
+  line-height: inherit !important;
+}
+.rd-paragraph :where(p, div, span, b, strong, i, em, u, s, strike, del, ul, ol, li, blockquote) {
+  font-size: inherit !important;
+}
+.rd-paragraph :where(b, strong) { font-weight: 700; }
 /* Global CSS reset padding:0 sıfırlar; liste marker'larının görünmesi için */
 .rd-paragraph ul,
 .rd-paragraph ol { padding-left: 1.6em; }

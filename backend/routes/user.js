@@ -1,6 +1,7 @@
 import readerAccess from "../middlewares/readerAccess.js";
 // routes/user.js
 import express from "express";
+import emailChange from "./emailChange.js";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import Work from "../models/Work.js";
@@ -17,6 +18,7 @@ import { DEVELOPMENT_COACH_LAUNCH_ENABLED } from "../../shared/features.js";
 
 const router = express.Router();
 router.use(readerAccess);
+router.use(emailChange);
 
 // Match cover uploads: IP attempts, source verification, auth, account attempts.
 router.post(["/avatar", "/banner"], uploadLimiter, uploadOrigin);
@@ -177,60 +179,6 @@ router.patch("/password", async (req, res) => {
   }
 });
 
-/* ─── 4. E-posta Değiştir ─── */
-// PATCH /api/user/change-email
-router.patch("/change-email", async (req, res) => {
-  try {
-    const { newEmail, currentPassword } = req.body;
-
-    if (!newEmail || !newEmail.trim()) {
-      return res.status(400).json({ message: "Yeni e-posta adresi gereklidir." });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(newEmail.trim())) {
-      return res.status(400).json({ message: "Geçerli bir e-posta adresi girin." });
-    }
-
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
-
-    // Şifresi olan hesaplarda mevcut şifre zorunlu
-    if (user.sifreHash) {
-      if (!currentPassword) {
-        return res.status(400).json({ message: "E-posta değiştirmek için mevcut şifrenizi girin." });
-      }
-      const isMatch = await bcrypt.compare(currentPassword, user.sifreHash);
-      if (!isMatch) {
-        return res.status(400).json({ message: "Mevcut şifre yanlış." });
-      }
-    }
-
-    // Başka bir hesapta kullanılıyor mu?
-    const existing = await User.findOne({
-      email: newEmail.trim().toLowerCase(),
-      _id: { $ne: req.user.id },
-    });
-    if (existing) {
-      return res.status(409).json({ message: "Bu e-posta adresi zaten kullanılıyor." });
-    }
-
-    const updatedUser = await User.findByIdAndUpdate(
-      req.user.id,
-      { $set: { email: newEmail.trim().toLowerCase() } },
-      { new: true, runValidators: true }
-    ).select("-sifreHash -password -emailVerifyToken -emailVerifyExpires -emailVerifyOtp -emailVerifyOtpExpires -passwordResetToken -passwordResetExpires -passwordResetOtp -passwordResetOtpExpires");
-
-    res.json({ user: updatedUser, message: "E-posta adresi güncellendi." });
-  } catch (err) {
-    if (err.code === 11000) {
-      return res.status(409).json({ message: "Bu e-posta adresi zaten kullanılıyor." });
-    }
-    console.error("E-posta Değiştirme Hatası:", err);
-    res.status(500).json({ message: "E-posta değiştirilemedi." });
-  }
-});
-
 /* ─── 5. İlk Şifre Belirle (Google ile kayıt olanlar) ─── */
 // PATCH /api/user/set-password
 router.patch("/set-password", async (req, res) => {
@@ -243,18 +191,18 @@ router.patch("/set-password", async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
 
-    if (user.sifreHash && user.authProvider !== "google") {
+    if (user.sifreHash) {
       return res.status(400).json({
         message: "Zaten şifreniz var. Değiştirmek için mevcut şifrenizi girin.",
       });
     }
 
     const hashed = await bcrypt.hash(newPassword, 12);
-    await User.findByIdAndUpdate(
-      req.user.id,
-      { $set: { sifreHash: hashed, authProvider: "both" } },
-      { runValidators: false }
+    const changed = await User.updateOne(
+      { _id: req.user.id, sifreHash: null },
+      { $set: { sifreHash: hashed, authProvider: "both" } }
     );
+    if (!changed.modifiedCount) return res.status(409).json({ message: "Şifren bu sırada değişti. Yeniden giriş yap." });
 
     res.json({ message: "Şifre belirlendi." });
   } catch (err) {

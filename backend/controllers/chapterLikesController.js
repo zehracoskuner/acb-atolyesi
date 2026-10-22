@@ -5,7 +5,7 @@ import { changeWorkLike, desiredLike, likeTarget } from "../services/likes.js";
 export const toggleChapterLike = async (req, res) => {
   try {
     const result = await changeWorkLike({ userId: req.user.id, chapterId: req.params.chapterId, liked: desiredLike(req.body) });
-    if (result.added) notifyLike({ senderId: req.user.id, workId: result.workId }).catch(console.error);
+    if (result.added) notifyLike({ senderId: req.user.id, workId: result.workId, chapterId: req.params.chapterId }).catch(console.error);
     res.json({ liked: result.liked, likedByMe: result.liked, likeCount: result.likeCount, workLikeCount: result.workLikeCount });
   } catch (err) {
     if (!err.status) console.error("chapter like:", err);

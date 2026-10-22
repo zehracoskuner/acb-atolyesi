@@ -2,6 +2,7 @@
 import { Resend } from "resend";
 import nodemailer from "nodemailer";
 import User       from "../models/User.js";
+import { mobileLink } from './mobileLinks.js';
 
 let resend;
 function getResend() {
@@ -140,8 +141,8 @@ export async function sendAdminMail({ subject, html }) {
 }
 
 /* ── E-posta doğrulama ── */
-export async function sendVerificationEmail(email, token) {
-  const link = `${getApiBaseUrl()}/auth/verify-email?token=${encodeURIComponent(token)}`;
+export async function sendVerificationEmail(email, token, client) {
+  const link = client === 'native' ? mobileLink('verify', { token }) : `${getApiBaseUrl()}/auth/verify-email?token=${encodeURIComponent(token)}`;
   return await send({
     to:      email,
     subject: "E-posta adresini doğrula — ACB Atölyesi",
@@ -224,7 +225,8 @@ export async function sendEmailVerifyOtp(email, otp) {
 }
 
 /* ── Şifre sıfırlama (OTP) ── */
-export async function sendPasswordResetEmail(email, otp) {
+export async function sendPasswordResetEmail(email, otp, client) {
+  const nativeAction = client === 'native' ? `<p><a href="${mobileLink('reset', { email, otp }).replaceAll('&', '&amp;')}">Mobil uygulamada yeni şifre belirle</a></p>` : '';
   await send({
     to:      email,
     subject: "Şifre sıfırlama kodu — ACB Atölyesi",
@@ -256,6 +258,7 @@ export async function sendPasswordResetEmail(email, otp) {
 
                 <p style="font-size:13px;color:#9a8e80;line-height:1.6;margin:0 0 16px">
                   Bu kodu <strong style="color:#1a1209">ACB Atölyesi uygulamasında</strong> şifre sıfırlama ekranına gir.
+                  ${nativeAction}
                 </p>
 
                 <hr style="border:none;border-top:1px solid #e2ddd6;margin:24px 0 16px"/>

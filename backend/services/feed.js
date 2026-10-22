@@ -5,6 +5,7 @@ import Work from "../models/Work.js";
 import Chapter from "../models/Chapter.js";
 import User from "../models/User.js";
 import ChapterLike from "../models/ChapterLike.js";
+import { logCommentCounts } from "./logCommentCounts.js";
 
 const PAGE_SIZE = 15;
 const publicWork = { status: "published", isAnonymous: { $ne: true } };
@@ -61,6 +62,7 @@ export async function readFeed({ viewerId, scope, page }) {
   );
   const [result] = await Log.aggregate(pipeline);
   const items = result?.items || [];
+  const commentCounts = await logCommentCounts(items.filter(item => item.type === "log"));
   const total = result?.count?.[0]?.total || 0;
   const authorIds = [...new Map(items.filter(item => item.author?._id).map(item => [String(item.author._id), item.author._id])).values()];
   // One batch for the visible authors; anonymous titles never enter this response.
@@ -78,6 +80,7 @@ export async function readFeed({ viewerId, scope, page }) {
   ]) : [];
   const likeMap = new Map(likes.map(like => [String(like._id), like]));
   return { items: items.map(item => ({ ...item,
+    ...(item.type === "log" ? { commentCount: commentCounts.get(String(item._id)) ?? 0 } : {}),
     ...(item.type === "chapter" ? { likeCount: likeMap.get(String(item._id))?.count || 0, likedByMe: !!likeMap.get(String(item._id))?.mine } : {}),
     authorShelf: shelfMap.get(String(item.author?._id)) || { works: [], total: 0 } })),
     scope, page, total, hasMore: page * PAGE_SIZE < total, isEmpty: total === 0 };

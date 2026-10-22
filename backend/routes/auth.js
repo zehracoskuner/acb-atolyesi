@@ -131,7 +131,7 @@ router.post("/register", validateTermsAcceptance, async (req, res) => {
     });
 
     try {
-      const messageId = await sendVerificationEmail(email, verifyToken);
+      const messageId = await sendVerificationEmail(email, verifyToken, req.body.client);
       console.info("Doğrulama e-postası posta sağlayıcısı tarafından kabul edildi:", messageId);
     } catch (err) {
       console.error("Doğrulama e-postası gönderilemedi:", err.message);
@@ -199,9 +199,11 @@ router.post("/login", async (req, res) => {
         email:           user.email,
         avatarUrl:       user.avatarUrl,
         emailVerified:   user.emailVerified,
+        hasPassword:     !!user.sifreHash,
         authProvider:    user.authProvider,
         birthYear: user.birthYear,
         profileComplete: user.profileComplete && Number.isInteger(user.birthYear),
+        canChooseUsername: user.profileComplete === false || !user.kullaniciAdi,
         ...termsStatus(user),
         tourCompleted:   user.tourCompleted,
         role:            user.role,
@@ -263,9 +265,11 @@ router.post("/complete-profile", ensureIdentity, validateTermsAcceptance, async 
         email:           user.email,
         avatarUrl:       user.avatarUrl,
         emailVerified:   user.emailVerified,
+        hasPassword:     !!user.sifreHash,
         authProvider:    user.authProvider,
         birthYear: user.birthYear,
         profileComplete: user.profileComplete && Number.isInteger(user.birthYear),
+        canChooseUsername: user.profileComplete === false || !user.kullaniciAdi,
         ...termsStatus(user),
         tourCompleted:   user.tourCompleted,
         role:            user.role,
@@ -341,7 +345,7 @@ router.post("/resend-verification", async (req, res) => {
     }
 
     try {
-      await sendVerificationEmail(email, verifyToken);
+      await sendVerificationEmail(email, verifyToken, req.body.client);
     } catch (err) {
       console.error("Yeniden doğrulama maili gönderilemedi:", err.message);
       // Başarısız gönderim, daha önceki geçerli bağlantıyı bozmamalı.
@@ -462,7 +466,7 @@ router.post("/forgot-password", async (req, res) => {
         { runValidators: false }
       );
 
-      sendPasswordResetEmail(email, otp).catch(console.error);
+      sendPasswordResetEmail(email, otp, req.body.client).catch(console.error);
     }
 
     return res.json({ message: "Eğer bu e-posta kayıtlıysa sıfırlama kodu gönderildi." });
@@ -569,9 +573,11 @@ router.get("/me", ensureIdentity, async (req, res) => {
         email:           user.email,
         avatarUrl:       user.avatarUrl,
         emailVerified:   user.emailVerified,
+        hasPassword:     !!user.sifreHash,
         authProvider:    user.authProvider,
         birthYear: user.birthYear,
         profileComplete: user.profileComplete && Number.isInteger(user.birthYear),
+        canChooseUsername: user.profileComplete === false || !user.kullaniciAdi,
         ...termsStatus(user),
         tourCompleted:   user.tourCompleted,
         role:            user.role,
@@ -622,9 +628,11 @@ router.post("/google/mobile", async (req, res) => {
         email:           user.email,
         avatarUrl:       user.avatarUrl,
         emailVerified:   user.emailVerified,
+        hasPassword:     !!user.sifreHash,
         authProvider:    user.authProvider,
         birthYear: user.birthYear,
         profileComplete: user.profileComplete && Number.isInteger(user.birthYear),
+        canChooseUsername: user.profileComplete === false || !user.kullaniciAdi,
         ...termsStatus(user),
         tourCompleted:   user.tourCompleted,
         role:            user.role,

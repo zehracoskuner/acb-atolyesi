@@ -1,0 +1,120 @@
+[
+  {
+    "id": "terms",
+    "title": "Kullanıcı Sözleşmesi",
+    "sections": [
+      {
+        "title": "Taraflar ve Kapsam",
+        "content": "Bu Kullanıcı Sözleşmesi (\"Sözleşme\"), ACB Atölyesi platformunu (\"Platform\") işleten ACB Atölyesi (\"Biz\", \"Atölye\") ile platforma kayıt olan veya platformu kullanan gerçek kişi (\"Kullanıcı\", \"Yazar\") arasında akdedilmektedir.\r\n\r\nPlatforma kayıt olarak veya hizmetlerimizi kullanarak bu Sözleşme'nin tüm koşullarını okuduğunuzu, anladığınızı ve kabul ettiğinizi beyan etmiş olursunuz. Bu koşulları kabul etmiyorsanız lütfen platformu kullanmayınız."
+      },
+      {
+        "title": "Hizmetin Tanımı",
+        "content": "ACB Atölyesi; yazarlara yaratıcı yazarlık süreçlerini desteklemek amacıyla dijital bir çalışma ortamı sunar. Platform kapsamında şu hizmetler sağlanmaktadır:\r\n\r\n• Çevrimiçi eser yazma ve düzenleme araçları\r\n• Bölüm ve proje yönetimi\r\n• Yazarlık günlüğü ve ilerleme takibi\r\n• Atölye topluluğunda eser paylaşımı ve okuyucu geri bildirimi\r\n• Yapay zeka destekli yazarlık koçu\r\n\r\nPlatform, zaman zaman önceden bildirim yapmaksızın güncelleme ve değişiklik hakkını saklı tutar."
+      },
+      {
+        "title": "Hesap Oluşturma ve Güvenlik",
+        "content": "Platforma üye olmak için 13 yaşını doldurmuş olmanız gerekmektedir. 18 yaş altı kullanıcıların ebeveyn veya vasi onayı alması önerilir.\r\n\r\nHesabınızın güvenliğinden tamamen siz sorumlusunuz. Şifrenizi kimseyle paylaşmamalı, hesabınıza yetkisiz erişim fark ettiğinizde derhal bizimle iletişime geçmelisiniz.\r\n\r\nTek bir gerçek kişi adına yalnızca bir hesap açılabilir. Toplu kayıt, bot kayıt veya başka kişiler adına hesap oluşturulması yasaktır."
+      },
+      {
+        "title": "Fikri Mülkiyet Hakları",
+        "content": "Platform aracılığıyla oluşturduğunuz tüm özgün eserler üzerindeki telif hakkı size aittir. ACB Atölyesi, eserleriniz üzerinde herhangi bir mülkiyet hakkı talep etmez.\r\n\r\nEserlerinizi Platform üzerinde paylaştığınızda; Atölye'ye, söz konusu eserleri yalnızca hizmet amacıyla (teknik depolama, önbellek, düzeltme, Platform içi görüntüleme) kullanmak üzere sınırlı, münhasır olmayan, devredilemez bir lisans tanımış olursunuz.\r\n\r\nPlatform'un kendisi (kod tabanı, tasarım, marka unsurları, özgün içerik) ACB Atölyesi'ne aittir ve izinsiz kopyalanamaz, dağıtılamaz."
+      },
+      {
+        "title": "Yasaklanan İçerik ve Davranışlar",
+        "content": "Aşağıdaki içerikleri oluşturmak, paylaşmak veya teşvik etmek kesinlikle yasaktır:\r\n\r\n• Nefret söylemi, ayrımcılık veya şiddeti körükleyen içerikler\r\n• Gerçek kişileri karalayan veya onların rızası olmaksızın kişisel bilgilerini ifşa eden içerikler\r\n• Başkasına ait telif hakkı korumalı eserlerin izinsiz kopyalanması\r\n• Kullanıcıları aldatmaya yönelik yanıltıcı bilgiler\r\n• Zararlı yazılım yaymaya veya sisteme zarar vermeye yönelik her türlü girişim\r\n\r\nEtik Atölye Kuralları kapsamındaki yükümlülükler de bu maddenin ayrılmaz bir parçasıdır."
+      },
+      {
+        "title": "Hesap Askıya Alma ve Sonlandırma",
+        "content": "Bu Sözleşme'yi ihlal etmeniz halinde hesabınız önceden uyarı yapılmaksızın askıya alınabilir veya kalıcı olarak kapatılabilir.\r\n\r\nHesabınızı kendiniz kapatmak isterseniz Ayarlar bölümünden işlemi gerçekleştirebilirsiniz. Hesap kapatma işlemi geri alınamaz; kamuya açık eserleriniz Platform'dan kaldırılır, ancak teknik yedekler yasal saklama süreleri boyunca tutulabilir.\r\n\r\nACB Atölyesi, hizmetin bütünlüğünü korumak amacıyla gerekli gördüğü durumlarda içerik kaldırma ve hesap askıya alma kararı verme hakkını saklı tutar."
+      },
+      {
+        "title": "Sorumluluk Sınırlaması",
+        "content": "Platform \"olduğu gibi\" sunulmaktadır. Hizmet kesintileri, veri kayıpları veya üçüncü taraf içeriklerinden kaynaklanabilecek zararlar için ACB Atölyesi'nin sorumluluğu, yasaların izin verdiği azami ölçüde sınırlandırılmıştır.\r\n\r\nYapay zeka destekli özellikler, yazarlık sürecine yardımcı olmak amacıyla sunulur. Bu araçların önerileri kesin, hatasız veya hukuki ya da edebi açıdan bağlayıcı nitelikte değildir. Kullanıcı, yapay zeka önerilerini kendi takdirine göre değerlendirir ve uygulama sorumluluğu tamamen kullanıcıya aittir.\r\n\r\nOlası kesintilere karşı eserlerinizin yerel yedeklerini düzenli olarak almanızı şiddetle tavsiye ederiz."
+      },
+      {
+        "title": "Sözleşme Değişiklikleri",
+        "content": "Bu Sözleşme'yi zaman zaman güncelleyebiliriz. Önemli değişiklikler Platform üzerinden ve kayıtlı e-posta adresinize bildirim yapılarak duyurulacaktır.\r\n\r\nDeğişiklikten sonra platforma girişiniz, güncellenmiş Sözleşme'yi kabul ettiğiniz anlamına gelir.\r\n\r\nBu Sözleşme Türkiye Cumhuriyeti kanunlarına tabidir."
+      },
+      {
+        "title": "Taslak Ek: Eser Sahipliği ve İzinsiz Kullanım",
+        "content": "5846 sayılı Fikir ve Sanat Eserleri Kanunu kapsamında korunan bir eserin sahibi, onu meydana getiren kişidir. Birden fazla kişinin ve diğer hak sahiplerinin hakları saklıdır. Platforma yükleme veya burada paylaşma, tek başına eser sahipliğini Platforma ya da diğer kullanıcılara geçirmez; telif korumasının doğması için Platforma kayıt gerekmez.\n\nKullanıcı, paylaştığı içerik üzerinde gerekli hak veya izinlere sahip olmalıdır. Kanuni istisnalar saklı kalmak üzere, hak sahibinin gerekli izni olmadan başkasının eserini kopyalamak, işlemek, değiştirmek, dağıtmak veya internet dâhil kamuya iletmek yasaktır. Başkasının eserini kendi eseri gibi sunmak ve kaynağı yanıltıcı biçimde göstermek de yasaktır. Yalnızca yazarın adını belirtmek, izin gerektiren bir kullanımı kendiliğinden hukuka uygun kılmaz. Alıntı ve diğer kanuni istisnalar, kendi şartları ve sınırları içinde uygulanır.\n\nIV. maddede belirtilen hizmet amaçlı kullanım, eserin mülkiyetinin devri veya reklam, satış, üçüncü kişilere lisanslama ya da yapay zekâ modeli eğitimi için genel izin olarak yorumlanamaz. Manevi haklar saklıdır. Mali haklara ilişkin işlemlerde yazılı şekil ve hakların ayrı ayrı belirtilmesi şartları ayrıca değerlendirilmelidir; bu kabul kutusunun tek başına söz konusu şartları karşıladığı ileri sürülmez.\n\nİhlal iddiasını eser ve ilgili içerik bağlantısı, hak sahipliği veya temsil açıklaması ve iletişim bilgileriyle acbatolyesi@gmail.com adresine iletebilirsiniz. Platform bildirimi inceleyerek taraflardan açıklama isteyebilir ve mevcut moderasyon kuralları kapsamında işlem yapabilir. Bildirim tek başına kesin ihlal kararı sayılmaz; hak sahiplerinin kanuni başvuru yolları saklıdır."
+      },
+      {
+        "title": "Taslak Ek: Açık Kabul ve Sürüm",
+        "content": "I. ve VIII. maddelerdeki kayıt, kullanım veya girişin kabul sayılacağı yönündeki ifadeler mevcut metnin parçası olarak korunmuştur. Bu sürümün kabul sürecinde ise bu ek esas alınır: yalnızca kayıt olmak, Google ile giriş yapmak ya da hizmeti kullanmak güncel sözleşmenin açık kabulü yerine geçmez. Önceden işaretlenmemiş zorunlu kutu aracılığıyla kabul alınır; sözleşme sürümü ve sunucunun belirlediği kabul zamanı kullanıcı hesabıyla kaydedilir. Güncel sürümü kabul etmemiş üyelerden yeniden kabul istenir.\n\nBu işlem pazarlama veya ticari elektronik ileti izni içermez. Gizlilik Politikası bilgilendirme amacıyla ayrıca erişilebilirdir; sözleşme kabulü kişisel veriler için sınırsız açık rıza olarak yorumlanamaz."
+      }
+    ]
+  },
+  {
+    "id": "privacy",
+    "title": "Gizlilik Politikası",
+    "sections": [
+      {
+        "title": "Veri Sorumlusu",
+        "content": "Bu Gizlilik Politikası kapsamında kişisel verilerinizi işleyen veri sorumlusu ACB Atölyesi'dir.\r\n\r\n      KVKK kapsamındaki her türlü başvuru ve soru için acbatolyesi@gmail.com adresinden bizimle iletişime geçebilirsiniz.\r\n\r\n      Kişisel verileriniz; sözleşmenin kurulması ve ifası, hukuki yükümlülüklerin yerine getirilmesi, meşru menfaatlerimiz ve gerekli hâllerde açık rızanız hukuki sebeplerine dayanarak işlenmektedir."
+      },
+      {
+        "title": "Toplanan Veriler",
+        "content": "ACB Atölyesi, hizmetlerimizi sunabilmek için yalnızca gerekli minimum veriyi toplar.\r\n\r\nHesap verileri: Kayıt sırasında sağladığınız ad, kullanıcı adı ve e-posta adresi.\r\n\r\nİçerik verileri: Platform üzerinde oluşturduğunuz eserler, bölümler, günlük kayıtları ve paylaşımlar.\r\n\r\nTeknik veriler: IP adresi, tarayıcı türü, cihaz bilgisi, oturum süreleri ve sayfa gezinme verileri. Bu veriler yalnızca güvenlik ve performans iyileştirme amacıyla işlenir.\r\n\r\nGoogle ile giriş yapmanız halinde Google hesabınızdan yalnızca ad ve e-posta adresi alınır; parola veya ödeme bilgilerine erişilmez."
+      },
+      {
+        "title": "Verilerin Kullanım Amacı",
+        "content": "Topladığımız veriler yalnızca şu amaçlarla kullanılır:\r\n\r\n• Hesabınızı oluşturmak ve kimliğinizi doğrulamak\r\n• Platform hizmetlerini size sunmak ve kişiselleştirmek\r\n• Güvenlik ihlallerini tespit etmek ve önlemek\r\n• Hizmet kalitesini artırmak için anonim kullanım istatistikleri üretmek\r\n• Yasal yükümlülükleri yerine getirmek\r\n\r\nVerileriniz hiçbir koşulda üçüncü taraflara satılmaz, kiralanmaz veya reklam amaçlı kullanılmaz."
+      },
+      {
+        "title": "Veri Paylaşımı",
+        "content": "Verilerinizi yalnızca aşağıdaki sınırlı durumlarda üçüncü taraflarla paylaşabiliriz:\r\n\r\nAltyapı sağlayıcıları: Sunucu barındırma (hosting), dosya depolama (Cloudinary) ve e-posta iletimi (Nodemailer/Gmail SMTP) gibi teknik hizmetler için çalıştığımız güvenilir sağlayıcılar. Bu sağlayıcılar verilerinizi yalnızca bizim adımıza işler.\r\n\r\nYasal zorunluluk: Mahkeme kararı veya yetkili makam talebi gibi yasal yükümlülüklerin gerektirdiği durumlarda.\r\n\r\nBunların dışında hiçbir kişi veya kuruluşla veri paylaşımı yapılmaz."
+      },
+      {
+        "title": "Çerezler ve Yerel Depolama",
+        "content": "Platform, oturum yönetimi ve tercihlerinizi hatırlamak amacıyla çerez ve localStorage kullanır. Bunlar arasında:\r\n\r\n• JWT kimlik doğrulama token'ı (oturum süresince)\r\n• Okuma tercihleri (tema, yazı boyutu)\r\n• Sayfa ilerleme kayıtları\r\n\r\nReklam veya izleme amaçlı üçüncü taraf çerez kullanılmaz. Tarayıcı ayarlarınızdan çerezleri devre dışı bırakabilirsiniz; ancak bu durumda bazı özellikler çalışmayabilir."
+      },
+      {
+        "title": "Veri Saklama Süresi",
+        "content": "Hesabınız aktif olduğu sürece verileriniz saklanır. Hesabınızı kapattığınızda kişisel verileriniz 30 gün içinde silinir.\r\n\r\nKamuya açık eserleriniz için önceden içeriği gizli veya taslak konumuna almanızı öneririz. Silinmiş hesaplara ait veriler teknik yedeklerden 90 gün içinde tamamen temizlenir.\r\n\r\nYasal bir yükümlülük bulunması halinde ilgili veriler mevzuatın öngördüğü süre boyunca saklanabilir."
+      },
+      {
+        "title": "Haklarınız",
+        "content": "Türkiye Kişisel Verilerin Korunması Kanunu (KVKK) kapsamında aşağıdaki haklara sahipsiniz:\r\n\r\n• Kişisel verilerinizin işlenip işlenmediğini öğrenme\r\n• İşlenme amacını ve bu amaca uygun kullanılıp kullanılmadığını öğrenme\r\n• Yurt içinde veya yurt dışında verilerin aktarıldığı üçüncü kişileri öğrenme\r\n• Eksik veya yanlış işlenmiş verilerin düzeltilmesini talep etme\r\n• Kişisel verilerinizin silinmesini veya yok edilmesini talep etme\r\n• İşlemenin otomatik sistemler aracılığıyla yapılması nedeniyle aleyhinize sonuç doğurmasına itiraz etme\r\n\r\nBu haklarınızı kullanmak için acbatolyesi@gmail.com adresine yazabilirsiniz."
+      },
+      {
+        "title": "Güvenlik",
+        "content": "Verilerinizi korumak için endüstri standardı güvenlik önlemleri uygulanmaktadır:\r\n\r\n• Parolalar bcrypt ile şifrelenerek saklanır\r\n• API iletişimi JWT kimlik doğrulama ile güvence altına alınır\r\n• HTTPS üzerinden şifreli bağlantı zorunludur\r\n• Hassas işlemler için e-posta doğrulaması uygulanır\r\n\r\nHiçbir sistem %100 güvenli değildir. Bir güvenlik açığı fark ederseniz lütfen acbatolyesi@gmail.com adresinden bize bildirin."
+      }
+    ]
+  },
+  {
+    "id": "ethics",
+    "title": "Etik Kurallar",
+    "sections": [
+      {
+        "title": "Emeğe Saygı",
+        "content": "Her metin, bir insanın kırılganlığını kâğıda dökmesidir. Bir eseri okuyup yorum bırakmak, o kırılganlığa ortak olmayı kabul etmektir.\r\n\r\nBir eseri beğenmeseniz dahi yazarın harcadığı zaman, cesaret ve çabayı göz önünde bulundurun. \"Bu berbattı\" yerine \"Şu kısım beni bağlayamadı çünkü...\" demek, hem daha doğru hem de çok daha değerlidir."
+      },
+      {
+        "title": "Yapıcı Eleştiri",
+        "content": "Yapıcı eleştiri, bir eserin nasıl daha iyi olabileceğine dair somut, dürüst ve saygılı bir bakış açısıdır.\r\n\r\nYapıcı yorumun anatomisi:\r\n\r\n→ Gördüğünüzü adlandırın: \"Diyaloglar çok mekanik hissettiriyor.\"\r\n→ Nedenini açıklayın: \"Her cümle aynı uzunlukta olduğu için ritim oluşmuyor.\"\r\n→ Bir kapı aralayın: \"Karakterlerin bazen yarım bıraktığı cümleler deneyebilirsiniz.\"\r\n\r\nEleştiri esere yönelik olmalıdır; yazarın kişiliğine, niyetine veya geçmişine değil."
+      },
+      {
+        "title": "Kabul Edilemez Davranışlar",
+        "content": "Aşağıdaki davranışlar ACB Atölyesi'nde kesinlikle kabul edilmez ve hesap kapatmaya kadar yaptırımla sonuçlanır:\r\n\r\n• Bir eseri veya yazarı aşağılayıcı, küçük düşürücü yorumlar\r\n• Kişisel saldırı, hakaret veya taciz\r\n• Nefret söylemi — kimseye dil, din, cinsiyet, köken veya kimliği nedeniyle saldırılamaz\r\n• Başka bir kullanıcıyı Platform dışından takip etme veya tehdit etme\r\n• Spam yorum, koordineli taciz veya organize baskı\r\n\r\n\"Ama dürüst davranıyordum\" savunması kabul görmez. Dürüstlük ile nezaket birbirini dışlamaz."
+      },
+      {
+        "title": "Topluluk Ruhu",
+        "content": "Atölye, birbirinden öğrenen yazarların topluluğudur. Yeni başlayan bir yazar ile yıllardır yazan biri aynı masayı paylaşır. Bu zenginliktir.\r\n\r\nFarklı türlere, anlatı tarzlarına ve dünya görüşlerine saygı gösterin. Bir eserin \"iyi\" olduğuna tek bir tanım yoktur.\r\n\r\nAtölyedeki her yorumunuz bir yazarın bir sonraki cümlesini etkiler. Bu sorumluluğu hafiften almayın."
+      },
+      {
+        "title": "Moderasyon ve Bildirim",
+        "content": "Etik dışı gördüğünüz bir içeriği bildirmek için yorum veya içerik yanındaki \"Bildir\" seçeneğini kullanın. Tüm bildirimler gizlilik içinde değerlendirilir.\r\n\r\nModerasyon kararları şu adımları izler:\r\n1. Bildirimin incelenmesi\r\n2. Gerekirse taraflara ulaşılması\r\n3. İçerik kaldırma / uyarı / geçici askıya alma / hesap kapatma\r\n\r\nİyi niyetli bildirimler her zaman değerlendirmeye alınır. Kötü niyetli veya asılsız toplu şikâyet kampanyaları da yaptırım kapsamındadır."
+      },
+      {
+        "title": "Kör Atölye Özel Kuralları",
+        "content": "Kör Atölye modunda bir eserin yazarı gizlidir. Bu özellik, önyargısız yorum kültürünü desteklemek için tasarlanmıştır.\r\n\r\nKör Atölye'de ek kurallar geçerlidir:\r\n\r\n• Yazarın kim olduğunu tahmin etmeye veya açıklamaya çalışmayın\r\n• Yazar kimliği ifşa edildiğinde önceki yorumlarınızı çelişkili biçimde revize etmeyiniz\r\n• \"Bu kimin eseri?\" sorusunu açık bir şekilde sormayın\r\n\r\nKör Atölye, samimiyet güvenliğine dayalıdır. Bu güveni koruyun."
+      },
+      {
+        "title": "Taslak Ek: Eser Sahipliği ve İzinsiz Kullanım",
+        "content": "Yazarın emeğine ve hak sahiplerinin izinlerine saygı gösterin. Başkasının metnini kendi eseriniz gibi sunmayın; kanuni istisnalar dışında gerekli izin olmadan kopyalamayın, değiştirmeyin veya yeniden paylaşmayın. Kaynak göstermek tek başına izin yerine geçmez.\n\nEser sahipliği, hizmet amaçlı kullanım ve ihlal bildiriminin kapsamı Kullanıcı Sözleşmesi'nin IX. taslak ekinde açıklanmıştır. Bu ek hukuk incelemesi beklemektedir. Aşağıdaki topluluk taahhüdü, üyelik sözleşmesinin kaydedilen açık kabulünden ayrıdır."
+      }
+    ]
+  }
+]

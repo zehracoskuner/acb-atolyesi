@@ -37,8 +37,36 @@
 .explore-page .feed-card-actions button, .feed-card-actions > a { display:inline-flex; align-items:center; gap:6px; min-height:39px; padding:4px 0; border:0; background:none; font-size:.69rem; color:var(--feed-muted); }
 .feed-card-actions button:hover, .feed-card-actions > a:hover { color:var(--feed-accent); }
 .feed-card-actions .is-liked { color:#9c4536; }
+.explore-page .feed-card-actions .feed-comment-toggle { gap:8px; margin:5px 0; padding:6px 10px; min-height:34px; border-radius:20px; transition:background .15s, color .15s; }
+.explore-page .feed-card-actions .feed-comment-toggle.has-comments { background:#f1e8dc; color:var(--feed-accent); }
+.explore-page .feed-card-actions .feed-comment-toggle:hover { background:#eae0d2; }
+.feed-comment-toggle:focus-visible { outline:2px solid var(--feed-accent); outline-offset:3px; }
+.feed-comment-count { display:inline-flex; align-items:center; justify-content:center; min-width:23px; height:23px; padding:0 6px; box-sizing:border-box; border-radius:12px; background:var(--feed-accent); color:#fff; font-size:.7rem; font-weight:600; font-variant-numeric:tabular-nums; }
 .feed-visibility { display:inline-flex; align-items:center; gap:4px; margin-left:auto; font-size:.57rem; color:var(--feed-muted); }
 .feed-error { font-size:.75rem; color:#993e2b; }
+.feed-comments-wrap { margin:8px 0 10px; padding:18px; border:1px solid #e9e0d4; border-radius:12px; background:#faf7f1; }
+.feed-comments-heading { display:flex; align-items:center; gap:8px; color:#87432d; margin-bottom:18px; }
+.feed-comments-heading h3 { margin:0; font:500 .85rem 'Lora',Georgia,serif; }
+.feed-comments-heading > span { margin-left:auto; font-size:.7rem; color:#796c5d; white-space:nowrap; }
+.feed-comments-list { display:flex; flex-direction:column; gap:16px; margin-bottom:18px; }
+.feed-comments-item { display:flex; align-items:flex-start; gap:10px; }
+.feed-comments-body { flex:1; min-width:0; }
+.feed-comments-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-height:24px; margin-bottom:3px; }
+.feed-comments-author { font:600 .75rem 'DM Sans',sans-serif; color:#33291f; overflow-wrap:anywhere; }
+.feed-comments-time { font-size:.65rem; color:#796c5d; }
+.feed-comments-text { margin:0; font:400 .84rem/1.75 'Lora',Georgia,serif; color:#514437; white-space:pre-wrap; overflow-wrap:anywhere; }
+.feed-comments-wrap .feed-comments-delBtn { display:grid; place-items:center; margin-left:auto; width:28px; min-height:28px; padding:0; border:0; border-radius:50%; background:transparent; color:#796c5d; cursor:pointer; }
+.feed-comments-wrap .feed-comments-delBtn:hover { background:#f0dfd7; color:#933e31; }
+.feed-comments-form { display:flex; align-items:flex-end; gap:10px; padding:10px; border:1px solid #ded3c5; border-radius:12px; background:#fffdf8; }
+.feed-comments-form:focus-within { border-color:#a47758; box-shadow:0 0 0 3px #a4775814; }
+.feed-comments-form .feed-comments-input { flex:1; min-width:0; width:auto; border:0; outline:none; box-shadow:none; background:transparent; padding:4px; resize:vertical; min-height:48px; max-height:180px; font:400 .82rem/1.6 'DM Sans',sans-serif; color:#33291f; }
+.feed-comments-form .feed-comments-send { display:grid; place-items:center; flex-shrink:0; width:36px; min-height:36px; padding:0; border:0; border-radius:50%; background:#87432d; color:#fff; cursor:pointer; }
+.feed-comments-form .feed-comments-send:disabled { opacity:.35; cursor:default; }
+.feed-comments-muted { font-size:.78rem; color:#796c5d; margin:0 0 16px; }
+.feed-comments-error { font-size:.75rem; color:#993e2b; }
+.feed-comments-wrap .feed-comments-login { background:transparent; border:0; color:#87432d; font-size:.78rem; padding:8px 0; cursor:pointer; }
+.feed-comments-wrap button:focus-visible { outline:2px solid #87432d; outline-offset:3px; }
+@media(max-width:480px) { .feed-comments-wrap { padding:12px; } .feed-comments-heading h3 { font-size:.78rem; } }
 .feed-card-main form { flex-wrap:wrap; }
 .feed-card-main [style] p { overflow-wrap:anywhere; }
 .feed-header-meta { display:flex; align-items:center; gap:8px; flex-shrink:0; }

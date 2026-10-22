@@ -136,7 +136,9 @@ export default function DetailPanel({
         <div className="pw-detail-actions">
           <button
             className="pw-btn pw-btn--detail"
-            onClick={() => navigate(`/work/${workId}/scene/${node.id}`)}
+            onClick={() => navigate(`/work/${workId}/scene/${node.id}`, {
+              state: { plotPath: `/work/${workId}/plot` },
+            })}
             aria-label="Sahne detay sayfasına git"
           >
             📄 Sahne Detayı →

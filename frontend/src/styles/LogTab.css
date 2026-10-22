@@ -326,6 +326,11 @@
   transition:  color .15s;
 }
 .log-comment-toggle:hover { color: var(--gold); }
+.log-comment-toggle { min-height: 36px; padding: 6px 10px; gap: 8px; border-radius: 20px; transition: background .15s, color .15s; }
+.log-comment-toggle.has-comments { color: var(--ink-2); background: rgba(176, 139, 80, .09); }
+.log-comment-toggle:hover { background: rgba(176, 139, 80, .15); }
+.log-comment-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.log-comment-count { display: inline-flex; align-items: center; justify-content: center; min-width: 23px; height: 23px; padding: 0 6px; box-sizing: border-box; border-radius: 12px; background: var(--ink-2); color: var(--paper, #fffaf2); font-size: .7rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .log-comment-section { margin-top: 10px; }
 

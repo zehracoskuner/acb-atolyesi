@@ -2,9 +2,10 @@
 import Notification from "../models/Notification.js";
 import User         from "../models/User.js";
 import Work         from "../models/Work.js";
+import Chapter from "../models/Chapter.js";
 
 /* ─── Ortak yardımcı ─── */
-const createNotification = async ({ recipientId, senderId, type, workId, logId, text }) => {
+const createNotification = async ({ recipientId, senderId, type, workId, logId, chapterId, text }) => {
   if (senderId && String(recipientId) === String(senderId)) return;
 
   await Notification.create({
@@ -13,6 +14,7 @@ const createNotification = async ({ recipientId, senderId, type, workId, logId, 
     type,
     work:      workId || null,
     log:       logId  || null,
+    chapter:   chapterId || null,
     text,
     read:      false,
   });
@@ -75,7 +77,7 @@ export const notifyAdmins = async ({ type, workId, text }) => {
 /* ═══════════════════════════════════════════
    Eser beğeni bildirimi
 ═══════════════════════════════════════════ */
-export const notifyLike = async ({ senderId, workId }) => {
+export const notifyLike = async ({ senderId, workId, chapterId }) => {
   const [sender, work] = await Promise.all([
     User.findById(senderId).select("username kullaniciAdi").lean(),
     Work.findById(workId).select("title user").lean(),
@@ -83,21 +85,23 @@ export const notifyLike = async ({ senderId, workId }) => {
   if (!work?.user) return;
 
   const senderName = sender?.kullaniciAdi || sender?.username || "Bir okur";
-  const workTitle  = work.title || "bir eser";
+  const chapter = chapterId ? await Chapter.findById(chapterId).select("title").lean() : null;
+  const workTitle = chapter ? `${work.title} · ${chapter.title}` : (work.title || "bir eser");
 
   await createNotification({
     recipientId: work.user,
     senderId,
     type:   "like",
     workId,
-    text:   `${senderName}, "${workTitle}" adlı eserini beğendi.`,
+    chapterId,
+    text:   `${senderName}, "${workTitle}" ${chapter ? "bölümünü" : "adlı eserini"} beğendi.`,
   });
 };
 
 /* ═══════════════════════════════════════════
    Eser yorum bildirimi (eser sahibine)
 ═══════════════════════════════════════════ */
-export const notifyComment = async ({ senderId, workId, commentPreview }) => {
+export const notifyComment = async ({ senderId, workId, commentPreview, chapterId }) => {
   const [sender, work] = await Promise.all([
     User.findById(senderId).select("username kullaniciAdi").lean(),
     Work.findById(workId).select("title user").lean(),
@@ -105,7 +109,8 @@ export const notifyComment = async ({ senderId, workId, commentPreview }) => {
   if (!work?.user) return;
 
   const senderName = sender?.kullaniciAdi || sender?.username || "Bir okur";
-  const workTitle  = work.title || "bir eser";
+  const chapter = chapterId ? await Chapter.findById(chapterId).select("title").lean() : null;
+  const workTitle = chapter ? `${work.title} · ${chapter.title}` : (work.title || "bir eser");
   const preview    = commentPreview?.slice(0, 50) || "";
 
   await createNotification({
@@ -113,7 +118,8 @@ export const notifyComment = async ({ senderId, workId, commentPreview }) => {
     senderId,
     type:   "comment",
     workId,
-    text:   `${senderName}, "${workTitle}" eserine yorum yaptı${preview ? `: "${preview}…"` : "."}`,
+    chapterId,
+    text:   `${senderName}, "${workTitle}" ${chapter ? "bölümüne" : "eserine"} yorum yaptı${preview ? `: "${preview}…"` : "."}`,
   });
 };
 
@@ -123,7 +129,7 @@ export const notifyComment = async ({ senderId, workId, commentPreview }) => {
      metinle yanıt olduğu belli. İstersen enum'a "comment_reply" ekleyip
      burada değiştirebilirsin.
 ═══════════════════════════════════════════ */
-export const notifyReply = async ({ senderId, recipientId, workId }) => {
+export const notifyReply = async ({ senderId, recipientId, workId, chapterId }) => {
   if (String(senderId) === String(recipientId)) return;
 
   const sender = await User.findById(senderId).select("username kullaniciAdi").lean();
@@ -134,6 +140,7 @@ export const notifyReply = async ({ senderId, recipientId, workId }) => {
     senderId,
     type:   "comment",
     workId,
+    chapterId,
     text:   `${senderName} bir yorumunuza yanıt verdi.`,
   });
 };

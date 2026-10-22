@@ -286,8 +286,11 @@ router.get("/profile/:userId/logs", async (req, res) => {
       .limit(limit)
       .lean();
 
+    const { logCommentCounts } = await import("../services/logCommentCounts.js");
+    const counts = await logCommentCounts(logs);
     const items = logs.map((l) => ({
       _id:       l._id,
+      commentCount: counts.get(String(l._id)) ?? 0,
       content:   l.content,
       likeCount: l.likes?.length ?? 0,
       likedByMe: !!req.user && (l.likes || []).some(id => String(id) === String(req.user.id)),

@@ -15,6 +15,15 @@ beforeEach(() => vi.stubGlobal("React", React));
 afterEach(() => vi.unstubAllGlobals());
 const render = (element, path = "/keşfet") => renderToStaticMarkup(<MemoryRouter initialEntries={[path]}>{element}</MemoryRouter>);
 const author = { _id: "writer", kullaniciAdi: "Kalem" };
+it("closed log cards distinguish comments from an empty conversation", () => {
+  const item = { _id: "log", type: "log", author, content: "Note" };
+  const populated = render(<LogCard item={{ ...item, commentCount: 7 }} />);
+  expect(populated).toContain('aria-expanded="false"');
+  expect(populated).toContain('class="feed-comment-count">7</span>');
+  const empty = render(<LogCard item={{ ...item, commentCount: 0 }} />);
+  expect(empty).toContain("Henüz yorum yok");
+  expect(empty).not.toContain('class="feed-comment-count"');
+});
 const work = { _id: "book", title: "Fısıltı", author, description: "Gecenin içinden bir ses.", chapterCount: 3, universe: { genres: ["Gizem"] } };
 
 it("feed deep link includes both scopes and the writing desk with the requested first quote", () => {
@@ -27,7 +36,7 @@ it("feed deep link includes both scopes and the writing desk with the requested 
 it("log profile, related work, shelf and social actions are independent links/controls", () => {
   const html = render(<LogCard item={{ _id: "log", type: "log", author, content: "Bir cümle daha.", createdAt: new Date().toISOString(), visibility: "followers", relatedWork: work, authorShelf: { works: [{ _id: "other", title: "Diğer Kitap" }], total: 1 } }} />);
   for (const href of ["/profile/writer", "/story/book", "/story/other"]) expect(html).toContain(`href="${href}"`);
-  expect(html).toContain("Takipçilere özel"); expect(html).toContain("Beğen"); expect(html).toContain("Yorum");
+  expect(html).toContain("Takipçilere özel"); expect(html).toContain("Beğen"); expect(html).toContain("Henüz yorum yok");
   expect(html).not.toMatch(/<a\b[^>]*>(?:(?!<\/a>)[\s\S])*<(?:a|button)\b/);
 });
 it("unlinked logs and writers with no books remain readable without broken routes", () => {

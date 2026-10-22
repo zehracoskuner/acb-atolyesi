@@ -7,6 +7,8 @@ import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
 import { apiGet } from "../lib/api";
 import FeedComposer from "../components/feed/FeedComposer";
+import { CommentSection } from "../components/LogTab";
+import "../styles/LogTab.css";
 
 /* ─── Yardımcılar ─── */
 function timeAgo(iso) {
@@ -147,6 +149,7 @@ function LogCard({ item }) {
           {likeCount > 0 && <span>{likeCount}</span>}
         </button>
       </div>
+      <CommentSection logId={item._id} isLoggedIn={isLoggedIn} logAuthorId={item.author?._id} initialCount={item.commentCount} />
     </div>
   );
 }

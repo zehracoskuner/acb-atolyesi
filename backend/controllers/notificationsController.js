@@ -1,4 +1,6 @@
 import Notification from "../models/Notification.js";
+import Log from "../models/Log.js";
+import { canReadLog } from "../services/logAccess.js";
 
 export const getNotifications = async (req, res) => {
   try {
@@ -11,12 +13,24 @@ export const getNotifications = async (req, res) => {
         .limit(limit)
         .populate("sender", "username kullaniciAdi")
         .populate("work",   "title")
+        .populate("chapter", "title order")
         .lean(),
       // 🔥 DÜZELTME 1: isRead yerine read kullanıyoruz
       Notification.countDocuments({ recipient: userId, read: false }),
     ]);
 
-    res.json({ items: notifications, unreadCount });
+    // Preserve log IDs for existing clients; only expose previews the recipient may read.
+    const logs = await Log.find({ _id: { $in: notifications.map(n => n.log).filter(Boolean) } })
+      .select("content author visibility createdAt").lean();
+    const contexts = new Map();
+    await Promise.all(logs.map(async log => {
+      if (await canReadLog(log, userId)) contexts.set(String(log._id), {
+        preview: log.content.slice(0, 160), createdAt: log.createdAt,
+      });
+    }));
+    res.json({ items: notifications.map(n => ({ ...n,
+      ...(n.log ? { logContext: contexts.get(String(n.log)) || null } : {}),
+    })), unreadCount });
   } catch (err) {
     console.error("getNotifications hatası:", err);
     res.status(500).json({ error: "Sunucu hatası" });
