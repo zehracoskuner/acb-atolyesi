@@ -571,7 +571,7 @@
 
 .rd-paragraph {
   font-family: var(--rd-font-display);
-  font-size: calc(1.375rem * var(--rd-font-scale, 1));
+  font-size: calc(1.125rem * var(--rd-font-scale, 1));
   font-weight: 600;
   line-height: 1.75;
   color: var(--rd-prose);
