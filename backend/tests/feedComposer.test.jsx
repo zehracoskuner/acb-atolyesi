@@ -41,6 +41,7 @@ import WorkshopFeed from "../../frontend/src/components/feed/WorkshopFeed.jsx";
 import Feed from "../../frontend/src/pages/Feed.jsx";
 import { Avatar, InlineComments } from "../../frontend/src/components/feed/FeedCards.jsx";
 import { CommentSection } from "../../frontend/src/components/LogTab.jsx";
+import LogReplyMention from "../../frontend/src/components/LogReplyMention.jsx";
 
 function render(Component, props = {}, instance = "composer") {
   h.instance = instance;
@@ -113,7 +114,7 @@ it.each(["feed", "profile"])("%s comments send replies, preserve failed drafts a
   await form(tree).props.onSubmit(event());
   expect(h.apiPost).toHaveBeenLastCalledWith("/logs/log/comments", { content: "My reply", parentId: "parent" });
   tree = render(Component, props, "comments");
-  expect(text(tree)).toContain("Yazar kişisine yanıt");
+  expect(find(tree, node => node.type === LogReplyMention && node.props.comment.parentId === "parent")).toBeTruthy();
   expect(text(tree)).not.toContain("yanıt yazıyorsun");
   button(tree, "Yanıt ver").props.onClick();
   button(render(Component, props, "comments"), "Vazgeç").props.onClick();

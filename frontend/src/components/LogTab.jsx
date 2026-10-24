@@ -1,3 +1,5 @@
+import { logCommentThreads } from "./logCommentThreads";
+import LogReplyMention from "./LogReplyMention";
 import "../styles/LogReplies.css";
 import { loadLogTarget } from "../lib/loadLogTarget";
 import { useLike } from "../hooks/useLike";
@@ -116,13 +118,12 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
             <p className="log-comment-empty">Henüz yorum yok. İlk yorumu sen yaz!</p>
           ) : (
             <div className="log-comment-list">
-              {comments.map(c => {
-                const parent = comments.find(parent => parent._id === c.parentId);
+              {logCommentThreads(comments).map(({ comment: c, parent, isReply }) => {
                 const isOwn       = myId && c.author?._id === myId;
                 const isLogOwner  = myId && logAuthorId === myId;
                 const canDelete   = isOwn || isLogOwner;
                 return (
-                  <div key={c._id} className="log-comment-item">
+                  <div key={c._id} className={`log-comment-item${isReply ? " is-reply" : ""}`}>
                     <div className="log-comment-avatar">
                       {c.author?.avatarUrl
                         ? <img src={c.author.avatarUrl} alt="" />
@@ -142,10 +143,7 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
                           </button>
                         )}
                       </div>
-                      {c.parentId && <blockquote className="log-reply-context">
-                    {parent ? <><strong>{parent.author?.kullaniciAdi || "Yazar"} kişisine yanıt</strong><span>{parent.content}</span></> : "Yanıtlanan yorum silinmiş."}
-                  </blockquote>}
-                  <p className="log-comment-text">{c.content}</p>
+                      <p className="log-comment-text"><LogReplyMention comment={c} parent={parent} />{c.content}</p>
                   <button type="button" className="log-reply-button" disabled={posting} onClick={() => {
                     if (!requireMember()) return;
                     setReplyTo(c);
@@ -161,7 +159,7 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
           {isLoggedIn ? (
             <form className="log-comment-form" onSubmit={handlePost}>
             {replyTo && <div className="log-reply-selection" role="status">
-              <span><strong>{replyTo.author?.kullaniciAdi || "Yazar"} kişisine yanıt yazıyorsun</strong><span>{replyTo.content}</span></span>
+              <span><span className="log-reply-mention">@{replyTo.author?.kullaniciAdi || "Yazar"}</span> kişisine yanıt yazıyorsun</span>
               <button type="button" disabled={posting} onClick={() => { setReplyTo(null); inputRef.current?.focus(); }}>Vazgeç</button>
             </div>}
               <div className="log-comment-input-wrap">

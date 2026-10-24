@@ -21,6 +21,8 @@ const logCommentSchema = new mongoose.Schema(
       trim:      true,
     },
     parentId: { type: mongoose.Schema.Types.ObjectId, ref: "LogComment", default: null },
+    threadId: { type: mongoose.Schema.Types.ObjectId, ref: "LogComment", default: null },
+    replyToAuthor: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   },
   { timestamps: true }
 );

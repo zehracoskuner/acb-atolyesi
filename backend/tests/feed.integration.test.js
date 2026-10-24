@@ -82,6 +82,8 @@ it("log replies persist their target, reject other logs and survive target delet
   const reply = await post(entry._id, String(parent._id));
   expect(reply.status).toBe(201);
   expect(reply.body.item.parentId).toBe(String(parent._id));
+  expect(reply.body.item.threadId).toBe(String(parent._id));
+  expect(reply.body.item.replyToAuthor._id).toBe(String(viewer._id));
   expect((await post(other._id, String(parent._id))).status).toBe(404);
   expect((await post(entry._id, "invalid")).status).toBe(400);
   expect((await post(entry._id, {})).status).toBe(400);

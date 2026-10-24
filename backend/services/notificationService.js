@@ -232,24 +232,20 @@ export const notifyLogLike = async ({ senderId, logId, logAuthorId }) => {
 /* ═══════════════════════════════════════════
    Günlük yorum bildirimi
 ═══════════════════════════════════════════ */
-export const notifyLogComment = async ({ senderId, logId, logAuthorId, commentPreview }) => {
-  if (String(senderId) === String(logAuthorId)) return;
-
+export const notifyLogComment = async ({ senderId, logId, logAuthorId, commentPreview, replyAuthorId }) => {
   const sender = await User.findById(senderId).select("username kullaniciAdi").lean();
   if (!sender) return;
 
   const preview    = commentPreview?.slice(0, 50) || "";
   const senderName = sender.kullaniciAdi || sender.username;
 
-  await createNotification({
-    recipientId: logAuthorId,
-    senderId,
-    type:  "log_comment",
-    logId,
-    text:  preview
-      ? `${senderName} günlük girdine yorum yaptı: "${preview}…"`
-      : `${senderName} günlük girdine yorum yaptı.`,
-  });
+  const recipients = [...new Set([logAuthorId, replyAuthorId].filter(Boolean).map(String))];
+  await Promise.all(recipients.filter(id => id !== String(senderId)).map(recipientId => {
+    const action = recipientId === String(replyAuthorId) ? "yorumuna yanıt verdi" : "günlük girdine yorum yaptı";
+    return createNotification({ recipientId, senderId, type: "log_comment", logId,
+      text: preview ? `${senderName} ${action}: "${preview}${commentPreview.length > 50 ? "…" : ""}"` : `${senderName} ${action}.`,
+    });
+  }));
 };
 // Report detail remains the durable inbox even when a notification delivery fails.
 export async function notifyReport(report, operation) {

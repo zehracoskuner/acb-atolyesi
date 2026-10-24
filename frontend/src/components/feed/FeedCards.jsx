@@ -1,3 +1,5 @@
+import { logCommentThreads } from "../logCommentThreads";
+import LogReplyMention from "../LogReplyMention";
 import "../../styles/LogReplies.css";
 import "../../styles/FeedCards.css";
 import { useLike } from "../../hooks/useLike";
@@ -96,11 +98,10 @@ export function InlineComments({ logId, isLoggedIn, onCountChange }) {
         <p className="feed-comments-muted">Henüz yorum yok.</p>
       ) : (
         <div className="feed-comments-list">
-          {comments.map(c => {
-            const parent = comments.find(parent => parent._id === c.parentId);
+          {logCommentThreads(comments).map(({ comment: c, parent, isReply }) => {
             const isOwn = myId && (c.author?._id === myId || c.author?._id?.toString() === myId);
             return (
-              <div key={c._id} className="feed-comments-item">
+              <div key={c._id} className={`feed-comments-item${isReply ? " is-reply" : ""}`}>
                 <Avatar user={c.author} size={32} />
                 <div className="feed-comments-body">
                   <div className="feed-comments-meta">
@@ -118,10 +119,7 @@ export function InlineComments({ logId, isLoggedIn, onCountChange }) {
                       </button>
                     )}
                   </div>
-                  {c.parentId && <blockquote className="log-reply-context">
-                    {parent ? <><strong>{parent.author?.kullaniciAdi || "Yazar"} kişisine yanıt</strong><span>{parent.content}</span></> : "Yanıtlanan yorum silinmiş."}
-                  </blockquote>}
-                  <p className="feed-comments-text">{c.content}</p>
+                  <p className="feed-comments-text"><LogReplyMention comment={c} parent={parent} />{c.content}</p>
                   <button type="button" className="log-reply-button" disabled={posting} onClick={() => {
                     if (!requireMember()) return;
                     setReplyTo(c);
@@ -137,7 +135,7 @@ export function InlineComments({ logId, isLoggedIn, onCountChange }) {
       {isLoggedIn ? (
         <form className="feed-comments-form" onSubmit={handlePost}>
             {replyTo && <div className="log-reply-selection" role="status">
-              <span><strong>{replyTo.author?.kullaniciAdi || "Yazar"} kişisine yanıt yazıyorsun</strong><span>{replyTo.content}</span></span>
+              <span><span className="log-reply-mention">@{replyTo.author?.kullaniciAdi || "Yazar"}</span> kişisine yanıt yazıyorsun</span>
               <button type="button" disabled={posting} onClick={() => { setReplyTo(null); inputRef.current?.focus(); }}>Vazgeç</button>
             </div>}
           <textarea

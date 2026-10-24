@@ -246,6 +246,7 @@ router.get("/:id/comments", optionalAuth, async (req, res) => {
     if (!await canReadLog(log, req.user?.id)) return res.status(404).json({ message: "Girdi bulunamadı." });
     const comments = await LogComment.find({ log: req.params.id })
       .populate("author", "_id kullaniciAdi avatarUrl")
+      .populate("replyToAuthor", "_id kullaniciAdi")
       .sort({ createdAt: 1 })
       .lean();
     return res.json({ items: comments });
@@ -270,14 +271,19 @@ router.post("/:id/comments", ensureAuth, async (req, res) => {
     const log = await Log.findById(req.params.id);
     if (!log) return res.status(404).json({ message: "Girdi bulunamadı." });
     if (!await canReadLog(log, req.user.id)) return res.status(403).json({ message: "Bu içeriği görüntüleme yetkiniz yok." });
+    let parent = null;
     if (parentId != null) {
       if (typeof parentId !== "string" || !mongoose.isObjectIdOrHexString(parentId))
         return res.status(400).json({ message: "Geçersiz yorum." });
-      const parent = await LogComment.exists({ _id: parentId, log: log._id });
+      parent = await LogComment.findOne({ _id: parentId, log: log._id }).lean();
       if (!parent) return res.status(404).json({ message: "Yanıtlanacak yorum bulunamadı." });
     }
-    const comment = await LogComment.create({ log: req.params.id, author: req.user.id, content: content.trim(), parentId: parentId ?? null });
-    const populated = await comment.populate("author", "_id kullaniciAdi avatarUrl");
+    const comment = await LogComment.create({ log: req.params.id, author: req.user.id, content: content.trim(), parentId: parentId ?? null,
+      threadId: parent ? (parent.threadId || parent.parentId || parent._id) : null, replyToAuthor: parent?.author || null });
+    const populated = await comment.populate([
+      { path: "author", select: "_id kullaniciAdi avatarUrl" },
+      { path: "replyToAuthor", select: "_id kullaniciAdi" },
+    ]);
 
     // Bildirim gönder
     notifyLogComment({
@@ -285,6 +291,7 @@ router.post("/:id/comments", ensureAuth, async (req, res) => {
       logId:          req.params.id,
       logAuthorId:    log.author.toString(),
       commentPreview: content.trim(),
+      replyAuthorId: parent?.author,
     }).catch(console.error);
 
     return res.status(201).json({ item: populated });
