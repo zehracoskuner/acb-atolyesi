@@ -1,3 +1,5 @@
+import MentionInput from "../components/MentionInput";
+import MentionText from "../components/MentionText";
 import ReportActions from "../components/ReportActions";
 import { useLike } from "../hooks/useLike";
 import { useMembership } from "../lib/membershipContext";
@@ -120,6 +122,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
   const [reportOpen,   setReportOpen]   = useState(false);
 
   const [displayContent, setDisplayContent] = useState(comment.content ?? "");
+  const [displayMentions, setDisplayMentions] = useState(comment.mentions || []);
   const [deleted,        setDeleted]        = useState(false);
 
   const isLoggedIn = !!currentUser;
@@ -168,6 +171,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
     try {
       const data = await apiPatch(`/comments/${comment._id}`, { content: editText.trim() });
       setDisplayContent(data.item?.content ?? editText.trim());
+      setDisplayMentions(data.item?.mentions || []);
       setEditOpen(false);
     } catch {
       setEditError("Kaydedilemedi, tekrar dene.");
@@ -307,7 +311,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
         {/* ── İçerik veya düzenleme formu ── */}
         {editOpen ? (
           <div className="sdp-edit-form">
-            <textarea
+            <MentionInput
               ref={editRef}
               className="sdp-textarea sdp-textarea--sm"
               value={editText}
@@ -332,7 +336,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
             </div>
           </div>
         ) : (
-          <p className="sdp-comment-text">{displayContent}</p>
+          <p className="sdp-comment-text"><MentionText content={displayContent} mentions={displayMentions} /></p>
         )}
 
         {/* ── Silme onayı ── */}
@@ -401,7 +405,7 @@ function CommentItem({ comment, workId, currentUser, isReply = false, onReplyAdd
         {/* ── Yanıt formu ── */}
         {replyOpen && (
           <div className="sdp-reply-form">
-            <textarea
+            <MentionInput
               ref={textareaRef}
               value={replyText}
               onChange={e => setReplyText(e.target.value)}
@@ -514,7 +518,7 @@ function CommentSection({ workId, currentUser }) {
         <div className="sdp-composer">
           <Avatar user={currentUser} size="md" />
           <div className="sdp-composer-inner">
-            <textarea
+            <MentionInput
               ref={textareaRef}
               value={text}
               onChange={e => setText(e.target.value.slice(0, 2000))}

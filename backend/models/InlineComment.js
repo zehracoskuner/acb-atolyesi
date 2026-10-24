@@ -16,7 +16,8 @@ const inlineCommentSchema = new mongoose.Schema({
   workId:         { type: mongoose.Schema.Types.ObjectId, ref: "Work",    required: true },
   chapterId:      { type: mongoose.Schema.Types.ObjectId, ref: "Chapter", required: true },
   paragraphIndex: { type: Number, required: true },
-  content:        { type: String, required: true, maxlength: 1000 },
+    mentions: [{ user: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, name: String, _id: false }],
+    content: { type: String, required: true, maxlength: 1000 },
   author:         { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 
   // Moderasyon — route'daki /report endpoint'i için gerekli

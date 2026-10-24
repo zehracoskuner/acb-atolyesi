@@ -232,7 +232,7 @@ export const notifyLogLike = async ({ senderId, logId, logAuthorId }) => {
 /* ═══════════════════════════════════════════
    Günlük yorum bildirimi
 ═══════════════════════════════════════════ */
-export const notifyLogComment = async ({ senderId, logId, logAuthorId, commentPreview, replyAuthorId }) => {
+export const notifyLogComment = async ({ senderId, logId, logAuthorId, commentPreview, replyAuthorId, excludeRecipientIds = [] }) => {
   const sender = await User.findById(senderId).select("username kullaniciAdi").lean();
   if (!sender) return;
 
@@ -240,7 +240,7 @@ export const notifyLogComment = async ({ senderId, logId, logAuthorId, commentPr
   const senderName = sender.kullaniciAdi || sender.username;
 
   const recipients = [...new Set([logAuthorId, replyAuthorId].filter(Boolean).map(String))];
-  await Promise.all(recipients.filter(id => id !== String(senderId)).map(recipientId => {
+  await Promise.all(recipients.filter(id => id !== String(senderId) && !excludeRecipientIds.includes(id)).map(recipientId => {
     const action = recipientId === String(replyAuthorId) ? "yorumuna yanıt verdi" : "günlük girdine yorum yaptı";
     return createNotification({ recipientId, senderId, type: "log_comment", logId,
       text: preview ? `${senderName} ${action}: "${preview}${commentPreview.length > 50 ? "…" : ""}"` : `${senderName} ${action}.`,

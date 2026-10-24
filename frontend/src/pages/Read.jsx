@@ -1,3 +1,5 @@
+import MentionInput from "../components/MentionInput";
+import MentionText from "../components/MentionText";
 import ReportActions from "../components/ReportActions";
 import ChapterMedia from "../components/ChapterMedia";
 import { useLike } from "../hooks/useLike";
@@ -408,7 +410,7 @@ function InlineCommentDrawer({ open, onClose, paragraph, chapterId, workId, curr
           <div className="rdic-drawer-compose">
             <Avatar user={currentUser} size={28} />
             <div className="rdic-drawer-compose-inner">
-              <textarea
+              <MentionInput
                 ref={textareaRef}
                 className="rdic-drawer-textarea"
                 placeholder="Bu paragraf hakkında düşünceni yaz…"
@@ -450,6 +452,7 @@ function InlineCommentItem({ comment, currentUser, onUpdated, onDeleted }) {
   const [reportOpen,   setReportOpen]   = useState(false);
 
   const [displayContent, setDisplayContent] = useState(comment.content ?? "");
+  const [displayMentions, setDisplayMentions] = useState(comment.mentions || []);
   const [deleted,        setDeleted]        = useState(false);
   const [menuOpen,       setMenuOpen]       = useState(false);
   const menuRef = useRef(null);
@@ -481,6 +484,7 @@ function InlineCommentItem({ comment, currentUser, onUpdated, onDeleted }) {
       const data = await apiPatch(`/inline-comments/${comment._id}`, { content: editText.trim() });
       const updated = data.item?.content ?? editText.trim();
       setDisplayContent(updated);
+      setDisplayMentions(data.item?.mentions || []);
       setEditOpen(false);
       onUpdated?.(comment._id, updated);
     } catch {
@@ -569,7 +573,7 @@ function InlineCommentItem({ comment, currentUser, onUpdated, onDeleted }) {
 
       {editOpen ? (
         <div className="rdic-edit-form">
-          <textarea
+          <MentionInput
             ref={editRef}
             className="rdic-drawer-textarea"
             value={editText}
@@ -590,7 +594,7 @@ function InlineCommentItem({ comment, currentUser, onUpdated, onDeleted }) {
           </div>
         </div>
       ) : (
-        <p className="rdic-comment-text">{displayContent}</p>
+        <p className="rdic-comment-text"><MentionText content={displayContent} mentions={displayMentions} /></p>
       )}
 
       {deleteConfirm && (
@@ -646,6 +650,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
 
   // Görünür içerik (düzenleme sonrası güncellenir)
   const [displayContent, setDisplayContent] = useState(comment.content ?? "");
+  const [displayMentions, setDisplayMentions] = useState(comment.mentions || []);
   const [deleted,        setDeleted]        = useState(false);
 
   const isLoggedIn = !!currentUser;
@@ -688,6 +693,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
     try {
       const data = await apiPatch(`/comments/${comment._id}`, { content: editText.trim() });
       setDisplayContent(data.item?.content ?? editText.trim());
+      setDisplayMentions(data.item?.mentions || []);
       setEditOpen(false);
     } catch {
       setEditError("Kaydedilemedi, tekrar dene.");
@@ -832,7 +838,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
         {/* ── İçerik veya düzenleme formu ── */}
         {editOpen ? (
           <div className="rd-edit-form">
-            <textarea
+            <MentionInput
               ref={editRef}
               className="rd-textarea rd-textarea--reply"
               value={editText}
@@ -850,7 +856,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
             </div>
           </div>
         ) : (
-          <p className="rd-comment-text">{displayContent}</p>
+          <p className="rd-comment-text"><MentionText content={displayContent} mentions={displayMentions} /></p>
         )}
 
         {/* ── Silme onayı ── */}
@@ -915,7 +921,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
           <div className="rd-reply-composer">
             <Avatar user={currentUser} size={24} />
             <div className="rd-reply-composer-inner">
-              <textarea
+              <MentionInput
                 value={replyText} onChange={e => setReplyText(e.target.value)}
                 placeholder="Cevabını yaz…" className="rd-textarea rd-textarea--reply"
                 rows={2} autoFocus
@@ -1009,7 +1015,7 @@ function CommentSection({ chapterId, workId }) {
         <div className="rd-comment-composer">
           <Avatar user={currentUser} size={32} />
           <div className="rd-reply-composer-inner">
-            <textarea
+            <MentionInput
               value={text} onChange={e => setText(e.target.value.slice(0, 2000))}
               placeholder="Bu bölüm hakkında düşüncelerini yaz…"
               className="rd-textarea rd-textarea--main" rows={3}

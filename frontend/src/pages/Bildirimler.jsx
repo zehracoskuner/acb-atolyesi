@@ -22,6 +22,7 @@ const NOTIF_ICON = {
   follow:  { emoji: "👤", bg: "rgba(59,130,246,.1)" },
   comment: { emoji: "💬", bg: "rgba(34,197,94,.1)"  },
   log_like:    { emoji: "❤️", bg: "rgba(239,68,68,.1)" },
+  mention: { emoji: "@", bg: "rgba(135,67,45,.1)" },
   log_comment: { emoji: "💬", bg: "rgba(34,197,94,.1)" },
   system:  { emoji: "📢", bg: "rgba(200,191,173,.3)" },
 };

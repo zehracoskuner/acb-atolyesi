@@ -1,3 +1,5 @@
+import MentionInput from "../../frontend/src/components/MentionInput.jsx";
+import MentionText from "../../frontend/src/components/MentionText.jsx";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Exercise the actual component handlers with persistent hook state, without
@@ -59,7 +61,7 @@ const find = (tree, predicate) => elements(tree).find(predicate);
 const text = node => Array.isArray(node) ? node.map(text).join("") : node && typeof node === "object" ? text(node.props?.children) : String(node ?? "");
 const button = (tree, label) => find(tree, node => node.type === "button" && (text(node) === label || node.props["aria-label"] === label));
 const form = tree => find(tree, node => node.type === "form");
-const textarea = tree => find(tree, node => node.type === "textarea");
+const textarea = tree => find(tree, node => (node.type === "textarea" || node.type === MentionInput));
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 function effects() {
@@ -106,11 +108,11 @@ it.each(["feed", "profile"])("%s comments send replies, preserve failed drafts a
   button(tree, "Yanıt ver").props.onClick();
   tree = render(Component, props, "comments");
   expect(text(tree)).toContain("Yazar kişisine yanıt yazıyorsun");
-  find(tree, node => node.type === "input" || node.type === "textarea").props.onChange({ target: { value: "My reply" } });
+  find(tree, node => node.type === "input" || (node.type === "textarea" || node.type === MentionInput)).props.onChange({ target: { value: "My reply" } });
   h.apiPost.mockRejectedValueOnce(new Error("Failed"));
   await form(render(Component, props, "comments")).props.onSubmit(event());
   tree = render(Component, props, "comments");
-  expect(find(tree, node => node.type === "input" || node.type === "textarea").props.value).toBe("My reply");
+  expect(find(tree, node => node.type === "input" || (node.type === "textarea" || node.type === MentionInput)).props.value).toBe("My reply");
   h.apiPost.mockResolvedValueOnce({ item: { ...parent, _id: "reply", content: "My reply", parentId: "parent" } });
   await form(tree).props.onSubmit(event());
   expect(h.apiPost).toHaveBeenLastCalledWith("/logs/log/comments", { content: "My reply", parentId: "parent" });
@@ -136,7 +138,7 @@ it("content editing preserves failed drafts and deletion waits for confirmation 
   await form(tree).props.onSubmit(event());
   expect(h.apiPatch).toHaveBeenLastCalledWith("/logs/log", { content: "Updated" });
   tree = render(LogContent, props, "editor");
-  expect(text(tree)).toContain("Updated");
+  expect(find(tree, node => node.type === MentionText).props.content).toBe("Updated");
   button(tree, "Sil").props.onClick();
   expect(h.apiDelete).not.toHaveBeenCalled();
   tree = render(LogContent, props, "editor");
@@ -149,6 +151,33 @@ it("content editing preserves failed drafts and deletion waits for confirmation 
   const guest = render(LogContent, { ...props, canEdit: false, canDelete: false }, "guest-editor");
   expect(button(guest, "Düzenle")).toBeUndefined();
   expect(button(guest, "Sil")).toBeUndefined();
+});
+
+it("mention suggestions insert a selected username, respect five people and ignore email addresses", async () => {
+  vi.useFakeTimers();
+  try {
+    const onChange = vi.fn();
+    let props = { value: "Hello @st", onChange, maxLength: 500 };
+    h.apiGet.mockResolvedValue({ items: [{ _id: "stranger", kullaniciAdi: "stranger" }] });
+    let tree = render(MentionInput, props, "mentions");
+    textarea(tree).props.onChange({ target: { value: props.value, selectionStart: props.value.length } });
+    render(MentionInput, props, "mentions"); effects();
+    await vi.advanceTimersByTimeAsync(250);
+    tree = render(MentionInput, props, "mentions");
+    expect(h.apiGet).toHaveBeenLastCalledWith("/search/users?q=st");
+    textarea(tree).props.onKeyDown({ key: "Enter", preventDefault: vi.fn() });
+    expect(onChange).toHaveBeenLastCalledWith({ target: { value: "Hello @stranger " } });
+    props = { ...props, value: "@one @two @three @four @five @st" };
+    tree = render(MentionInput, props, "mentions");
+    textarea(tree).props.onChange({ target: { value: props.value, selectionStart: props.value.length } });
+    render(MentionInput, props, "mentions"); effects(); await vi.advanceTimersByTimeAsync(250);
+    button(render(MentionInput, props, "mentions"), "@stranger").props.onClick();
+    expect(text(render(MentionInput, props, "mentions"))).toContain("en fazla 5");
+    h.apiGet.mockClear();
+    textarea(render(MentionInput, props, "mentions")).props.onChange({ target: { value: "mail@stranger", selectionStart: 13 } });
+    render(MentionInput, props, "mentions"); effects(); await vi.advanceTimersByTimeAsync(250);
+    expect(h.apiGet).not.toHaveBeenCalled();
+  } finally { vi.useRealTimers(); }
 });
 
 describe("Feed sharing through existing logs", () => {

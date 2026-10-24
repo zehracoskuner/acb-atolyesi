@@ -11,6 +11,12 @@ import Work from "../models/Work.js";
 import Chapter from "../models/Chapter.js";
 import Log from "../models/Log.js";
 import LogComment from "../models/LogComment.js";
+import Notification from "../models/Notification.js";
+import MentionCooldown from "../models/MentionCooldown.js";
+import Comment from "../models/Comment.js";
+import InlineComment from "../models/InlineComment.js";
+import commentRouter from "../routes/comments.js";
+import inlineCommentRouter from "../routes/inlineComments.js";
 import ChapterLike from "../models/ChapterLike.js";
 import feedRouter from "../routes/feed.js";
 import logRouter from "../routes/log.js";
@@ -24,13 +30,14 @@ beforeAll(async () => {
   await mongoose.connect(mongo.getUri(), { dbName: "feed_isolated_test" });
   const app = express();
   app.use(express.json()); app.use("/api/feed", feedRouter); app.use("/api/logs", logRouter);
+  app.use("/api/comments", commentRouter); app.use("/api/inline-comments", inlineCommentRouter);
   server = app.listen(0, "127.0.0.1"); await once(server, "listening");
   base = `http://127.0.0.1:${server.address().port}/api`;
 }, 120000);
 afterAll(async () => { if (server) await new Promise(resolve => server.close(resolve)); await mongoose.disconnect(); await mongo?.stop(); vi.unstubAllEnvs(); });
 afterEach(() => vi.restoreAllMocks());
 beforeEach(async () => {
-  await Promise.all([User, Work, Chapter, Log, LogComment, ChapterLike].map(model => model.deleteMany({})));
+  await Promise.all([User, Work, Chapter, Log, LogComment, ChapterLike, Notification, MentionCooldown, Comment, InlineComment].map(model => model.deleteMany({})));
   [viewer, followed, stranger] = await User.create(["viewer", "followed", "stranger"].map(name => ({ email: `${name}@feed.test`, kullaniciAdi: name, birthYear: 1990, ...newTermsAcceptance() })));
   await User.updateOne({ _id: viewer._id }, { following: [followed._id] });
 });
@@ -115,6 +122,46 @@ it("only owners edit log text and comments, preserving replies and enforcing lim
   expect((await request(logPath, { method: "DELETE", user: stranger })).status).toBe(403);
   expect((await request(commentPath, { method: "DELETE", user: stranger })).status).toBe(200);
   expect((await request(logPath, { method: "DELETE" })).status).toBe(200);
+});
+
+it("mentions deduplicate, throttle concurrent sends for five minutes, and respect private logs and edits", async () => {
+  const entry = await log(viewer, "public");
+  const post = (content, id = entry._id, user = viewer) => request(`/logs/${id}/comments`, { method: "POST", user, body: { content } });
+  const created = await post("@stranger @stranger @viewer");
+  expect(created.status).toBe(201);
+  expect(created.body.item.mentions).toHaveLength(2);
+  expect(await Notification.countDocuments({ type: "mention" })).toBe(1);
+  await Promise.all(Array.from({ length: 4 }, () => post("Again @stranger")));
+  expect(await Notification.countDocuments({ type: "mention" })).toBe(1);
+  const key = `${viewer._id}:${stranger._id}`;
+  await MentionCooldown.updateOne({ _id: key }, { nextAt: new Date(Date.now() - 1) });
+  await request(`/logs/${entry._id}/comments/${created.body.item._id}`, { method: "PATCH", body: { content: "Edited @stranger" } });
+  expect(await Notification.countDocuments({ type: "mention" })).toBe(1);
+  await post("After cooldown @stranger");
+  expect(await Notification.countDocuments({ type: "mention" })).toBe(2);
+  await post("Different sender @stranger", entry._id, followed);
+  expect(await Notification.countDocuments({ type: "mention" })).toBe(3);
+  const privateLog = await log(viewer, "private");
+  await post("Private @followed", privateLog._id);
+  expect(await Notification.countDocuments({ recipient: followed._id })).toBe(0);
+  expect((await post("@one @two @three @four @five @six")).status).toBe(400);
+  const edited = await request(`/logs/${entry._id}/comments/${created.body.item._id}`, { method: "PATCH", body: { content: "@one @two @three @four @five @six" } });
+  expect(edited.status).toBe(400);
+});
+
+it("work, chapter and paragraph comments share the mention limit and notification cooldown", async () => {
+  const work = await book(viewer, "Mentions");
+  const chapter = await Chapter.create({ work: work._id, title: "Chapter", status: "published", content: "<p>Paragraph</p>" });
+  await Work.updateOne({ _id: work._id }, { publishedChapterIds: [chapter._id] });
+  for (const [path, extra] of [[`/comments/work/${work._id}`, {}], [`/comments/chapter/${chapter._id}`, {}], ["/inline-comments", { workId: work._id, chapterId: chapter._id, paragraphIndex: 0 }]]) {
+    const res = await request(path, { method: "POST", body: { ...extra, content: "Hello @stranger" } });
+    expect(res.status).toBe(201);
+    expect(res.body.item.mentions[0].user).toBe(String(stranger._id));
+    const editPath = `${path === "/inline-comments" ? path : "/comments"}/${res.body.item._id}`;
+    expect((await request(editPath, { method: "PATCH", body: { content: "Edited @stranger" } })).status).toBe(200);
+    expect((await request(path, { method: "POST", body: { ...extra, content: "@one @two @three @four @five @six" } })).status).toBe(400);
+  }
+  expect(await Notification.countDocuments({ type: "mention" })).toBe(1);
 });
 
 it("public includes every author's public log, never followers/private, even for the owner", async () => {

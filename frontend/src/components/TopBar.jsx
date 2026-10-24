@@ -90,6 +90,7 @@ const NOTIF_ICON = {
   comment:          "💬",
   follow:           "👤",
   log_like:         "✨",
+  mention: "@",
   log_comment:      "💬",
   chapter_approved: "✅",
   chapter_pending:  "⏳",

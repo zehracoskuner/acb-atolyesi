@@ -1,9 +1,13 @@
+import MentionInput from "./MentionInput";
+import MentionText from "./MentionText";
 import { useRef, useState } from "react";
 import { apiPatch, apiDelete } from "../lib/api";
 import "../styles/LogContent.css";
 
-export default function LogContent({ content, endpoint, maxLength = 500, canEdit, canDelete, onUpdated, onDeleted, className, children }) {
+export default function LogContent({ content, mentions = [], endpoint, maxLength = 500, canEdit, canDelete, onUpdated, onDeleted, className, children }) {
   const [saved, setSaved] = useState(null);
+  const [savedMentions, setSavedMentions] = useState(null);
+  const Editor = maxLength === 500 ? MentionInput : "textarea";
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -18,7 +22,7 @@ export default function LogContent({ content, endpoint, maxLength = 500, canEdit
     pending.current = true; setBusy(true); setError("");
     try {
       const res = await apiPatch(endpoint, { content: draft.trim() });
-      setSaved(res.item.content); onUpdated?.(res.item); setEditing(false);
+      setSaved(res.item.content); setSavedMentions(res.item.mentions || []); onUpdated?.(res.item); setEditing(false);
     } catch (err) { setError(err.message || "Kaydedilemedi. Yeniden deneyebilirsin."); }
     finally { pending.current = false; setBusy(false); }
   }
@@ -31,13 +35,13 @@ export default function LogContent({ content, endpoint, maxLength = 500, canEdit
   }
   return <div className="log-content-manager">
     {editing ? <form className="log-content-editor" onSubmit={save}>
-      <textarea autoFocus aria-label={`${label} düzenle`} value={draft} onChange={event => setDraft(event.target.value)} maxLength={maxLength} disabled={busy} rows={3} />
+      <Editor autoFocus aria-label={`${label} düzenle`} value={draft} onChange={event => setDraft(event.target.value)} maxLength={maxLength} disabled={busy} rows={3} />
       <div className="log-content-actions">
         <button type="submit" disabled={busy || !draft.trim() || draft.trim().length > maxLength}>{busy ? "Kaydediliyor…" : "Kaydet"}</button>
         <button type="button" disabled={busy} onClick={() => { setEditing(false); setError(""); }}>Vazgeç</button>
       </div>
     </form> : <>
-      <p className={className}>{children}{saved ?? content}</p>
+      <p className={className}>{children}<MentionText content={saved ?? content} mentions={savedMentions ?? mentions} /></p>
       <div className="log-content-actions">
         {canEdit && <button type="button" disabled={busy} onClick={() => { setDraft(saved ?? content); setEditing(true); setConfirmDelete(false); setError(""); }}>Düzenle</button>}
         {canDelete && !confirmDelete && <button type="button" disabled={busy} onClick={() => { setConfirmDelete(true); setError(""); }}>Sil</button>}

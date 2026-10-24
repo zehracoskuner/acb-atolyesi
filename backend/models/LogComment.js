@@ -14,6 +14,7 @@ const logCommentSchema = new mongoose.Schema(
       ref:      "User",
       required: true,
     },
+    mentions: [{ user: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, name: String, _id: false }],
     content: {
       type:      String,
       required:  true,

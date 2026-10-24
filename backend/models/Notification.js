@@ -19,7 +19,7 @@ const notificationSchema = new mongoose.Schema(
       enum: [
         "report_update",
         // Sosyal
-        "like", "comment", "follow", "log_like", "log_comment",
+        "like", "comment", "follow", "log_like", "log_comment", "mention",
         // Moderasyon (sistem bildirimleri — sender: null)
         "chapter_pending",   // incelemeye alındı
         "chapter_approved",  // onaylandı, yayında

@@ -1,0 +1,9 @@
+.mention-input-wrap { position: relative; flex: 1; min-width: 0; width: 100%; }
+.mention-input-wrap > textarea, .mention-input-wrap > input { box-sizing: border-box; width: 100%; }
+.feed-comments-form .mention-input-wrap .feed-comments-input { width: 100%; }
+.mention-suggestions { position: absolute; left: 0; right: 0; bottom: calc(100% + 5px); z-index: 30; max-height: 220px; overflow-y: auto; padding: 4px; border: 1px solid #ded3c5; border-radius: 8px; background: #fffdf8; box-shadow: 0 4px 16px #33291f18; }
+.mention-suggestions button { display: block; width: 100%; padding: 9px 10px; border: 0; border-radius: 4px; text-align: left; background: transparent; color: #514437; font: 500 .8rem 'DM Sans', sans-serif; cursor: pointer; }
+.mention-suggestions button[aria-selected="true"], .mention-suggestions button:hover { background: #f2ede3; }
+.mention-suggestions p { margin: 6px; font-size: .75rem; color: #796c5d; }
+.comment-mention, .feed-card a.comment-mention { color: #87432d; font-weight: 500; text-decoration: none; }
+.comment-mention:hover { text-decoration: underline; }

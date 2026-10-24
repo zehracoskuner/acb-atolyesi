@@ -1,3 +1,4 @@
+import { resolveMentions, notifyMentions } from "../services/mentions.js";
 import readerAccess from "../middlewares/readerAccess.js";
 import mongoose from "mongoose";
 // backend/routes/logs.js
@@ -295,7 +296,8 @@ router.post("/:id/comments", ensureAuth, async (req, res) => {
       parent = await LogComment.findOne({ _id: parentId, log: log._id }).lean();
       if (!parent) return res.status(404).json({ message: "Yanıtlanacak yorum bulunamadı." });
     }
-    const comment = await LogComment.create({ log: req.params.id, author: req.user.id, content: content.trim(), parentId: parentId ?? null,
+    const mentions = await resolveMentions(content.trim());
+    const comment = await LogComment.create({ mentions, log: req.params.id, author: req.user.id, content: content.trim(), parentId: parentId ?? null,
       threadId: parent ? (parent.threadId || parent.parentId || parent._id) : null, replyToAuthor: parent?.author || null });
     const populated = await comment.populate([
       { path: "author", select: "_id kullaniciAdi avatarUrl" },
@@ -309,11 +311,13 @@ router.post("/:id/comments", ensureAuth, async (req, res) => {
       logAuthorId:    log.author.toString(),
       commentPreview: content.trim(),
       replyAuthorId: parent?.author,
+      excludeRecipientIds: mentions.map(mention => String(mention.user)),
     }).catch(console.error);
 
+    await notifyMentions({ senderId: req.user.id, mentions, log }).catch(console.error);
     return res.status(201).json({ item: populated });
   } catch (err) {
-    return res.status(500).json({ message: "Yorum eklenemedi." });
+    return res.status(err.status || 500).json({ message: err.status ? err.message : "Yorum eklenemedi." });
   }
 });
 
@@ -334,12 +338,15 @@ router.patch("/:id/comments/:commentId", ensureAuth, async (req, res) => {
     if (!await canReadLog(log, req.user.id)) return res.status(404).json({ message: "Girdi bulunamadı." });
     const user = await User.findById(req.user.id).select("commentBanned").lean();
     if (user?.commentBanned) return res.status(403).json({ message: "Yorum yapma yetkiniz kısıtlanmış." });
+    const previous = comment.mentions || [];
+    comment.mentions = await resolveMentions(content.trim());
     comment.content = content.trim();
     await comment.save();
     await comment.populate([{ path: "author", select: "_id kullaniciAdi avatarUrl" }, { path: "replyToAuthor", select: "_id kullaniciAdi" }]);
+    await notifyMentions({ senderId: req.user.id, mentions: comment.mentions, previous, log }).catch(console.error);
     return res.json({ item: comment });
   } catch (err) {
-    return res.status(err.status || 500).json({ message: "Yorum düzenlenemedi." });
+    return res.status(err.status || 500).json({ message: err.status ? err.message : "Yorum düzenlenemedi." });
   }
 });
 

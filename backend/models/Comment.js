@@ -10,8 +10,8 @@ const commentSchema = new mongoose.Schema(
     // chapter VEYA work — ikisi de opsiyonel, controller'da doğrulanır
     chapter: { type: ObjectId, ref: "Chapter", default: null },
     work:    { type: ObjectId, ref: "Work",    default: null },
-
-    content:  { type: String, required: true, maxlength: 2000, trim: true },
+    mentions: [{ user: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, name: String, _id: false }],
+    content: { type: String, required: true, maxlength: 2000, trim: true },
     parentId: { type: ObjectId, ref: "Comment", default: null },
 
     // Beğeni — toggle destekli array. likeCount denormalize, $size ile senkron tutulur.

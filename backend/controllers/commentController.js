@@ -1,3 +1,4 @@
+import { resolveMentions, notifyMentions } from "../services/mentions.js";
 // backend/controllers/commentController.js
 import mongoose from "mongoose";
 import Comment  from "../models/Comment.js";
@@ -174,7 +175,9 @@ export async function createComment(req, res) {
       if (parentComment.parentId) return res.status(400).json({ error: "İkinci seviye yanıt desteklenmiyor." });
     }
 
+    const mentions = await resolveMentions(body);
     const comment = await Comment.create({
+      mentions,
       author:   req.user.id,
       chapter:  resolvedChapterId,
       work:     resolvedWorkId,
@@ -189,22 +192,24 @@ export async function createComment(req, res) {
     const me           = req.user.id;
     const parentAuthor = parentComment?.author?.toString() || null;
 
-    if (parentAuthor && parentAuthor !== me) {
+    if (parentAuthor && parentAuthor !== me && !mentions.some(mention => String(mention.user) === parentAuthor)) {
       notifyReply({ senderId: me, recipientId: parentComment.author, workId: resolvedWorkId, chapterId: resolvedChapterId })
         .catch((e) => console.error("notifyReply:", e.message));
     }
 
     const workOwner = work?.user?.toString() || null;
-    if (workOwner && workOwner !== me && workOwner !== parentAuthor) {
+    if (workOwner && workOwner !== me && workOwner !== parentAuthor && !mentions.some(mention => String(mention.user) === workOwner)) {
       notifyComment({ senderId: me, workId: resolvedWorkId, commentPreview: body, chapterId: resolvedChapterId })
         .catch((e) => console.error("notifyComment:", e.message));
     }
 
+    await notifyMentions({ senderId: me, mentions, workId: resolvedWorkId, chapterId: resolvedChapterId }).catch(console.error);
     res.status(201).json({
       item:    shapeComment(comment.toObject(), req.user.id),
       message: "Yorum eklendi.",
     });
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ message: err.message });
     console.error("createComment:", err);
     res.status(500).json({ error: "Yorum eklenemedi." });
   }
@@ -228,14 +233,18 @@ export async function updateComment(req, res) {
     if (comment.isDeleted)                         return res.status(410).json({ error: "Bu yorum silinmiş." });
     if (comment.author.toString() !== req.user.id) return res.status(403).json({ error: "Yetkisiz." });
 
+    const previous = comment.mentions || [];
+    comment.mentions = await resolveMentions(body);
     comment.content  = body;
     comment.isEdited = true;
     comment.editedAt = new Date();
     await comment.save();
     await comment.populate("author", "kullaniciAdi avatarUrl");
 
+    await notifyMentions({ senderId: req.user.id, mentions: comment.mentions, previous, workId: comment.work, chapterId: comment.chapter }).catch(console.error);
     res.json({ item: shapeComment(comment.toObject(), req.user.id), message: "Yorum güncellendi." });
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ message: err.message });
     console.error("updateComment:", err);
     res.status(500).json({ error: "Yorum güncellenemedi." });
   }

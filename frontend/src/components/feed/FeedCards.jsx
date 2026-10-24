@@ -1,3 +1,4 @@
+import MentionInput from "../MentionInput";
 import LogContent from "../LogContent";
 import { logCommentThreads } from "../logCommentThreads";
 import LogReplyMention from "../LogReplyMention";
@@ -105,7 +106,7 @@ export function InlineComments({ logId, isLoggedIn, onCountChange, logAuthorId }
                     <span className="feed-comments-time">{timeAgo(c.createdAt)}</span>
 
                   </div>
-                  <LogContent content={c.content} endpoint={`/logs/${logId}/comments/${c._id}`} className="feed-comments-text"
+                  <LogContent content={c.content} mentions={c.mentions} endpoint={`/logs/${logId}/comments/${c._id}`} className="feed-comments-text"
                     canEdit={isOwn} canDelete={isOwn || (myId && String(logAuthorId) === String(myId))}
                     onUpdated={updated => { setComments(prev => prev.map(item => item._id === updated._id ? updated : item)); setReplyTo(current => current?._id === updated._id ? updated : current); }}
                     onDeleted={() => handleDelete(c._id)}><LogReplyMention comment={c} parent={parent} /></LogContent>
@@ -127,7 +128,7 @@ export function InlineComments({ logId, isLoggedIn, onCountChange, logAuthorId }
               <span><span className="log-reply-mention">@{replyTo.author?.kullaniciAdi || "Yazar"}</span> kişisine yanıt yazıyorsun</span>
               <button type="button" disabled={posting} onClick={() => { setReplyTo(null); inputRef.current?.focus(); }}>Vazgeç</button>
             </div>}
-          <textarea
+          <MentionInput
             className="feed-comments-input"
             rows={1}
             ref={inputRef}

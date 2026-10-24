@@ -1,3 +1,4 @@
+import { resolveMentions, notifyMentions } from "../services/mentions.js";
 import readerAccess from "../middlewares/readerAccess.js";
 // routes/inlineComments.js
 import express       from "express";
@@ -24,6 +25,7 @@ router.get("/", async (req, res) => {
       .lean();
     res.json({ items });
   } catch (e) {
+    if (e.status) return res.status(e.status).json({ message: e.message });
     res.status(500).json({ error: "İşlem tamamlanamadı." });
   }
 });
@@ -46,7 +48,9 @@ router.post("/", ensureAuth, async (req, res) => {
     if (dbUser?.commentBanned)
       return res.status(403).json({ message: "Yorum yapma yetkiniz kısıtlanmış." });
 
+    const mentions = await resolveMentions(content.trim());
     const doc = await InlineComment.create({
+      mentions,
       workId,
       chapterId,
       paragraphIndex: Number(paragraphIndex),
@@ -54,8 +58,10 @@ router.post("/", ensureAuth, async (req, res) => {
       author: req.user.id,
     });
     const populated = await doc.populate("author", "kullaniciAdi username avatarUrl");
+    await notifyMentions({ senderId: req.user.id, mentions, workId, chapterId }).catch(console.error);
     res.status(201).json({ item: populated });
   } catch (e) {
+    if (e.status) return res.status(e.status).json({ message: e.message });
     res.status(500).json({ error: "İşlem tamamlanamadı." });
   }
 });
@@ -72,11 +78,15 @@ router.patch("/:id", ensureAuth, async (req, res) => {
     if (!content?.trim()) return res.status(400).json({ error: "İçerik boş olamaz" });
     if (content.trim().length > 1000) return res.status(400).json({ error: "1000 karakter limiti" });
 
+    const previous = doc.mentions || [];
+    doc.mentions = await resolveMentions(content.trim());
     doc.content = content.trim();
     await doc.save();
     await doc.populate("author", "kullaniciAdi username avatarUrl");
+    await notifyMentions({ senderId: req.user.id, mentions: doc.mentions, previous, workId: doc.workId, chapterId: doc.chapterId }).catch(console.error);
     res.json({ item: doc });
   } catch (e) {
+    if (e.status) return res.status(e.status).json({ message: e.message });
     res.status(500).json({ error: "İşlem tamamlanamadı." });
   }
 });
@@ -91,6 +101,7 @@ router.delete("/:id", ensureAuth, async (req, res) => {
     await doc.deleteOne();
     res.json({ ok: true });
   } catch (e) {
+    if (e.status) return res.status(e.status).json({ message: e.message });
     res.status(500).json({ error: "İşlem tamamlanamadı." });
   }
 });
@@ -110,6 +121,7 @@ router.post("/:id/report", ensureAuth, async (req, res) => {
     await doc.save();
     res.json({ message: "Şikayetin alındı." });
   } catch (e) {
+    if (e.status) return res.status(e.status).json({ message: e.message });
     res.status(500).json({ error: "İşlem tamamlanamadı." });
   }
 });

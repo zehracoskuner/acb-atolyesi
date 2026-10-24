@@ -1,3 +1,4 @@
+import MentionInput from "./MentionInput";
 import LogContent from "./LogContent";
 import { logCommentThreads } from "./logCommentThreads";
 import LogReplyMention from "./LogReplyMention";
@@ -135,7 +136,7 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
                         <span className="log-comment-time">{timeAgo(c.createdAt)}</span>
 
                       </div>
-                      <LogContent content={c.content} endpoint={`/logs/${logId}/comments/${c._id}`} className="log-comment-text"
+                      <LogContent content={c.content} mentions={c.mentions} endpoint={`/logs/${logId}/comments/${c._id}`} className="log-comment-text"
                     canEdit={isOwn} canDelete={canDelete}
                     onUpdated={updated => { setComments(prev => prev.map(item => item._id === updated._id ? updated : item)); setReplyTo(current => current?._id === updated._id ? updated : current); }}
                     onDeleted={() => handleDelete(c._id)}><LogReplyMention comment={c} parent={parent} /></LogContent>
@@ -158,7 +159,7 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
               <button type="button" disabled={posting} onClick={() => { setReplyTo(null); inputRef.current?.focus(); }}>Vazgeç</button>
             </div>}
               <div className="log-comment-input-wrap">
-                <input
+                <MentionInput as="input"
                   className="log-comment-input"
                   type="text"
                   ref={inputRef}
