@@ -1,3 +1,4 @@
+import LogContent from "../LogContent";
 import { logCommentThreads } from "../logCommentThreads";
 import LogReplyMention from "../LogReplyMention";
 import "../../styles/LogReplies.css";
@@ -7,7 +8,7 @@ import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Heart, MessageCircle, ArrowUpRight, BookOpen, LockKeyhole } from "lucide-react";
 import { useMembership } from "../../lib/membershipContext";
-import { apiGet, apiPost, apiDelete } from "../../lib/api";
+import { apiGet, apiPost } from "../../lib/api";
 import WriterShelf from "./WriterShelf";
 import { BookCover } from "./WriterShelf";
 import { timeAgo } from "./feedPresentation";
@@ -33,7 +34,7 @@ export function Avatar({ user, size = 36 }) {
 }
 
 /* ── Akış yorumları ── */
-export function InlineComments({ logId, isLoggedIn, onCountChange }) {
+export function InlineComments({ logId, isLoggedIn, onCountChange, logAuthorId }) {
   const [comments, setComments] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [loaded, setLoaded] = useState(false);
@@ -79,15 +80,10 @@ export function InlineComments({ logId, isLoggedIn, onCountChange }) {
     }
   }
 
-  async function handleDelete(commentId) {
-    try {
-      await apiDelete(`/logs/${logId}/comments/${commentId}`);
-      setComments(prev => prev.filter(c => c._id !== commentId));
-      setReplyTo(current => current?._id === commentId ? null : current);
-      onCountChange(count => Math.max(0, count - 1));
-    } catch {
-      setError("Yorum silinemedi. Yeniden deneyebilirsin.");
-    }
+  function handleDelete(commentId) {
+    setComments(prev => prev.filter(c => c._id !== commentId));
+    setReplyTo(current => current?._id === commentId ? null : current);
+    onCountChange(count => Math.max(0, count - 1));
   }
 
   return (
@@ -107,19 +103,12 @@ export function InlineComments({ logId, isLoggedIn, onCountChange }) {
                   <div className="feed-comments-meta">
                     <span className="feed-comments-author">{c.author?.kullaniciAdi}</span>
                     <span className="feed-comments-time">{timeAgo(c.createdAt)}</span>
-                    {isOwn && (
-                      <button
-                        className="feed-comments-delBtn"
-                        onClick={() => handleDelete(c._id)}
-                        aria-label="Yorumu sil"
-                      >
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M18 6L6 18M6 6l12 12"/>
-                        </svg>
-                      </button>
-                    )}
+
                   </div>
-                  <p className="feed-comments-text"><LogReplyMention comment={c} parent={parent} />{c.content}</p>
+                  <LogContent content={c.content} endpoint={`/logs/${logId}/comments/${c._id}`} className="feed-comments-text"
+                    canEdit={isOwn} canDelete={isOwn || (myId && String(logAuthorId) === String(myId))}
+                    onUpdated={updated => { setComments(prev => prev.map(item => item._id === updated._id ? updated : item)); setReplyTo(current => current?._id === updated._id ? updated : current); }}
+                    onDeleted={() => handleDelete(c._id)}><LogReplyMention comment={c} parent={parent} /></LogContent>
                   <button type="button" className="log-reply-button" disabled={posting} onClick={() => {
                     if (!requireMember()) return;
                     setReplyTo(c);
@@ -186,7 +175,9 @@ function AuthorLine({ item, shelf }) {
 }
 
 export function LogCard({ item, initiallyShowComments = false }) {
-  const { status, requireMember } = useMembership();
+  const { status, user, requireMember } = useMembership();
+  const [deleted, setDeleted] = useState(false);
+  const isOwn = !!user && String(user._id || user.id) === String(item.author?._id || item.author);
   const { liked, likeCount, busy: liking, error, toggle } = useLike({
     path: `/logs/${item._id}/like`, initialLiked: item.likedByMe, initialCount: item.likeCount,
   });
@@ -205,10 +196,11 @@ export function LogCard({ item, initiallyShowComments = false }) {
     if (!requireMember()) return;
     await toggle();
   }
+  if (deleted) return null;
   return <article className="feed-card">
     <div className="feed-card-main">
       <AuthorLine item={item} shelf={item.authorShelf} />
-      <p className="feed-log-text">{item.content}</p>
+      <LogContent content={item.content} endpoint={`/logs/${item._id}`} maxLength={800} className="feed-log-text" canEdit={isOwn} canDelete={isOwn} onDeleted={() => setDeleted(true)} />
       {item.relatedWork && <Link className="feed-related-work" to={`/story/${item.relatedWork._id}`}>
         <BookCover work={item.relatedWork} /><span><small>BU ESERİN SATIR ARASINDAN</small><strong>{item.relatedWork.title}</strong><span>Eseri keşfet</span></span><ArrowUpRight size={17} aria-hidden="true" />
       </Link>}
@@ -218,7 +210,7 @@ export function LogCard({ item, initiallyShowComments = false }) {
         {item.visibility === "followers" && <span className="feed-visibility"><LockKeyhole size={11} aria-hidden="true" />Takipçilere özel</span>}
       </footer>
       {error && <p className="feed-error" role="alert">{error}</p>}
-      {showComments && <div id={`feed-comments-${item._id}`}><InlineComments logId={item._id} isLoggedIn={status === "authenticated"} onCountChange={setCommentCount} /></div>}
+      {showComments && <div id={`feed-comments-${item._id}`}><InlineComments logId={item._id} isLoggedIn={status === "authenticated"} onCountChange={setCommentCount} logAuthorId={item.author?._id || item.author} /></div>}
     </div>
   </article>;
 }

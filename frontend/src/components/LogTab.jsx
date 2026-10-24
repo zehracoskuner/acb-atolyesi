@@ -1,3 +1,4 @@
+import LogContent from "./LogContent";
 import { logCommentThreads } from "./logCommentThreads";
 import LogReplyMention from "./LogReplyMention";
 import "../styles/LogReplies.css";
@@ -7,7 +8,7 @@ import { useMembership } from "../lib/membershipContext";
 // src/components/LogTab.jsx
 
 import { useCallback, useState, useEffect, useRef } from "react";
-import { apiGet, apiPost, apiDelete } from "../lib/api";
+import { apiGet, apiPost } from "../lib/api";
 
 const MAX_CHARS = 800;
 
@@ -90,12 +91,10 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
     }
   }
 
-  async function handleDelete(commentId) {
-    try {
-      await apiDelete(`/logs/${logId}/comments/${commentId}`);
-      setComments(prev => prev.filter(c => c._id !== commentId));
-      setReplyTo(current => current?._id === commentId ? null : current);
-    } catch (e) { alert("Silinemedi: " + e.message); }
+  function handleDelete(commentId) {
+    setComments(prev => prev.filter(c => c._id !== commentId));
+    setReplyTo(current => current?._id === commentId ? null : current);
+
   }
 
   const count = loaded ? comments.length : initialCount;
@@ -134,16 +133,12 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
                       <div className="log-comment-header">
                         <span className="log-comment-author">{c.author?.kullaniciAdi || "Yazar"}</span>
                         <span className="log-comment-time">{timeAgo(c.createdAt)}</span>
-                        {canDelete && (
-                          <button className="log-comment-delete" onClick={() => handleDelete(c._id)} title="Sil">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <polyline points="3 6 5 6 21 6"/>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                            </svg>
-                          </button>
-                        )}
+
                       </div>
-                      <p className="log-comment-text"><LogReplyMention comment={c} parent={parent} />{c.content}</p>
+                      <LogContent content={c.content} endpoint={`/logs/${logId}/comments/${c._id}`} className="log-comment-text"
+                    canEdit={isOwn} canDelete={canDelete}
+                    onUpdated={updated => { setComments(prev => prev.map(item => item._id === updated._id ? updated : item)); setReplyTo(current => current?._id === updated._id ? updated : current); }}
+                    onDeleted={() => handleDelete(c._id)}><LogReplyMention comment={c} parent={parent} /></LogContent>
                   <button type="button" className="log-reply-button" disabled={posting} onClick={() => {
                     if (!requireMember()) return;
                     setReplyTo(c);
@@ -218,18 +213,11 @@ function LogEntry({ log, isOwner, onDelete, isLoggedIn, highlighted }) {
             {log.visibility !== "public" && (
               <span className="log-vis-badge">{vis.icon} {vis.label}</span>
             )}
-            {isOwner && (
-              <button className="log-delete-btn" onClick={() => onDelete(log._id)}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-              </button>
-            )}
+
           </div>
         </div>
 
-        <p className="log-entry-content">{log.content}</p>
+        <LogContent content={log.content} endpoint={`/logs/${log._id}`} maxLength={800} className="log-entry-content" canEdit={isOwner} canDelete={isOwner} onDeleted={() => onDelete(log._id)} />
 
         {log.relatedWork && (
           <div className="log-work-tag">
@@ -404,13 +392,9 @@ export default function LogTab({ userId, isOwner, works, targetLogId }) {
     return () => cancelAnimationFrame(frame);
   }, [loading, targetLogId, targetMissing, error]);
 
-  async function handleDelete(logId) {
-    if (!window.confirm("Bu girdiyi silmek istiyor musun?")) return;
-    try {
-      await apiDelete(`/logs/${logId}`);
-      setLogs(p => p.filter(l => l._id !== logId));
-      if (String(logId) === targetLogId) setTargetMissing(true);
-    } catch (e) { alert("Silinemedi: " + e.message); }
+  function handleDelete(logId) {
+    setLogs(p => p.filter(l => l._id !== logId));
+    if (String(logId) === targetLogId) setTargetMissing(true);
   }
 
   return (

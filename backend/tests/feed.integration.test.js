@@ -95,6 +95,28 @@ it("log replies persist their target, reject other logs and survive target delet
   expect(remaining.body.items[0].parentId).toBe(String(parent._id));
 });
 
+it("only owners edit log text and comments, preserving replies and enforcing limits", async () => {
+  const entry = await log(viewer, "public");
+  const comment = await LogComment.create({ log: entry._id, author: stranger._id, content: "Original" });
+  const reply = await LogComment.create({ log: entry._id, author: viewer._id, content: "Reply", parentId: comment._id });
+  const logPath = `/logs/${entry._id}`;
+  const commentPath = `${logPath}/comments/${comment._id}`;
+  expect((await request(logPath, { method: "PATCH", user: stranger, body: { content: "Forbidden" } })).status).toBe(403);
+  expect((await request(commentPath, { method: "PATCH", body: { content: "Forbidden" } })).status).toBe(403);
+  for (const content of [" ", "a".repeat(801), {}]) {
+    expect((await request(logPath, { method: "PATCH", body: { content } })).status).toBe(400);
+  }
+  expect((await request(commentPath, { method: "PATCH", user: stranger, body: { content: "a".repeat(501) } })).status).toBe(400);
+  expect((await request(logPath, { method: "PATCH", body: { content: " Edited log ", visibility: "private" } })).body.item).toMatchObject({ content: "Edited log", visibility: "public" });
+  expect((await request(commentPath, { method: "PATCH", user: stranger, body: { content: " Edited comment " } })).body.item.content).toBe("Edited comment");
+  expect(String((await LogComment.findById(reply._id)).parentId)).toBe(String(comment._id));
+  await User.updateOne({ _id: stranger._id }, { commentBanned: true });
+  expect((await request(commentPath, { method: "PATCH", user: stranger, body: { content: "Blocked edit" } })).status).toBe(403);
+  expect((await request(logPath, { method: "DELETE", user: stranger })).status).toBe(403);
+  expect((await request(commentPath, { method: "DELETE", user: stranger })).status).toBe(200);
+  expect((await request(logPath, { method: "DELETE" })).status).toBe(200);
+});
+
 it("public includes every author's public log, never followers/private, even for the owner", async () => {
   for (const author of [viewer, followed, stranger]) for (const visibility of ["public", "followers", "private"]) await log(author, visibility);
   const res = await request("/feed?scope=public");

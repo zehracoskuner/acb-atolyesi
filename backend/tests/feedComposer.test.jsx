@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Exercise the actual component handlers with persistent hook state, without
 // introducing a second React renderer or a browser dependency into this suite.
-const h = vi.hoisted(() => ({ slots: {}, cursor: 0, instance: "", effects: [], cleanups: {}, session: {}, requireMember: vi.fn(), apiPost: vi.fn(), apiGet: vi.fn() }));
+const h = vi.hoisted(() => ({ slots: {}, cursor: 0, instance: "", effects: [], cleanups: {}, session: {}, requireMember: vi.fn(), apiPost: vi.fn(), apiGet: vi.fn(), apiPatch: vi.fn(), apiDelete: vi.fn() }));
 vi.mock("react", async original => {
   const actual = await original();
   return {
@@ -31,7 +31,7 @@ vi.mock("react", async original => {
 });
 vi.mock("../../frontend/src/lib/membershipContext", () => ({ useMembership: () => ({ ...h.session, requireMember: h.requireMember }) }));
 vi.mock("../../frontend/src/lib/session", () => ({ useSession: () => h.session }));
-vi.mock("../../frontend/src/lib/api", () => ({ apiPost: h.apiPost, apiGet: h.apiGet, apiDelete: vi.fn() }));
+vi.mock("../../frontend/src/lib/api", () => ({ apiPost: h.apiPost, apiGet: h.apiGet, apiDelete: h.apiDelete, apiPatch: h.apiPatch }));
 vi.mock("react-router-dom", async original => ({ ...await original(), useNavigate: () => vi.fn() }));
 vi.mock("../../frontend/src/components/TopBar", () => ({ default: () => null }));
 vi.mock("../../frontend/src/components/Footer", () => ({ default: () => null }));
@@ -41,6 +41,7 @@ import WorkshopFeed from "../../frontend/src/components/feed/WorkshopFeed.jsx";
 import Feed from "../../frontend/src/pages/Feed.jsx";
 import { Avatar, InlineComments } from "../../frontend/src/components/feed/FeedCards.jsx";
 import { CommentSection } from "../../frontend/src/components/LogTab.jsx";
+import LogContent from "../../frontend/src/components/LogContent.jsx";
 import LogReplyMention from "../../frontend/src/components/LogReplyMention.jsx";
 
 function render(Component, props = {}, instance = "composer") {
@@ -119,6 +120,35 @@ it.each(["feed", "profile"])("%s comments send replies, preserve failed drafts a
   button(tree, "Yanıt ver").props.onClick();
   button(render(Component, props, "comments"), "Vazgeç").props.onClick();
   expect(text(render(Component, props, "comments"))).not.toContain("yanıt yazıyorsun");
+});
+
+it("content editing preserves failed drafts and deletion waits for confirmation and a successful response", async () => {
+  const props = { content: "Original", endpoint: "/logs/log", maxLength: 800, canEdit: true, canDelete: true, onUpdated: vi.fn(), onDeleted: vi.fn() };
+  let tree = render(LogContent, props, "editor");
+  button(tree, "Düzenle").props.onClick();
+  tree = render(LogContent, props, "editor");
+  textarea(tree).props.onChange({ target: { value: " Updated " } });
+  h.apiPatch.mockRejectedValueOnce(new Error("Retry"));
+  await form(render(LogContent, props, "editor")).props.onSubmit(event());
+  tree = render(LogContent, props, "editor");
+  expect(textarea(tree).props.value).toBe(" Updated ");
+  h.apiPatch.mockResolvedValueOnce({ item: { content: "Updated" } });
+  await form(tree).props.onSubmit(event());
+  expect(h.apiPatch).toHaveBeenLastCalledWith("/logs/log", { content: "Updated" });
+  tree = render(LogContent, props, "editor");
+  expect(text(tree)).toContain("Updated");
+  button(tree, "Sil").props.onClick();
+  expect(h.apiDelete).not.toHaveBeenCalled();
+  tree = render(LogContent, props, "editor");
+  h.apiDelete.mockRejectedValueOnce(new Error("Retry delete"));
+  await button(tree, "Evet, sil").props.onClick();
+  expect(props.onDeleted).not.toHaveBeenCalled();
+  h.apiDelete.mockResolvedValueOnce({});
+  await button(render(LogContent, props, "editor"), "Evet, sil").props.onClick();
+  expect(props.onDeleted).toHaveBeenCalledOnce();
+  const guest = render(LogContent, { ...props, canEdit: false, canDelete: false }, "guest-editor");
+  expect(button(guest, "Düzenle")).toBeUndefined();
+  expect(button(guest, "Sil")).toBeUndefined();
 });
 
 describe("Feed sharing through existing logs", () => {

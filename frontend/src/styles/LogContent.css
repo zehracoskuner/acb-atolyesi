@@ -1,0 +1,10 @@
+.log-content-manager { min-width: 0; }
+.log-content-actions { display: flex; gap: 14px; align-items: center; }
+.log-content-manager .log-content-actions button { border: 0; background: none; padding: 4px 0; min-height: 30px; color: #796c5d; font: 500 .72rem 'DM Sans', sans-serif; cursor: pointer; }
+.log-content-actions button:hover { color: #87432d; }
+.log-content-actions button:disabled { opacity: .5; cursor: default; }
+.log-content-actions button:focus-visible { outline: 2px solid #87432d; outline-offset: 3px; }
+.log-content-editor { display: block; margin: 6px 0; }
+.log-content-editor textarea { box-sizing: border-box; width: 100%; min-height: 80px; padding: 10px; border: 1px solid #d8cfc1; border-radius: 6px; background: #fffdf8; color: #33291f; font: inherit; resize: vertical; }
+.log-content-confirm { margin: 8px 0; font-size: .78rem; color: #796c5d; }
+.log-content-error { color: #993e2b; font-size: .78rem; }

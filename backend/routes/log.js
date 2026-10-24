@@ -177,6 +177,23 @@ router.post("/", ensureAuth, async (req, res) => {
    DELETE /api/logs/:id
    — Girdiyi sil (sadece sahibi)
 ═══════════════════════════════════════════ */
+router.patch("/:id", ensureAuth, async (req, res) => {
+  try {
+    validateLikeId(req.params.id);
+    const { content } = req.body;
+    if (typeof content !== "string" || !content.trim() || content.trim().length > 800)
+      return res.status(400).json({ message: "Günlük girdisi 1–800 karakter olmalı." });
+    const log = await Log.findById(req.params.id);
+    if (!log) return res.status(404).json({ message: "Girdi bulunamadı." });
+    if (String(log.author) !== String(req.user.id)) return res.status(403).json({ message: "Bu girdiyi düzenleme yetkiniz yok." });
+    log.content = content.trim();
+    await log.save();
+    return res.json({ item: log });
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: "Girdi düzenlenemedi." });
+  }
+});
+
 router.delete("/:id", ensureAuth, async (req, res) => {
   try {
     const log = await Log.findById(req.params.id);
@@ -303,6 +320,29 @@ router.post("/:id/comments", ensureAuth, async (req, res) => {
 /* ═══════════════════════════════════════════
    DELETE /api/logs/:id/comments/:commentId
 ═══════════════════════════════════════════ */
+router.patch("/:id/comments/:commentId", ensureAuth, async (req, res) => {
+  try {
+    validateLikeId(req.params.id);
+    validateLikeId(req.params.commentId);
+    const { content } = req.body;
+    if (typeof content !== "string" || !content.trim() || content.trim().length > 500)
+      return res.status(400).json({ message: "Yorum 1–500 karakter olmalı." });
+    const comment = await LogComment.findOne({ _id: req.params.commentId, log: req.params.id });
+    if (!comment) return res.status(404).json({ message: "Yorum bulunamadı." });
+    if (String(comment.author) !== String(req.user.id)) return res.status(403).json({ message: "Bu yorumu düzenleme yetkiniz yok." });
+    const log = await Log.findById(req.params.id);
+    if (!await canReadLog(log, req.user.id)) return res.status(404).json({ message: "Girdi bulunamadı." });
+    const user = await User.findById(req.user.id).select("commentBanned").lean();
+    if (user?.commentBanned) return res.status(403).json({ message: "Yorum yapma yetkiniz kısıtlanmış." });
+    comment.content = content.trim();
+    await comment.save();
+    await comment.populate([{ path: "author", select: "_id kullaniciAdi avatarUrl" }, { path: "replyToAuthor", select: "_id kullaniciAdi" }]);
+    return res.json({ item: comment });
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: "Yorum düzenlenemedi." });
+  }
+});
+
 router.delete("/:id/comments/:commentId", ensureAuth, async (req, res) => {
   try {
     const comment = await LogComment.findById(req.params.commentId);

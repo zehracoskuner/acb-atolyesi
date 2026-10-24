@@ -1,3 +1,4 @@
+import LogContent from "../components/LogContent";
 import { useLike } from "../hooks/useLike";
 import { useSession } from "../lib/session";
 // src/pages/Feed.jsx
@@ -92,6 +93,9 @@ function Avatar({ user, size = 38 }) {
 /* ── Günlük girdisi kartı ── */
 function LogCard({ item }) {
   const navigate = useNavigate();
+  const [deleted, setDeleted] = useState(false);
+  const { user } = useSession();
+  const isOwn = !!user && String(user._id || user.id) === String(item.author?._id || item.author);
   const { liked, likeCount, busy: liking, error: likeError, toggle } = useLike({
     path: `/logs/${item._id}/like`, initialLiked: item.likedByMe, initialCount: item.likeCount,
   });
@@ -101,6 +105,7 @@ function LogCard({ item }) {
     await toggle();
   }
 
+  if (deleted) return null;
   return (
     <div style={c.card}>
       {likeError && <p role="alert">{likeError}</p>}
@@ -119,7 +124,7 @@ function LogCard({ item }) {
         <span style={c.typeBadgeLog}>✒ Günlük</span>
       </div>
 
-      <p style={c.logContent}>{item.content}</p>
+      <LogContent content={item.content} endpoint={`/logs/${item._id}`} maxLength={800} className="feed-log-text" canEdit={isOwn} canDelete={isOwn} onDeleted={() => setDeleted(true)} />
 
       {item.relatedWork && (
         <button
