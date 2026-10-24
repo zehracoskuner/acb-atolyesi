@@ -1,0 +1,9 @@
+.log-reply-context { margin: 4px 0 6px; padding: 6px 10px; border-left: 2px solid #b99a71; background: #f2ede3; color: #796c5d; font-size: .72rem; }
+.log-reply-context strong, .log-reply-context span, .log-reply-selection span { display: block; overflow-wrap: anywhere; }
+.log-reply-context span, .log-reply-selection > span > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.log-reply-button, .log-reply-selection button { background: transparent; border: 0; padding: 6px 0; min-height: 32px; color: #87432d; font: inherit; font-size: .75rem; cursor: pointer; }
+.log-reply-button:focus-visible, .log-reply-selection button:focus-visible { outline: 2px solid #87432d; outline-offset: 2px; }
+.log-reply-selection { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-basis: 100%; width: 100%; padding: 6px; color: #796c5d; font-size: .75rem; }
+.log-reply-selection > span { min-width: 0; }
+.log-reply-selection button { flex-shrink: 0; }
+.log-comment-form, .feed-comments-form { flex-wrap: wrap; }

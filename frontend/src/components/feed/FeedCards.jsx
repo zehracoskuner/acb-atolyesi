@@ -1,6 +1,7 @@
+import "../../styles/LogReplies.css";
 import "../../styles/FeedCards.css";
 import { useLike } from "../../hooks/useLike";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Heart, MessageCircle, ArrowUpRight, BookOpen, LockKeyhole } from "lucide-react";
 import { useMembership } from "../../lib/membershipContext";
@@ -30,7 +31,7 @@ export function Avatar({ user, size = 36 }) {
 }
 
 /* ── Akış yorumları ── */
-function InlineComments({ logId, isLoggedIn, onCountChange }) {
+export function InlineComments({ logId, isLoggedIn, onCountChange }) {
   const [comments, setComments] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [loaded, setLoaded] = useState(false);
@@ -39,6 +40,9 @@ function InlineComments({ logId, isLoggedIn, onCountChange }) {
   const [error,    setError]    = useState("");
   const { user: currentUser, requireMember } = useMembership();
   const myId = currentUser?._id || currentUser?.id;
+  const [replyTo, setReplyTo] = useState(null);
+  const inputRef = useRef(null);
+  const postingRef = useRef(false);
   useEffect(() => {
     let active = true;
     apiGet(`/logs/${logId}/comments`)
@@ -55,17 +59,20 @@ function InlineComments({ logId, isLoggedIn, onCountChange }) {
 
   async function handlePost(e) {
     e.preventDefault();
-    if (!text.trim() || posting || !loaded) return;
+    if (!text.trim() || postingRef.current || !loaded) return;
+    postingRef.current = true;
     setPosting(true);
     setError("");
     try {
-      const res = await apiPost(`/logs/${logId}/comments`, { content: text.trim() });
+      const res = await apiPost(`/logs/${logId}/comments`, { content: text.trim(), ...(replyTo ? { parentId: replyTo._id } : {}) });
       setComments(prev => [...prev, res.item]);
       onCountChange(count => count + 1);
       setText("");
+      setReplyTo(null);
     } catch (err) {
       setError(err.status === 403 ? "Yorum yapma yetkiniz kısıtlanmış." : "Yorum gönderilemedi.");
     } finally {
+      postingRef.current = false;
       setPosting(false);
     }
   }
@@ -74,6 +81,7 @@ function InlineComments({ logId, isLoggedIn, onCountChange }) {
     try {
       await apiDelete(`/logs/${logId}/comments/${commentId}`);
       setComments(prev => prev.filter(c => c._id !== commentId));
+      setReplyTo(current => current?._id === commentId ? null : current);
       onCountChange(count => Math.max(0, count - 1));
     } catch {
       setError("Yorum silinemedi. Yeniden deneyebilirsin.");
@@ -89,6 +97,7 @@ function InlineComments({ logId, isLoggedIn, onCountChange }) {
       ) : (
         <div className="feed-comments-list">
           {comments.map(c => {
+            const parent = comments.find(parent => parent._id === c.parentId);
             const isOwn = myId && (c.author?._id === myId || c.author?._id?.toString() === myId);
             return (
               <div key={c._id} className="feed-comments-item">
@@ -109,7 +118,15 @@ function InlineComments({ logId, isLoggedIn, onCountChange }) {
                       </button>
                     )}
                   </div>
+                  {c.parentId && <blockquote className="log-reply-context">
+                    {parent ? <><strong>{parent.author?.kullaniciAdi || "Yazar"} kişisine yanıt</strong><span>{parent.content}</span></> : "Yanıtlanan yorum silinmiş."}
+                  </blockquote>}
                   <p className="feed-comments-text">{c.content}</p>
+                  <button type="button" className="log-reply-button" disabled={posting} onClick={() => {
+                    if (!requireMember()) return;
+                    setReplyTo(c);
+                    inputRef.current?.focus();
+                  }}>Yanıt ver</button>
                 </div>
               </div>
             );
@@ -119,15 +136,20 @@ function InlineComments({ logId, isLoggedIn, onCountChange }) {
 
       {isLoggedIn ? (
         <form className="feed-comments-form" onSubmit={handlePost}>
+            {replyTo && <div className="log-reply-selection" role="status">
+              <span><strong>{replyTo.author?.kullaniciAdi || "Yazar"} kişisine yanıt yazıyorsun</strong><span>{replyTo.content}</span></span>
+              <button type="button" disabled={posting} onClick={() => { setReplyTo(null); inputRef.current?.focus(); }}>Vazgeç</button>
+            </div>}
           <textarea
             className="feed-comments-input"
             rows={1}
-            placeholder="Yorum yaz…"
+            ref={inputRef}
+                  placeholder={replyTo ? "Yanıt yaz…" : "Yorum yaz…"}
+                  aria-label={replyTo ? "Yanıt yaz" : "Yorum yaz"}
             value={text}
             onChange={e => setText(e.target.value)}
             maxLength={500}
             disabled={posting || !loaded}
-            aria-label="Yorum yaz"
           />
           <button
             className="feed-comments-send"

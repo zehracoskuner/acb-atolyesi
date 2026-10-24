@@ -1,4 +1,5 @@
 import readerAccess from "../middlewares/readerAccess.js";
+import mongoose from "mongoose";
 // backend/routes/logs.js
 import { Router }     from "express";
 import Log            from "../models/Log.js";
@@ -258,8 +259,8 @@ router.get("/:id/comments", optionalAuth, async (req, res) => {
 ═══════════════════════════════════════════ */
 router.post("/:id/comments", ensureAuth, async (req, res) => {
   try {
-    const { content } = req.body;
-    if (!content?.trim()) return res.status(400).json({ message: "Yorum boş olamaz." });
+    const { content, parentId } = req.body;
+    if (typeof content !== "string" || !content.trim()) return res.status(400).json({ message: "Yorum boş olamaz." });
     if (content.trim().length > 500) return res.status(400).json({ message: "Yorum en fazla 500 karakter." });
 
     const dbUser = await User.findById(req.user.id).select("commentBanned").lean();
@@ -269,7 +270,13 @@ router.post("/:id/comments", ensureAuth, async (req, res) => {
     const log = await Log.findById(req.params.id);
     if (!log) return res.status(404).json({ message: "Girdi bulunamadı." });
     if (!await canReadLog(log, req.user.id)) return res.status(403).json({ message: "Bu içeriği görüntüleme yetkiniz yok." });
-    const comment = await LogComment.create({ log: req.params.id, author: req.user.id, content: content.trim() });
+    if (parentId != null) {
+      if (typeof parentId !== "string" || !mongoose.isObjectIdOrHexString(parentId))
+        return res.status(400).json({ message: "Geçersiz yorum." });
+      const parent = await LogComment.exists({ _id: parentId, log: log._id });
+      if (!parent) return res.status(404).json({ message: "Yanıtlanacak yorum bulunamadı." });
+    }
+    const comment = await LogComment.create({ log: req.params.id, author: req.user.id, content: content.trim(), parentId: parentId ?? null });
     const populated = await comment.populate("author", "_id kullaniciAdi avatarUrl");
 
     // Bildirim gönder

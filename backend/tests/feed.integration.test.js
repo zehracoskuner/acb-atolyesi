@@ -74,6 +74,25 @@ it("log lists include comment counts before opening comments and reflect deletio
   expect((await request("/feed?scope=public")).body.items.find(item => item._id === String(entry._id)).commentCount).toBe(0);
 });
 
+it("log replies persist their target, reject other logs and survive target deletion", async () => {
+  const entry = await log(viewer, "public");
+  const other = await log(stranger, "public");
+  const parent = await LogComment.create({ log: entry._id, author: viewer._id, content: "Original" });
+  const post = (id, parentId) => request(`/logs/${id}/comments`, { method: "POST", body: { content: "Reply", parentId } });
+  const reply = await post(entry._id, String(parent._id));
+  expect(reply.status).toBe(201);
+  expect(reply.body.item.parentId).toBe(String(parent._id));
+  expect((await post(other._id, String(parent._id))).status).toBe(404);
+  expect((await post(entry._id, "invalid")).status).toBe(400);
+  expect((await post(entry._id, {})).status).toBe(400);
+  expect((await post(entry._id, reply.body.item._id)).status).toBe(201);
+  await request(`/logs/${entry._id}/comments/${parent._id}`, { method: "DELETE" });
+  expect((await post(entry._id, String(parent._id))).status).toBe(404);
+  const remaining = await request(`/logs/${entry._id}/comments`);
+  expect(remaining.body.items).toHaveLength(2);
+  expect(remaining.body.items[0].parentId).toBe(String(parent._id));
+});
+
 it("public includes every author's public log, never followers/private, even for the owner", async () => {
   for (const author of [viewer, followed, stranger]) for (const visibility of ["public", "followers", "private"]) await log(author, visibility);
   const res = await request("/feed?scope=public");

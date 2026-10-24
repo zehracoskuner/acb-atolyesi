@@ -1,3 +1,4 @@
+import "../styles/LogReplies.css";
 import { loadLogTarget } from "../lib/loadLogTarget";
 import { useLike } from "../hooks/useLike";
 import { useMembership } from "../lib/membershipContext";
@@ -36,6 +37,9 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
   const [error,     setError]     = useState("");
   const { user: currentUser, requireMember } = useMembership();
   const myId = currentUser?._id || currentUser?.id;
+  const [replyTo, setReplyTo] = useState(null);
+  const inputRef = useRef(null);
+  const postingRef = useRef(false);
 
   useEffect(() => {
     if (!initiallyOpen) return;
@@ -67,16 +71,19 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
 
   async function handlePost(e) {
     e.preventDefault();
-    if (!text.trim() || posting) return;
+    if (!text.trim() || postingRef.current || !loaded) return;
+    postingRef.current = true;
     setPosting(true);
     setError("");
     try {
-      const res = await apiPost(`/logs/${logId}/comments`, { content: text.trim() });
+      const res = await apiPost(`/logs/${logId}/comments`, { content: text.trim(), ...(replyTo ? { parentId: replyTo._id } : {}) });
       setComments(prev => [...prev, res.item]);
       setText("");
+      setReplyTo(null);
     } catch (e) {
       setError(e.message || "Gönderilemedi.");
     } finally {
+      postingRef.current = false;
       setPosting(false);
     }
   }
@@ -85,6 +92,7 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
     try {
       await apiDelete(`/logs/${logId}/comments/${commentId}`);
       setComments(prev => prev.filter(c => c._id !== commentId));
+      setReplyTo(current => current?._id === commentId ? null : current);
     } catch (e) { alert("Silinemedi: " + e.message); }
   }
 
@@ -109,6 +117,7 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
           ) : (
             <div className="log-comment-list">
               {comments.map(c => {
+                const parent = comments.find(parent => parent._id === c.parentId);
                 const isOwn       = myId && c.author?._id === myId;
                 const isLogOwner  = myId && logAuthorId === myId;
                 const canDelete   = isOwn || isLogOwner;
@@ -133,7 +142,15 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
                           </button>
                         )}
                       </div>
-                      <p className="log-comment-text">{c.content}</p>
+                      {c.parentId && <blockquote className="log-reply-context">
+                    {parent ? <><strong>{parent.author?.kullaniciAdi || "Yazar"} kişisine yanıt</strong><span>{parent.content}</span></> : "Yanıtlanan yorum silinmiş."}
+                  </blockquote>}
+                  <p className="log-comment-text">{c.content}</p>
+                  <button type="button" className="log-reply-button" disabled={posting} onClick={() => {
+                    if (!requireMember()) return;
+                    setReplyTo(c);
+                    inputRef.current?.focus();
+                  }}>Yanıt ver</button>
                     </div>
                   </div>
                 );
@@ -143,11 +160,17 @@ export function CommentSection({ logId, isLoggedIn, logAuthorId, initialCount = 
 
           {isLoggedIn ? (
             <form className="log-comment-form" onSubmit={handlePost}>
+            {replyTo && <div className="log-reply-selection" role="status">
+              <span><strong>{replyTo.author?.kullaniciAdi || "Yazar"} kişisine yanıt yazıyorsun</strong><span>{replyTo.content}</span></span>
+              <button type="button" disabled={posting} onClick={() => { setReplyTo(null); inputRef.current?.focus(); }}>Vazgeç</button>
+            </div>}
               <div className="log-comment-input-wrap">
                 <input
                   className="log-comment-input"
                   type="text"
-                  placeholder="Yorum yaz…"
+                  ref={inputRef}
+                  placeholder={replyTo ? "Yanıt yaz…" : "Yorum yaz…"}
+                  aria-label={replyTo ? "Yanıt yaz" : "Yorum yaz"}
                   value={text}
                   onChange={e => setText(e.target.value)}
                   maxLength={500}

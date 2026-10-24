@@ -20,6 +20,7 @@ const logCommentSchema = new mongoose.Schema(
       maxlength: 500,
       trim:      true,
     },
+    parentId: { type: mongoose.Schema.Types.ObjectId, ref: "LogComment", default: null },
   },
   { timestamps: true }
 );

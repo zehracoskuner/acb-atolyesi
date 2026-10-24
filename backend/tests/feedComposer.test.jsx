@@ -39,7 +39,8 @@ import React from "../../frontend/node_modules/react/index.js";
 import FeedComposer from "../../frontend/src/components/feed/FeedComposer.jsx";
 import WorkshopFeed from "../../frontend/src/components/feed/WorkshopFeed.jsx";
 import Feed from "../../frontend/src/pages/Feed.jsx";
-import { Avatar } from "../../frontend/src/components/feed/FeedCards.jsx";
+import { Avatar, InlineComments } from "../../frontend/src/components/feed/FeedCards.jsx";
+import { CommentSection } from "../../frontend/src/components/LogTab.jsx";
 
 function render(Component, props = {}, instance = "composer") {
   h.instance = instance;
@@ -87,6 +88,36 @@ beforeEach(() => {
 afterEach(() => {
   Object.values(h.cleanups).flat().forEach(cleanup => cleanup());
   vi.unstubAllGlobals();
+});
+
+it.each(["feed", "profile"])("%s comments send replies, preserve failed drafts and allow cancellation", async surface => {
+  const parent = { _id: "parent", author: { _id: "other", kullaniciAdi: "Yazar" }, content: "Original" };
+  h.apiGet.mockResolvedValue({ items: [parent] });
+  let Component = CommentSection;
+  let props = { logId: "log", isLoggedIn: true, initiallyOpen: true };
+  if (surface === "feed") {
+    Component = InlineComments;
+    props = { logId: "log", isLoggedIn: true, onCountChange: vi.fn() };
+  }
+  render(Component, props, "comments"); effects(); await tick();
+  let tree = render(Component, props, "comments");
+  button(tree, "Yanıt ver").props.onClick();
+  tree = render(Component, props, "comments");
+  expect(text(tree)).toContain("Yazar kişisine yanıt yazıyorsun");
+  find(tree, node => node.type === "input" || node.type === "textarea").props.onChange({ target: { value: "My reply" } });
+  h.apiPost.mockRejectedValueOnce(new Error("Failed"));
+  await form(render(Component, props, "comments")).props.onSubmit(event());
+  tree = render(Component, props, "comments");
+  expect(find(tree, node => node.type === "input" || node.type === "textarea").props.value).toBe("My reply");
+  h.apiPost.mockResolvedValueOnce({ item: { ...parent, _id: "reply", content: "My reply", parentId: "parent" } });
+  await form(tree).props.onSubmit(event());
+  expect(h.apiPost).toHaveBeenLastCalledWith("/logs/log/comments", { content: "My reply", parentId: "parent" });
+  tree = render(Component, props, "comments");
+  expect(text(tree)).toContain("Yazar kişisine yanıt");
+  expect(text(tree)).not.toContain("yanıt yazıyorsun");
+  button(tree, "Yanıt ver").props.onClick();
+  button(render(Component, props, "comments"), "Vazgeç").props.onClick();
+  expect(text(render(Component, props, "comments"))).not.toContain("yanıt yazıyorsun");
 });
 
 describe("Feed sharing through existing logs", () => {
