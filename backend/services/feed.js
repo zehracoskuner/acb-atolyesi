@@ -31,7 +31,7 @@ export async function readFeed({ viewerId, scope, page }) {
   // Merge before paginating: no per-source cap, no lost items beyond page four.
   const pipeline = [
     { $match: logFilter },
-    { $project: { _id: 1, type: { $literal: "log" }, author: 1, createdAt: 1, content: 1,
+    { $project: { _id: 1, type: { $literal: "log" }, author: 1, createdAt: 1, content: 1, mentions: 1,
       visibility: 1, relatedWork: 1, likeCount: { $size: { $ifNull: ["$likes", []] } },
       likedByMe: { $in: [new mongoose.Types.ObjectId(viewerId), { $ifNull: ["$likes", []] }] } } },
   ];

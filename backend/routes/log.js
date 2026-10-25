@@ -118,6 +118,7 @@ router.get("/my", ensureAuth, async (req, res) => {
       _id:       l._id,
       commentCount: counts.get(String(l._id)) ?? 0,
       content:   l.content,
+      mentions:  l.mentions || [],
       visibility: l.visibility,
       likeCount: l.likes?.length ?? 0,
       likedByMe: (l.likes || []).some(id => String(id) === String(req.user.id)),
@@ -142,19 +143,22 @@ router.post("/", ensureAuth, async (req, res) => {
   try {
     const { content, relatedWork, visibility } = req.body;
 
-    if (!content?.trim())
+    if (typeof content !== "string" || !content.trim())
       return res.status(400).json({ message: "İçerik boş olamaz." });
 
     if (content.trim().length > 800)
       return res.status(400).json({ message: "Günlük girdisi en fazla 800 karakter olabilir." });
 
+    const mentions = await resolveMentions(content.trim());
     const log = await Log.create({
+      mentions,
       author:      req.user.id,
       content:     content.trim(),
       relatedWork: relatedWork || null,
       visibility:  ["public", "followers", "private"].includes(visibility) ? visibility : "public",
     });
 
+    await notifyMentions({ senderId: req.user.id, mentions, log, isLogEntry: true }).catch(console.error);
     const populated = await log.populate([
       { path: "author",      select: "_id kullaniciAdi avatarUrl" },
       { path: "relatedWork", select: "_id title coverImage" },
@@ -170,7 +174,7 @@ router.post("/", ensureAuth, async (req, res) => {
     });
   } catch (err) {
     console.error("POST /logs hatası:", err);
-    return res.status(500).json({ message: "Girdi oluşturulamadı." });
+    return res.status(err.status || 500).json({ message: err.status ? err.message : "Girdi oluşturulamadı." });
   }
 });
 
@@ -187,11 +191,14 @@ router.patch("/:id", ensureAuth, async (req, res) => {
     const log = await Log.findById(req.params.id);
     if (!log) return res.status(404).json({ message: "Girdi bulunamadı." });
     if (String(log.author) !== String(req.user.id)) return res.status(403).json({ message: "Bu girdiyi düzenleme yetkiniz yok." });
+    const previous = log.mentions || [];
+    log.mentions = await resolveMentions(content.trim());
     log.content = content.trim();
     await log.save();
+    await notifyMentions({ senderId: req.user.id, mentions: log.mentions, previous, log, isLogEntry: true }).catch(console.error);
     return res.json({ item: log });
   } catch (err) {
-    return res.status(err.status || 500).json({ message: "Girdi düzenlenemedi." });
+    return res.status(err.status || 500).json({ message: err.status ? err.message : "Girdi düzenlenemedi." });
   }
 });
 

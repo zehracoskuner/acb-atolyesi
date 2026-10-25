@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useMembership } from "../../lib/membershipContext";
 import { apiPost } from "../../lib/api";
 import { Avatar } from "./FeedCards";
+import MentionInput from "../MentionInput";
 import "../../styles/FeedComposer.css";
 
 // POST /logs and the Log model enforce this existing limit.
@@ -88,7 +89,7 @@ export default function FeedComposer({ onPost }) {
     <form id={formId} onSubmit={share} className="feed-composer-form">
       <div className="feed-composer-header">
         <Avatar user={user} size={40} />
-        <textarea ref={textareaRef} value={content}
+        <MentionInput ref={textareaRef} value={content}
           onFocus={openComposer}
           onChange={event => { if (isMember && !postingRef.current) setContent(event.target.value); }}
           rows={editorOpen ? 4 : 2} maxLength={MAX_CHARS}

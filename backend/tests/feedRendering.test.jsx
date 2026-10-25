@@ -15,6 +15,10 @@ beforeEach(() => vi.stubGlobal("React", React));
 afterEach(() => vi.unstubAllGlobals());
 const render = (element, path = "/keşfet") => renderToStaticMarkup(<MemoryRouter initialEntries={[path]}>{element}</MemoryRouter>);
 const author = { _id: "writer", kullaniciAdi: "Kalem" };
+it("journal cards render selected mentions as profile links", () => {
+  const html = render(<LogCard item={{ _id: "log", author, content: "Hello @reader", mentions: [{ name: "reader", user: "reader-id" }] }} />);
+  expect(html).toContain('href="/profile/reader-id"');
+});
 it("closed log cards distinguish comments from an empty conversation", () => {
   const item = { _id: "log", type: "log", author, content: "Note" };
   const populated = render(<LogCard item={{ ...item, commentCount: 7 }} />);

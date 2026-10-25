@@ -201,7 +201,7 @@ export function LogCard({ item, initiallyShowComments = false }) {
   return <article className="feed-card">
     <div className="feed-card-main">
       <AuthorLine item={item} shelf={item.authorShelf} />
-      <LogContent content={item.content} endpoint={`/logs/${item._id}`} maxLength={800} className="feed-log-text" canEdit={isOwn} canDelete={isOwn} onDeleted={() => setDeleted(true)} />
+      <LogContent content={item.content} mentions={item.mentions} endpoint={`/logs/${item._id}`} maxLength={800} className="feed-log-text" canEdit={isOwn} canDelete={isOwn} onDeleted={() => setDeleted(true)} />
       {item.relatedWork && <Link className="feed-related-work" to={`/story/${item.relatedWork._id}`}>
         <BookCover work={item.relatedWork} /><span><small>BU ESERİN SATIR ARASINDAN</small><strong>{item.relatedWork.title}</strong><span>Eseri keşfet</span></span><ArrowUpRight size={17} aria-hidden="true" />
       </Link>}

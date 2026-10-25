@@ -218,7 +218,7 @@ function LogEntry({ log, isOwner, onDelete, isLoggedIn, highlighted }) {
           </div>
         </div>
 
-        <LogContent content={log.content} endpoint={`/logs/${log._id}`} maxLength={800} className="log-entry-content" canEdit={isOwner} canDelete={isOwner} onDeleted={() => onDelete(log._id)} />
+        <LogContent content={log.content} mentions={log.mentions} endpoint={`/logs/${log._id}`} maxLength={800} className="log-entry-content" canEdit={isOwner} canDelete={isOwner} onDeleted={() => onDelete(log._id)} />
 
         {log.relatedWork && (
           <div className="log-work-tag">
@@ -293,7 +293,7 @@ function LogComposer({ works, onPost }) {
 
   return (
     <div className={`log-composer ${expanded ? "log-composer--open" : ""}`}>
-      <textarea
+      <MentionInput
         ref={textareaRef}
         className="log-composer-input"
         placeholder="Ne yazıyorsun? Yaratım sürecini paylaş…"

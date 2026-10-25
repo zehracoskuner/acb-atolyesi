@@ -17,6 +17,7 @@ import Comment from "../models/Comment.js";
 import InlineComment from "../models/InlineComment.js";
 import commentRouter from "../routes/comments.js";
 import inlineCommentRouter from "../routes/inlineComments.js";
+import searchRouter from "../routes/search.js";
 import ChapterLike from "../models/ChapterLike.js";
 import feedRouter from "../routes/feed.js";
 import logRouter from "../routes/log.js";
@@ -31,6 +32,7 @@ beforeAll(async () => {
   const app = express();
   app.use(express.json()); app.use("/api/feed", feedRouter); app.use("/api/logs", logRouter);
   app.use("/api/comments", commentRouter); app.use("/api/inline-comments", inlineCommentRouter);
+  app.use("/api/search", searchRouter);
   server = app.listen(0, "127.0.0.1"); await once(server, "listening");
   base = `http://127.0.0.1:${server.address().port}/api`;
 }, 120000);
@@ -162,6 +164,27 @@ it("work, chapter and paragraph comments share the mention limit and notificatio
     expect((await request(path, { method: "POST", body: { ...extra, content: "@one @two @three @four @five @six" } })).status).toBe(400);
   }
   expect(await Notification.countDocuments({ type: "mention" })).toBe(1);
+});
+
+it("journal entries suggest users at @, retain linked mentions in feeds and notify under the shared cooldown", async () => {
+  const suggestions = await request("/search/users?mentions=1&q=");
+  expect(suggestions.body.items.map(user => user.kullaniciAdi)).toContain("stranger");
+  expect((await request("/search/users?mentions=1&q=s")).body.items.map(user => user.kullaniciAdi)).toEqual(["stranger"]);
+  const created = await request("/logs", { method: "POST", body: { content: "My day @stranger", visibility: "public" } });
+  expect(created.status).toBe(201);
+  const mention = { user: String(stranger._id), name: "stranger" };
+  expect(created.body.item.mentions).toEqual([mention]);
+  for (const path of ["/feed?scope=public", "/logs/my", `/logs/${viewer._id}`]) {
+    expect((await request(path)).body.items.find(item => item._id === created.body.item._id).mentions).toEqual([mention]);
+  }
+  expect((await Notification.findOne({ recipient: stranger._id }).lean()).text).toContain("günlük girdisinde");
+  await request(`/logs/${created.body.item._id}/comments`, { method: "POST", body: { content: "Again @stranger" } });
+  expect(await Notification.countDocuments({ recipient: stranger._id })).toBe(1);
+  const edited = await request(`/logs/${created.body.item._id}`, { method: "PATCH", body: { content: "Changed @followed" } });
+  expect(edited.body.item.mentions[0].user).toBe(String(followed._id));
+  expect(await Notification.countDocuments({ recipient: followed._id })).toBe(1);
+  const limit = await request("/logs", { method: "POST", body: { content: "@one @two @three @four @five @six" } });
+  expect(limit.status).toBe(400);
 });
 
 it("public includes every author's public log, never followers/private, even for the owner", async () => {

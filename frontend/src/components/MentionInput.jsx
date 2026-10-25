@@ -17,10 +17,10 @@ export default function MentionInput({ as: Tag = "textarea", ref, value = "", on
     setUsers([]); setActive(0); setMessage("");
   }
   useEffect(() => {
-    if (!enabled || !token || token.query.length < 2) return;
+    if (!enabled || !token) return;
     let current = true;
     const timer = setTimeout(() => {
-      apiGet(`/search/users?q=${encodeURIComponent(token.query)}`).then(result => {
+      apiGet(`/search/users?q=${encodeURIComponent(token.query)}&mentions=1`).then(result => {
         if (!current) return;
         const items = (result.items || []).filter(user => /^[A-Za-z0-9_]{3,30}$/.test(user.kullaniciAdi)).slice(0, 5);
         setUsers(items); setMessage(items.length ? "" : "Kullanıcı bulunamadı.");
@@ -33,7 +33,7 @@ export default function MentionInput({ as: Tag = "textarea", ref, value = "", on
     const replacement = `@${user.kullaniciAdi} `;
     const next = value.slice(0, token.start) + replacement + value.slice(token.end);
     const names = new Set([...next.matchAll(/(?:^|[^\p{L}\p{N}_@])@([A-Za-z0-9_]{3,30})(?![A-Za-z0-9_])/gu)].map(match => match[1]));
-    if (names.size > 5) { setMessage("Bir yorumda en fazla 5 farklı kişi etiketleyebilirsin."); return; }
+    if (names.size > 5) { setMessage("Bu alanda en fazla 5 farklı kişi etiketleyebilirsin."); return; }
     if (props.maxLength && next.length > props.maxLength) { setMessage("Etiket için yeterli karakter kalmadı."); return; }
     onChange({ target: { value: next } });
     setToken(null); setUsers([]); setMessage("");

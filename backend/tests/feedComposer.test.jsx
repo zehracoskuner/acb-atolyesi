@@ -157,14 +157,14 @@ it("mention suggestions insert a selected username, respect five people and igno
   vi.useFakeTimers();
   try {
     const onChange = vi.fn();
-    let props = { value: "Hello @st", onChange, maxLength: 500 };
+    let props = { value: "Hello @", onChange, maxLength: 500 };
     h.apiGet.mockResolvedValue({ items: [{ _id: "stranger", kullaniciAdi: "stranger" }] });
     let tree = render(MentionInput, props, "mentions");
     textarea(tree).props.onChange({ target: { value: props.value, selectionStart: props.value.length } });
     render(MentionInput, props, "mentions"); effects();
     await vi.advanceTimersByTimeAsync(250);
     tree = render(MentionInput, props, "mentions");
-    expect(h.apiGet).toHaveBeenLastCalledWith("/search/users?q=st");
+    expect(h.apiGet).toHaveBeenLastCalledWith("/search/users?q=&mentions=1");
     textarea(tree).props.onKeyDown({ key: "Enter", preventDefault: vi.fn() });
     expect(onChange).toHaveBeenLastCalledWith({ target: { value: "Hello @stranger " } });
     props = { ...props, value: "@one @two @three @four @five @st" };
@@ -183,6 +183,7 @@ it("mention suggestions insert a selected username, respect five people and igno
 describe("Feed sharing through existing logs", () => {
   it("starts collapsed and uses the current session avatar", () => {
     const tree = render(FeedComposer);
+    expect(textarea(tree).type).toBe(MentionInput);
     expect(find(tree, node => node.type === Avatar).props.user).toBe(h.session.user);
     expect(textarea(tree).props).toMatchObject({ rows: 2, readOnly: false });
     expect(button(tree, "Paylaş")).toBeUndefined();

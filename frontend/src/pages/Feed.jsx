@@ -124,7 +124,7 @@ function LogCard({ item }) {
         <span style={c.typeBadgeLog}>✒ Günlük</span>
       </div>
 
-      <LogContent content={item.content} endpoint={`/logs/${item._id}`} maxLength={800} className="feed-log-text" canEdit={isOwn} canDelete={isOwn} onDeleted={() => setDeleted(true)} />
+      <LogContent content={item.content} mentions={item.mentions} endpoint={`/logs/${item._id}`} maxLength={800} className="feed-log-text" canEdit={isOwn} canDelete={isOwn} onDeleted={() => setDeleted(true)} />
 
       {item.relatedWork && (
         <button

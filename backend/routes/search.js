@@ -56,6 +56,14 @@ router.get("/works", async (req, res) => {
 ═══════════════════════════════════════════ */
 router.get("/users", async (req, res) => {
   try {
+    if (req.query.mentions === "1") {
+      const query = req.query.q ?? "";
+      if (typeof query !== "string" || !/^[A-Za-z0-9_]{0,30}$/.test(query))
+        return res.status(400).json({ message: "Geçersiz kullanıcı araması." });
+      const items = await User.find({ kullaniciAdi: { $regex: `^${query}[A-Za-z0-9_]*$`, $options: "i" } })
+        .select("_id kullaniciAdi avatarUrl").sort({ kullaniciAdi: 1 }).limit(5).lean();
+      return res.json({ items });
+    }
     const { q } = req.query;
     if (!q || q.trim().length < 2)
       return res.json({ items: [] });

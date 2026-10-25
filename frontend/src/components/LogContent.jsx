@@ -7,7 +7,7 @@ import "../styles/LogContent.css";
 export default function LogContent({ content, mentions = [], endpoint, maxLength = 500, canEdit, canDelete, onUpdated, onDeleted, className, children }) {
   const [saved, setSaved] = useState(null);
   const [savedMentions, setSavedMentions] = useState(null);
-  const Editor = maxLength === 500 ? MentionInput : "textarea";
+  const Editor = MentionInput;
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);

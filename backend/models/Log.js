@@ -9,6 +9,7 @@ const logSchema = new mongoose.Schema(
       required: true,
       index:    true,
     },
+    mentions: [{ user: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, name: String, _id: false }],
     content: {
       type:      String,
       required:  true,
