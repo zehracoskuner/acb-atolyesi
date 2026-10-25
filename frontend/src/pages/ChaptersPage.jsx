@@ -59,10 +59,8 @@ function htmlify(raw) {
   // Zaten HTML tag varsa dokunma
   if (/<[a-z][\s\S]*>/i.test(raw)) return raw;
   // Düz metin → paragraf bloklarına çevir
-  return raw
-    .split(/\n\n+/)
-    .map((p) => `<div>${p.replace(/\n/g, "<br>") || "<br>"}</div>`)
-    .join("");
+  return raw.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+    .replace(/\r\n?/g, "\n").replace(/\n/g, "<br>");
 }
 
 function normalizeChapter(ch) {

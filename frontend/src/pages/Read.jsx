@@ -250,14 +250,14 @@ function InlineParagraph({ html, index, comments, onOpenDrawer }) {
       <div className="rd-paragraph" style={alignStyle} dangerouslySetInnerHTML={{ __html: html }} />
       <div className="rdic-gutter">
         {count > 0 && (
-          <button className="rdic-bubble" onClick={() => onOpenDrawer(index, plain)} title={`${count} yorum`}>
+          <button className="rdic-bubble" onClick={() => onOpenDrawer(index, plain)} title={`${count} yorum`} aria-label={`${count} paragraf yorumunu aç`}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
             {count}
           </button>
         )}
-        <button className="rdic-add" onClick={() => onOpenDrawer(index, plain)} title="Yorum ekle">
+        <button className="rdic-add" onClick={() => onOpenDrawer(index, plain)} title="Yorum ekle" aria-label="Paragrafa yorum ekle">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M12 5v14M5 12h14"/>
           </svg>
@@ -283,25 +283,21 @@ function InlineParagraphs({ text, commentMap, onOpenDrawer }) {
 
     const flush = () => {
       const trimmed = buffer.trim();
-      if (trimmed) result.push(`<p>${trimmed}</p>`);
+      if (trimmed) result.push(`<p>${buffer}</p>`);
       buffer = "";
     };
 
     for (const node of Array.from(tmp.childNodes)) {
       if (node.nodeType === Node.TEXT_NODE) {
-        buffer += node.textContent;
+        buffer += node.textContent.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
         continue;
       }
       if (node.nodeType !== Node.ELEMENT_NODE) continue;
 
       if (RDIC_BLOCK_TAGS.has(node.tagName)) {
         flush();
-        // boş blokları (örn. <div><br></div>) at — bunlar yazarken oluşan
-        // istemsiz boş satırlardır ve ayrı bir paragraf olarak gösterilmemeli.
-        // <hr>/<img> içeren bloklar metinsiz de olsa anlamlıdır, korunur.
-        const hasText = node.textContent.trim();
-        const hasMeaningfulVoid = /<(hr|img)\b/i.test(node.outerHTML);
-        if (hasText || hasMeaningfulVoid) result.push(node.outerHTML);
+        // Preserve intentional empty paragraphs.
+        result.push(node.outerHTML);
       } else {
         // satır-içi öğe (b, i, span, a, code, ...) → tampona ekle, ayrı blok açma
         buffer += node.outerHTML;
@@ -315,17 +311,27 @@ function InlineParagraphs({ text, commentMap, onOpenDrawer }) {
   if (!blocks.length)
     return <p className="rd-empty-para">Bu bölümde henüz içerik yok.</p>;
 
+  let commentIndex = -1;
   return (
     <>
-      {blocks.map((html, i) => (
+      {blocks.map((html, i) => {
+        const element = document.createElement("div");
+        element.innerHTML = html;
+        // Existing comments count only nonempty blocks; blank lines must not
+        // move those comments onto a different paragraph.
+        if (!element.textContent.trim() && !element.querySelector("hr,img")) {
+          return <div key={i} className="rd-paragraph" dangerouslySetInnerHTML={{ __html: html }} />;
+        }
+        commentIndex += 1;
+        return (
         <InlineParagraph
           key={i}
           html={html}
-          index={i}
-          comments={commentMap[i] || []}
+          index={commentIndex}
+          comments={commentMap[commentIndex] || []}
           onOpenDrawer={onOpenDrawer}
         />
-      ))}
+      ); })}
     </>
   );
 }

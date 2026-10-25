@@ -91,6 +91,21 @@ try {
   await page.keyboard.press("Control+z");
   assert.equal(await editor.textContent(), "Başlangıç son.");
 
+  // A browser's paragraph wrapper around a copied sentence must not split
+  // the destination sentence or introduce blank lines, at any caret position.
+  for (const offset of [0, 5, 10]) {
+    await editor.fill("ABCDEabcde");
+    await editor.evaluate((el, offset) => {
+      const range = document.createRange();
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      range.setStart(walker.nextNode(), offset); range.collapse(true);
+      const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    }, offset);
+    await paste(editor, '<div><p><b>EK</b></p></div>', 'EK');
+    assert.equal(await editor.innerText(), 'ABCDEabcde'.slice(0, offset) + 'EK' + 'ABCDEabcde'.slice(offset));
+    assert.equal(await editor.locator('b').filter({ hasText: /^EK$/ }).textContent(), 'EK');
+  }
+
   await editor.fill("");
   await paste(editor, `<html xmlns:o="urn:schemas-microsoft-com:office:office"><body><!--StartFragment--><p class="MsoNormal" style="margin:80px;line-height:8;color:red">Bir <b>kalın</b> ve <span style="font-style:italic;mso-bidi-font-style:normal">italik</span></p>
     <p></p>

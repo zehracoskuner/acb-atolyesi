@@ -54,6 +54,18 @@ export function chapterClipboardHtml(clipboard) {
   indentation.forEach(node => node.remove());
   const container = document.createElement("div");
   container.append(fragment);
+  // Browsers wrap a copied sentence in its source paragraph. Inserting that
+  // wrapper mid-sentence splits the destination paragraph. Only unwrap when
+  // plain text confirms there are no selected line breaks; keep intentional
+  // blank lines and structural formatting (headings, lists, quotes) intact.
+  if (text && !/[\r\n]/.test(text) && !container.querySelector("br,h1,h2,h3,ul,ol,li,blockquote")) {
+    for (const block of [...container.querySelectorAll("div")].reverse()) {
+      const inline = document.createElement("span");
+      inline.style.cssText = block.style.cssText;
+      inline.append(...block.childNodes);
+      block.replaceWith(inline);
+    }
+  }
   return container.textContent || container.querySelector("br") ? container.innerHTML : plainTextHtml(text);
 }
 
