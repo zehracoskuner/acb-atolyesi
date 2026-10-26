@@ -8,13 +8,26 @@ vi.mock("../../frontend/src/lib/membershipContext", () => ({ useMembership: () =
 vi.mock("../../frontend/src/components/TopBar", () => ({ default: () => null }));
 vi.mock("../../frontend/src/components/Footer", () => ({ default: () => null }));
 vi.mock("../../frontend/src/lib/api", () => ({ apiGet: vi.fn(), apiPost: vi.fn(), apiDelete: vi.fn() }));
-import ExplorePage, { ExploreWorkCard } from "../../frontend/src/pages/ExplorePage.jsx";
+import ExplorePage, { ExploreWorkCard, DiscoveryShelf } from "../../frontend/src/pages/ExplorePage.jsx";
 
 beforeEach(() => { vi.stubGlobal("React", React); data.status = "guest"; });
 afterEach(() => vi.unstubAllGlobals());
 const render = element => renderToStaticMarkup(<MemoryRouter>{element}</MemoryRouter>);
 
 describe("Explore content and access links", () => {
+  it.each([1, 2, 6, 20])("keeps all %i books together, including older and uncategorized books", count => {
+    const works = Array.from({ length: count }, (_, i) => ({
+      _id: `book-${i}`, title: `Kitap ${i}`, updatedAt: "2020-01-01",
+      universe: { genres: i % 3 === 0 ? ["Bilim Kurgu"] : i % 3 === 1 ? ["Gotik"] : [] },
+    }));
+    const html = render(<DiscoveryShelf works={works} />);
+    expect(html.match(/class="explore-work-card"/g)).toHaveLength(count);
+    for (const work of works) expect(html).toContain(`href="/story/${work._id}"`);
+    expect(html).toContain(`${count} kitap`);
+    expect(html).toContain("Hepsini göster");
+    expect(html).toContain('aria-label="Sonraki kitaplar"');
+    expect(html).not.toContain("Karanlık köşeler");
+  });
   it("offers the guest discovery and shared membership actions", () => {
     const html = render(<ExplorePage />);
     expect(html).toContain("Hikâyeleri keşfet");

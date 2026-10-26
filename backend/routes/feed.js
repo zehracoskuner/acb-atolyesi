@@ -70,7 +70,7 @@ router.get("/discover", async (req, res) => {
     const worksPromise = Work.find(workFilter)
       .populate("user", "_id kullaniciAdi avatarUrl")
       .sort({ updatedAt: -1 })
-      .limit(6)
+      .limit(Math.min(20, Math.max(1, parseInt(req.query.limit, 10) || 6)))
       .lean();
 
     const recentLogAuthors = await Log.find({ visibility: "public" })

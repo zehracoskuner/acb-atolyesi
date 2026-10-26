@@ -1,10 +1,10 @@
 import { useMembership } from "../lib/membershipContext";
 // src/pages/ExplorePage.jsx
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import TopBar from "../components/TopBar";
 import Footer from "../components/Footer";
-import { Search, ArrowRight, BookOpen, PenLine, X } from "lucide-react";
+import { Search, ArrowLeft, ArrowRight, BookOpen, PenLine, X } from "lucide-react";
 import "../styles/ExplorePage.css";
 import "../styles/SpotlightHero.css";
 import { apiGet } from "../lib/api";
@@ -79,14 +79,43 @@ export function ExploreWorkCard({ work, featured = false }) {
 }
 
 export function DiscoveryShelf({ works, voices = [] }) {
-  const firstWorks = works.slice(0, 4);
-  const remaining = works.slice(4);
-  const darkGenres = ["Gotik", "Korku", "Psikolojik Gerilim", "Distopya", "Gizem"];
-  const darkWorks = remaining.filter(work => work.universe?.genres?.some(g => darkGenres.includes(g)));
-  const otherWorks = remaining.filter(work => !darkWorks.includes(work));
+  const shelfId = useId();
+  const shelfRef = useRef(null);
+  const [showAll, setShowAll] = useState(false);
+  const [edges, setEdges] = useState({ start: true, end: true });
+
+  useEffect(() => {
+    const shelf = shelfRef.current;
+    if (!shelf) return;
+    const measure = () => setEdges({ start: shelf.scrollLeft <= 1, end: shelf.scrollLeft + shelf.clientWidth >= shelf.scrollWidth - 1 });
+    measure();
+    shelf.addEventListener("scroll", measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(shelf);
+    return () => { shelf.removeEventListener("scroll", measure); observer.disconnect(); };
+  }, [works, showAll]);
+
+  function move(direction) {
+    const shelf = shelfRef.current;
+    if (!shelf) return;
+    const card = shelf.firstElementChild;
+    const step = card ? card.getBoundingClientRect().width + parseFloat(getComputedStyle(shelf).columnGap || 0) : shelf.clientWidth;
+    shelf.scrollBy({ left: direction * step, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+  }
+
   return <>
-    <div className={`explore-work-grid explore-shelf${works.length <= 2 ? " explore-shelf-small" : ""}`}>
-      {firstWorks.map((work, index) => <ExploreWorkCard key={work._id} work={work} featured={index === 0 && works.length <= 2} />)}
+    <div className="explore-shelf-toolbar">
+      <div><h3>Atölyenin kitaplığı</h3><p>{works.length} kitap · {showAll ? "Bütün kitaplar bir arada." : "Yeni bir hikâye için rafı kaydır."}</p></div>
+      <div className="explore-shelf-actions">
+        <button type="button" className="explore-button" aria-controls={shelfId} aria-pressed={showAll} onClick={() => setShowAll(value => !value)}>{showAll ? "Raf görünümü" : "Hepsini göster"}</button>
+        {!showAll && <>
+          <button type="button" className="explore-shelf-arrow" aria-label="Önceki kitaplar" aria-controls={shelfId} disabled={edges.start} onClick={() => move(-1)}><ArrowLeft size={18} aria-hidden="true" /></button>
+          <button type="button" className="explore-shelf-arrow" aria-label="Sonraki kitaplar" aria-controls={shelfId} disabled={edges.end} onClick={() => move(1)}><ArrowRight size={18} aria-hidden="true" /></button>
+        </>}
+      </div>
+    </div>
+    <div id={shelfId} ref={shelfRef} className={`explore-book-shelf${showAll ? " explore-book-shelf-expanded" : ""}`} role="region" aria-label="Atölyenin kitaplığı" tabIndex={showAll ? undefined : 0}>
+      {works.map(work => <ExploreWorkCard key={work._id} work={work} />)}
     </div>
     {voices.length > 0 && <section className="explore-voices" aria-labelledby="explore-voices-title">
       <div className="explore-voices-heading"><p className="explore-eyebrow">SATIR ARASINDA BULUŞALIM</p><h2 id="explore-voices-title">Atölyeden sesler</h2><p>Günlüklerden, yazanların kendi sesiyle.</p></div>
@@ -95,10 +124,6 @@ export function DiscoveryShelf({ works, voices = [] }) {
         <figcaption><Avatar user={log.author} size={28} /><div>{log.author?._id ? <Link to={`/profile/${log.author._id}`}>{log.author.kullaniciAdi || "Yazar"}</Link> : <span>Bir atölye üyesi</span>}<small>Günlüğünden · {timeAgo(log.createdAt)}</small></div></figcaption>
       </figure>)}</div>
     </section>}
-    {[["Karanlık köşeler", "Biraz gizem, biraz tedirginlik. Bir sayfa daha.", darkWorks], ["Keşfetmeye devam", "Bir sonraki hikâyen bu rafta olabilir.", otherWorks]].map(([title, description, items]) => items.length > 0 && <section className="explore-collection" key={title} aria-label={title}>
-      <div className="explore-collection-heading"><h2>{title}</h2><p>{description}</p></div>
-      <div className="explore-work-grid explore-collection-grid">{items.map(work => <ExploreWorkCard key={work._id} work={work} />)}</div>
-    </section>)}
   </>;
 }
 
@@ -154,7 +179,9 @@ export default function ExplorePage() {
     const timer = setTimeout(async () => {
       if (!searching) {
         try {
-          const res = await apiGet(`/feed/discover${genre === "all" ? "" : `?genres=${encodeURIComponent(genre)}`}`);
+          const params = new URLSearchParams({ limit: "20" });
+          if (genre !== "all") params.set("genres", genre);
+          const res = await apiGet(`/feed/discover?${params}`);
           if (current) {
             setResults({ works: res.works || [], users: res.writers || [], loading: false, errors: {} });
           }

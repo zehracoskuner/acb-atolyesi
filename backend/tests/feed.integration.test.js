@@ -56,6 +56,26 @@ async function book(user, title, extras = {}) {
   return Work.create({ user: user._id, title, status: "published", ...extras });
 }
 
+it("web discovery includes twenty published books regardless of update age and still filters genres", async () => {
+  const works = await Work.create(Array.from({ length: 20 }, (_, i) => ({
+    user: i % 2 ? followed._id : stranger._id, title: `Shelf book ${i}`, status: "published",
+    universe: { genres: [i % 2 ? "Bilim Kurgu" : "Fantastik"] },
+  })));
+  const chapters = await Chapter.create(works.map(work => ({ work: work._id, title: "Chapter", status: "published" })));
+  await Promise.all(works.map((work, i) => Work.updateOne({ _id: work._id }, {
+    publishedChapterIds: [chapters[i]._id], updatedAt: new Date("2020-01-01"),
+  }, { timestamps: false })));
+  await book(viewer, "No published chapter");
+  for (const user of [null, viewer]) {
+    const res = await request("/feed/discover?limit=20", { user });
+    expect(res.status).toBe(200);
+    expect(res.body.works.map(work => work._id).sort()).toEqual(works.map(work => String(work._id)).sort());
+    const filtered = await request(`/feed/discover?limit=20&genres=${encodeURIComponent("Bilim Kurgu")}`, { user });
+    expect(filtered.body.works).toHaveLength(10);
+    expect(filtered.body.works.every(work => work.universe.genres.includes("Bilim Kurgu"))).toBe(true);
+  }
+});
+
 it("log lists include comment counts before opening comments and reflect deletion", async () => {
   const entry = await log(viewer, "public");
   const empty = await log(viewer, "public", "No comments");
