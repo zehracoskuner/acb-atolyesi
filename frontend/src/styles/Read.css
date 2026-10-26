@@ -570,6 +570,7 @@
 }
 
 .rd-paragraph {
+  white-space: pre-wrap;
   font-family: var(--rd-font-display);
   font-size: calc(1.125rem * var(--rd-font-scale, 1));
   font-weight: 600;
@@ -593,6 +594,7 @@
   font-size: inherit !important;
 }
 .rd-paragraph :where(b, strong) { font-weight: 700; }
+.rd-paragraph :where(p, div):empty { min-height: 1lh; }
 /* Global CSS reset padding:0 sıfırlar; liste marker'larının görünmesi için */
 .rd-paragraph ul,
 .rd-paragraph ol { padding-left: 1.6em; }
