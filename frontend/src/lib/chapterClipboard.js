@@ -18,11 +18,15 @@ export function chapterClipboardHtml(clipboard) {
 
   const fragment = DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [...tags, "h4", "h5", "h6", "section", "article", "pre"],
-    ALLOWED_ATTR: ["style"], ALLOW_DATA_ATTR: false, ALLOW_ARIA_ATTR: false,
+    ALLOWED_ATTR: ["style", "class"], ALLOW_DATA_ATTR: false, ALLOW_ARIA_ATTR: false,
     RETURN_DOM_FRAGMENT: true,
   });
+  // Chromium adds these clipboard-only breaks at selection boundaries. They
+  // describe the selection, not extra blank paragraphs in the document.
+  fragment.querySelectorAll('br.Apple-interchange-newline').forEach(node => node.remove());
   for (const original of [...fragment.querySelectorAll("*")]) {
     let element = original;
+    element.removeAttribute("class");
     // Use the same paragraph blocks as typing in the editor. Empty paragraphs
     // need a break to retain intentional blank lines after their margins go.
     if (/^(P|SECTION|ARTICLE|PRE|H[4-6])$/.test(element.tagName)) {

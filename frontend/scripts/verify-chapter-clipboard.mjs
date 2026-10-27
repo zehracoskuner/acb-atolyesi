@@ -106,6 +106,28 @@ try {
     assert.equal(await editor.locator('b').filter({ hasText: /^EK$/ }).textContent(), 'EK');
   }
 
+  // Round-trip the actual browser clipboard, including pre-wrap newlines.
+  for (const source of ['Bir satir', 'Bir\nIki', 'Bir\n\nSon']) {
+    await editor.fill(source);
+    const before = await editor.innerText();
+    await page.keyboard.press('Control+a');
+    await page.keyboard.press('Control+c');
+    await editor.fill('');
+    await page.keyboard.press('Control+v');
+    assert.equal(await editor.innerText(), before);
+  }
+
+  // Browser selection markers are not selected document line breaks.
+  await editor.fill('AB');
+  await editor.evaluate(el => {
+    const range = document.createRange();
+    range.setStart(el.firstChild.firstChild || el.firstChild, 1);
+    range.collapse(true);
+    getSelection().removeAllRanges(); getSelection().addRange(range);
+  });
+  await paste(editor, '<br class="Apple-interchange-newline"><div><b>EK</b></div><br class="Apple-interchange-newline">', 'EK');
+  assert.equal(await editor.innerText(), 'AEKB');
+
   // Preserve real paragraph boundaries even if a clipboard producer supplies
   // a plain-text flavour without newline separators.
   const separateParagraphs = await page.evaluate(async () => {
