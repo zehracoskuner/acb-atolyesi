@@ -17,7 +17,7 @@ const notificationSchema = new mongoose.Schema(
     type: {
       type: String,
       enum: [
-        "report_update",
+        "report_update", "new_log", "new_chapter", "new_registration",
         // Sosyal
         "like", "comment", "follow", "log_like", "log_comment", "mention",
         // Moderasyon (sistem bildirimleri — sender: null)

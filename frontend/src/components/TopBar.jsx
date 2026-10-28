@@ -1,6 +1,7 @@
 import NotificationContext from "./NotificationContext";
 import { notificationTarget } from "../lib/notificationTarget";
 import { useSession, logoutSession } from "../lib/session";
+import { syncExistingPush, unlockPushSound, playPushSound } from '../lib/webPush';
 import { EXPLORE_PATH } from "../lib/routes";
 import { rememberLoginReturn } from "../lib/loginReturn";
 // src/components/TopBar.jsx
@@ -92,6 +93,9 @@ const NOTIF_ICON = {
   log_like:         "✨",
   mention: "@",
   log_comment:      "💬",
+  new_log: "📓",
+  new_chapter: "📖",
+  new_registration: "👋",
   chapter_approved: "✅",
   chapter_pending:  "⏳",
   chapter_rejected: "❌",
@@ -251,6 +255,26 @@ export default function TopBar() {
   const [pendingCount,  setPendingCount]  = useState(0);
   const { user: sessionUser, status } = useSession();
   const user = sessionUser || {};
+
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    syncExistingPush().catch(() => {});
+    function receive(event) {
+      if (event.data?.type !== 'acb-push') return;
+      if (event.data.sound) playPushSound();
+      apiGet('/notifications').then(res => {
+        setNotifications(res.items || []); setUnreadCount(res.unreadCount || 0);
+      }).catch(() => {});
+    }
+    navigator.serviceWorker?.addEventListener('message', receive);
+    document.addEventListener('pointerdown', unlockPushSound);
+    document.addEventListener('keydown', unlockPushSound);
+    return () => {
+      navigator.serviceWorker?.removeEventListener('message', receive);
+      document.removeEventListener('pointerdown', unlockPushSound);
+      document.removeEventListener('keydown', unlockPushSound);
+    };
+  }, [status, user._id]);
 
   const dropdownRef = useRef(null);
   const notifRef    = useRef(null);

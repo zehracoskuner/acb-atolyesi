@@ -1,3 +1,4 @@
+import { notifyNewLog } from '../services/activityNotifications.js';
 import { resolveMentions, notifyMentions } from "../services/mentions.js";
 import readerAccess from "../middlewares/readerAccess.js";
 import mongoose from "mongoose";
@@ -159,6 +160,7 @@ router.post("/", ensureAuth, async (req, res) => {
     });
 
     await notifyMentions({ senderId: req.user.id, mentions, log, isLogEntry: true }).catch(console.error);
+    await notifyNewLog(log).catch(console.error);
     const populated = await log.populate([
       { path: "author",      select: "_id kullaniciAdi avatarUrl" },
       { path: "relatedWork", select: "_id title coverImage" },

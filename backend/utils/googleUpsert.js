@@ -1,3 +1,4 @@
+import { notifyNewRegistration } from '../services/activityNotifications.js';
 // backend/utils/googleUpsert.js
 import User from "../models/User.js";
 
@@ -46,5 +47,6 @@ export async function googleUpsert({ email, googleId, avatarUrl = "" }) {
     avatarUrl,
   });
 
+  await notifyNewRegistration(user).catch(console.error);
   return user;
 }

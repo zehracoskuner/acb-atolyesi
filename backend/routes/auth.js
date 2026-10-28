@@ -1,3 +1,4 @@
+import { notifyNewRegistration } from '../services/activityNotifications.js';
 // backend/routes/auth.js
 import { validBirthYear } from "../services/matureAccess.js";
 import { Router }      from "express";
@@ -118,7 +119,7 @@ router.post("/register", validateTermsAcceptance, async (req, res) => {
     const verifyToken   = crypto.randomBytes(32).toString("hex");
     const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    await User.create({
+    const registeredUser = await User.create({
       ...newTermsAcceptance(),
       kullaniciAdi,
       email,
@@ -130,6 +131,7 @@ router.post("/register", validateTermsAcceptance, async (req, res) => {
       emailVerifyExpires: verifyExpires,
     });
 
+    await notifyNewRegistration(registeredUser).catch(console.error);
     try {
       const messageId = await sendVerificationEmail(email, verifyToken, req.body.client);
       console.info("Doğrulama e-postası posta sağlayıcısı tarafından kabul edildi:", messageId);

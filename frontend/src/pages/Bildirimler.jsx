@@ -1,4 +1,5 @@
 import NotificationContext from "../components/NotificationContext";
+import WebPushSettings from '../components/WebPushSettings';
 import { notificationTarget } from "../lib/notificationTarget";
 // src/pages/Bildirimler.jsx
 import { useState, useEffect } from "react";
@@ -18,6 +19,9 @@ function timeAgo(iso) {
 }
 
 const NOTIF_ICON = {
+  new_log: { emoji: "📓", bg: "rgba(34,197,94,.1)" },
+  new_chapter: { emoji: "📖", bg: "rgba(59,130,246,.1)" },
+  new_registration: { emoji: "👋", bg: "rgba(59,130,246,.1)" },
   like:    { emoji: "❤️", bg: "rgba(239,68,68,.1)" },
   follow:  { emoji: "👤", bg: "rgba(59,130,246,.1)" },
   comment: { emoji: "💬", bg: "rgba(34,197,94,.1)"  },
@@ -35,10 +39,15 @@ export default function Bildirimler() {
 
   useEffect(() => {
     document.title = "Bildirimler · ACB Atölyesi";
-    apiGet("/notifications")
-      .then(res => setNotifications(res.items || []))
+    let active = true;
+    const refresh = () => apiGet("/notifications")
+      .then(res => { if (active) setNotifications(res.items || []); })
       .catch(error => { if (error.status === 401) navigate("/login"); })
-      .finally(() => setLoading(false));
+      .finally(() => { if (active) setLoading(false); });
+    refresh();
+    const receive = event => { if (event.data?.type === 'acb-push') refresh(); };
+    navigator.serviceWorker?.addEventListener('message', receive);
+    return () => { active = false; navigator.serviceWorker?.removeEventListener('message', receive); };
   }, [navigate]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -119,6 +128,7 @@ export default function Bildirimler() {
           </div>
         </div>
 
+        <WebPushSettings />
         {/* Liste */}
         {loading ? (
           <div style={{ textAlign: "center", padding: "3rem 0", color: "#9a8e80", fontSize: ".85rem", fontStyle: "italic" }}>

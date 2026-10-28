@@ -1,3 +1,4 @@
+import { notifyNewRegistration } from '../services/activityNotifications.js';
 import "dotenv/config";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
@@ -38,6 +39,7 @@ passport.use(new GoogleStrategy(
           avatarUrl:    profile.photos?.[0]?.value || "",
           emailVerified: true,
         });
+        await notifyNewRegistration(user).catch(console.error);
       } else if (!user.googleId) {
         user.googleId      = profile.id;
         user.emailVerified = true;

@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
-import { validWebSession } from "../services/authSession.js";
+import { validWebSession, hashSession } from "../services/authSession.js";
 import { getJwtSecret } from "../config/jwt.js";
 import { hasCurrentTerms, TERMS_VERSION } from "../config/terms.js";
 
@@ -32,6 +32,7 @@ function authenticate(optional, allowPending = false) {
       if (!user) return reject(401, "Yetkisiz veya token geçersiz.");
       if (!await validWebSession(decoded, user)) return reject(401, "Oturumunuz sona erdi. Lütfen yeniden giriş yapın.");
       req.webSession = !!req.cookies?.token;
+      req.sessionHash = hashSession(decoded.sid);
       if (user.role === "banned") return reject(403, "Hesabınız askıya alınmış.");
       const profileIncomplete = user.profileComplete === false || !Number.isInteger(user.birthYear);
       if (!allowPending && (!hasCurrentTerms(user) || profileIncomplete)) {

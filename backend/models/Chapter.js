@@ -1,3 +1,4 @@
+import { notifyNewChapter } from '../services/activityNotifications.js';
 // backend/models/Chapter.js
 import mongoose from "mongoose";
 import { chapterMediaSchema } from "./chapterMediaSchema.js";
@@ -83,7 +84,11 @@ const chapterSchema = new mongoose.Schema(
 chapterSchema.index({ status: 1, createdAt: -1 });
 chapterSchema.index({ work: 1, savedAt: -1 });
 
+chapterSchema.post('init', function (chapter) {
+  chapter.$locals.previouslyPublished = chapter.status === 'published';
+});
 chapterSchema.pre("save", async function () {
+  this.$locals.announcePublication = this.status === 'published' && !this.firstPublishedAt && !this.$locals.previouslyPublished;
   if (this.status === "published" && !this.firstPublishedAt) {
     this.firstPublishedAt = await databaseNow();
   }
@@ -94,6 +99,11 @@ chapterSchema.post("save", async function (chapter) {
     $min: { firstPublishedAt: chapter.firstPublishedAt },
     $max: { lastPublishedChapterAt: chapter.firstPublishedAt },
   }, { session: chapter.$session(), timestamps: false });
+  if (chapter.$locals.announcePublication) {
+    chapter.$locals.announcePublication = false;
+    const work = await Work.findById(chapter.work).session(chapter.$session());
+    if (work) await notifyNewChapter({ _id: chapter._id, status: 'published' }, work, chapter.$session());
+  }
 });
 
 chapterSchema.pre(/^(find|count|distinct)/, async function () {
