@@ -576,7 +576,7 @@
   font-weight: 600;
   line-height: 1.75;
   color: var(--rd-prose);
-  margin: 0 0 .65em;
+  margin: 0 0 .40em;
   text-align: start;
   hyphens: auto;
   -webkit-hyphens: auto;
@@ -883,7 +883,8 @@
 }
 
 /* Hover'da her zaman (+ buton dahil) görünür */
-.rdic-para-wrap:hover .rdic-gutter {
+.rdic-para-wrap:hover .rdic-gutter,
+.rdic-para-wrap:focus-within .rdic-gutter {
   opacity: 1;
   pointer-events: auto;
 }
@@ -893,7 +894,8 @@
   opacity: 0;
   transition: opacity .12s, background .12s, color .12s;
 }
-.rdic-para-wrap:hover .rdic-add {
+.rdic-para-wrap:hover .rdic-add,
+.rdic-para-wrap:focus-within .rdic-add {
   opacity: 1;
 }
 /* Yorum varsa + butonu hiç gösterilmez */
@@ -1356,8 +1358,24 @@
 ══════════════════════════ */
 @media (max-width: 760px) {
   .rd-content { padding: 28px 18px 60px; }
-  .rdic-gutter { display: none; }
+  .rdic-para-wrap { flex-direction: column; padding-right: 0; margin-right: 0; }
+  .rdic-gutter {
+    position: static;
+    align-self: flex-end;
+    flex-direction: row;
+    margin-top: -1em;
+    margin-bottom: .75em;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .rdic-add { opacity: 1; }
+  .rdic-bubble, .rdic-add { min-width: 44px; width: auto; height: 44px; padding: 0 10px; }
   .rd-toolbar { padding: 0 12px; }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .rdic-gutter { opacity: 1; pointer-events: auto; }
+  .rdic-add { opacity: 1; }
 }
 
 @media (max-width: 480px) {
