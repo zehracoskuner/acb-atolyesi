@@ -576,7 +576,7 @@
   font-weight: 600;
   line-height: 1.75;
   color: var(--rd-prose);
-  margin: 0 0 1.5em;
+  margin: 0 0 .65em;
   text-align: start;
   hyphens: auto;
   -webkit-hyphens: auto;
@@ -594,6 +594,8 @@
   font-size: inherit !important;
 }
 .rd-paragraph :where(b, strong) { font-weight: 700; }
+.rd-paragraph > :first-child { margin-top: 0; }
+.rd-paragraph > :last-child { margin-bottom: 0; }
 .rd-paragraph :where(p, div):empty { min-height: 1lh; }
 /* Global CSS reset padding:0 sıfırlar; liste marker'larının görünmesi için */
 .rd-paragraph ul,
