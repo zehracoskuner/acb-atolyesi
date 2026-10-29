@@ -8,6 +8,7 @@ import Work          from "../models/Work.js";
 import User          from "../models/User.js";
 import ensureAuth    from "../middlewares/ensureAuth.js";
 import { publishedDiscussion } from '../services/discussionAccess.js';
+import { notifyComment } from '../services/notificationService.js';
 
 const router = express.Router();
 router.use(readerAccess);
@@ -58,6 +59,12 @@ router.post("/", ensureAuth, async (req, res) => {
       author: req.user.id,
     });
     const populated = await doc.populate("author", "kullaniciAdi username avatarUrl");
+    const work = await Work.findById(workId).select('user').lean();
+    const ownerId = work?.user?.toString();
+    if (ownerId && ownerId !== String(req.user.id) && !mentions.some(mention => String(mention.user) === ownerId)) {
+      await notifyComment({ senderId: req.user.id, workId, chapterId, commentPreview: doc.content })
+        .catch(error => console.error('inline notifyComment:', error.message));
+    }
     await notifyMentions({ senderId: req.user.id, mentions, workId, chapterId }).catch(console.error);
     res.status(201).json({ item: populated });
   } catch (e) {
