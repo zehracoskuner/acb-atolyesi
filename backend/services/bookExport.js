@@ -140,7 +140,7 @@ export async function createBookFile(snapshot, format) {
     creator: "", lastModifiedBy: "", title: snapshot.title,
     styles: { default: {
       document: { run: { font: "Times New Roman", size: 24 }, paragraph: { spacing: { before: 0, after: 0, line: 360 }, widowControl: true } },
-      title: { run: { font: "Times New Roman", size: 40, bold: true }, paragraph: { alignment: AlignmentType.CENTER } },
+      title: { run: { font: "Times New Roman", size: 48, bold: true }, paragraph: { alignment: AlignmentType.CENTER } },
       heading1: { run: { font: "Times New Roman", size: 32, bold: true }, paragraph: { keepNext: true, spacing: { before: 0, after: 240 } } },
       heading2: { run: { font: "Times New Roman", size: 28, bold: true } },
       heading3: { run: { font: "Times New Roman", size: 26, bold: true } },
@@ -160,6 +160,10 @@ export async function createBookFile(snapshot, format) {
         children: [new TextRun({ children: [PageNumber.CURRENT] })] })] }) },
       children: paragraphs.map(({ runs, list, ...options }) => new Paragraph({
       ...options,
+      // Manuscript layout overrides editor alignment only in the exported DOCX.
+      alignment: options.heading === HeadingLevel.TITLE ? AlignmentType.CENTER : AlignmentType.LEFT,
+      ...(!list && !options.heading && runs.some(run => run.text.trim())
+        ? { indent: { ...options.indent, firstLine: 709 } } : {}),
       ...(list ? { numbering: { reference: `list-${list.id}`, level: list.level } } : {}),
       children: runs.flatMap(({ text, ...style }) => text.split("\n").map((part, index) =>
         new TextRun({ ...style, text: part, ...(index ? { break: 1 } : {}) }))),

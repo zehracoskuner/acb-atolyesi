@@ -28,6 +28,28 @@ describe("book files", () => {
     expect((xml.match(/<w:pageBreakBefore\s*\/>/g) || [])).toHaveLength(2);
     expect(footer).toContain('PAGE');
   });
+  it('left-aligns manuscript prose with a real first-line indent and a larger centered title', async () => {
+    const snapshot = { title: 'Book', chapters: [{ title: 'Chapter', content:
+      '<p style="text-align:justify">Prose</p><p style="text-align:right">Other</p><h2>Heading</h2><ul><li>Item</li></ul><blockquote>Quote</blockquote>' }] };
+    const original = JSON.stringify(snapshot);
+    const zip = await JSZip.loadAsync(await createBookFile(snapshot, 'docx'));
+    const xml = await zip.file('word/document.xml').async('string');
+    const styles = await zip.file('word/styles.xml').async('string');
+    const paragraphs = xml.match(/<w:p[ >][\s\S]*?<\/w:p>/g);
+    const containing = text => paragraphs.find(p => p.includes(`>${text}</w:t>`));
+    for (const text of ['Prose', 'Other', 'Quote']) {
+      expect(containing(text)).toContain('w:val="left"');
+      expect(containing(text)).toContain('w:firstLine="709"');
+      expect(containing(text)).not.toContain('<w:tab');
+    }
+    expect(containing('Quote')).toContain('w:left="720"');
+    for (const text of ['Book', 'Chapter', 'Heading', 'Item']) expect(containing(text)).not.toContain('w:firstLine');
+    expect(containing('Book')).toContain('w:val="center"');
+    const titleStyle = styles.match(/<w:style\b[^>]*w:styleId="Title"[\s\S]*?<\/w:style>/)[0];
+    expect(titleStyle).toContain('<w:sz w:val="48"');
+    expect(xml).not.toMatch(/w:val="(?:both|right)"/);
+    expect(JSON.stringify(snapshot)).toBe(original);
+  });
   it.each([0, 1, 2, 3, 5])('expands only a single Enter and preserves existing blank lines (%s)', async count => {
     const snapshot = { title: 'Book', chapters: [{ title: 'Chapter', content:
       `<div><p>First</p>${'<p><br></p>'.repeat(count)}<p><strong>Second</strong></p></div>` }] };
@@ -91,7 +113,8 @@ describe("book files", () => {
     expect(html).toContain("<ol>"); expect(html).toContain("<ul>");
     const zip = await JSZip.loadAsync(buffer, { checkCRC32: true });
     const xml = await zip.file("word/document.xml").async("string");
-    expect(xml).toContain('w:val="center"'); expect(xml).toContain('w:val="right"');
+    expect(xml).toContain('w:val="center"'); expect(xml).toContain('w:val="left"');
+    expect(xml).not.toContain('w:val="right"');
     expect(xml).toContain("<w:u"); expect(xml).toContain("<w:strike");
     expect(xml).not.toContain("altChunk"); expect(xml).not.toContain("SECRET_");
     expect(Object.keys(zip.files).filter(name => /word\/media|thumbnail/i.test(name))).toEqual([]);
