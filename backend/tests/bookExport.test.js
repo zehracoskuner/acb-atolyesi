@@ -13,11 +13,67 @@ const book = { title: 'İğde & Şüphe <Öykü> "Çığ"', notes: "SECRET_NOTE"
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("book files", () => {
+  it('uses manuscript typography, A4 margins, chapter page breaks and page numbers', async () => {
+    const zip = await JSZip.loadAsync(await createBookFile(book, 'docx'));
+    const styles = await zip.file('word/styles.xml').async('string');
+    const xml = await zip.file('word/document.xml').async('string');
+    const footer = await zip.file('word/footer1.xml').async('string');
+    expect(styles).toContain('w:ascii="Times New Roman"');
+    expect(styles).toContain('<w:sz w:val="24"');
+    expect(styles).toContain('w:line="360"');
+    expect(styles).not.toContain('w:after="160"');
+    expect(xml).toContain('w:w="11906"');
+    expect(xml).toContain('w:h="16838"');
+    for (const side of ['top', 'bottom', 'left', 'right']) expect(xml).toContain(`w:${side}="1417"`);
+    expect((xml.match(/<w:pageBreakBefore\s*\/>/g) || [])).toHaveLength(2);
+    expect(footer).toContain('PAGE');
+  });
+  it.each([0, 1, 2, 3, 5])('expands only a single Enter and preserves existing blank lines (%s)', async count => {
+    const snapshot = { title: 'Book', chapters: [{ title: 'Chapter', content:
+      `<div><p>First</p>${'<p><br></p>'.repeat(count)}<p><strong>Second</strong></p></div>` }] };
+    const expected = Math.max(1, count);
+    const paragraphs = bookParagraphs(snapshot).slice(2);
+    expect(paragraphs).toHaveLength(expected + 2);
+    expect(paragraphs.slice(1, -1).every(p => p.runs.length === 0)).toBe(true);
+    expect(paragraphs.every(p => p.spacing.before === 0 && p.spacing.after === 0)).toBe(true);
+    expect((await createBookFile(snapshot, 'txt')).toString('utf8')).toBe(`Book\n\nChapter\n\nFirst${'\n'.repeat(expected + 1)}Second\n`);
+    const zip = await JSZip.loadAsync(await createBookFile(snapshot, 'docx'));
+    const xml = await zip.file('word/document.xml').async('string');
+    expect((xml.match(/<w:p[ >]/g) || [])).toHaveLength(expected + 4);
+    expect((xml.match(/w:after="0"/g) || [])).toHaveLength(expected + 2);
+  });
+  it.each([1, 2, 3, 4])('handles soft line breaks without collapsing larger gaps (%s)', async breaks => {
+    const snapshot = { title: 'Book', chapters: [{ title: 'Chapter', content: `<p>First${'<br>'.repeat(breaks)}<b>Second</b></p>` }] };
+    const expected = Math.max(2, breaks);
+    expect((await createBookFile(snapshot, 'txt')).toString('utf8')).toContain(`First${'\n'.repeat(expected)}Second`);
+    const zip = await JSZip.loadAsync(await createBookFile(snapshot, 'docx'));
+    const xml = await zip.file('word/document.xml').async('string');
+    expect((xml.match(/<w:br\s*\/>/g) || [])).toHaveLength(expected);
+  });
+  it('preserves edge blanks and does not invent blanks for nested wrappers', () => {
+    const snapshot = { title: 'Book', chapters: [{ title: 'Chapter', content: '<div><div><p><br></p><p>Text</p><p>&nbsp;</p></div></div>' }] };
+    expect(bookParagraphs(snapshot).slice(2).map(p => p.runs.map(r => r.text).join(''))).toEqual(['', 'Text', '']);
+  });
+  it.each([
+    ['<div>First</div><div><br></div><div>Second</div>', 2],
+    ['<p>First<br></p><p>Second</p>', 2],
+    ['<p>First</p><p><br>Second</p>', 2],
+    ['<p>First<br><br></p><p>Second</p>', 3],
+    ['<p>First</p><p></p><p>&nbsp;</p><p>Second</p>', 3],
+  ])('preserves gaps across mixed editor blocks: %s', async (content, enters) => {
+    const snapshot = { title: 'Book', chapters: [{ title: 'Chapter', content }] };
+    const original = JSON.stringify(snapshot);
+    const text = (await createBookFile(snapshot, 'txt')).toString('utf8');
+    expect(text).toContain(`First${'\n'.repeat(enters)}Second`);
+    const paragraphs = bookParagraphs(snapshot).slice(2);
+    expect(paragraphs.map(p => p.runs.map(r => r.text).join('')).join('\n')).toBe(`First${'\n'.repeat(enters)}Second`);
+    expect(JSON.stringify(snapshot)).toBe(original);
+  });
   it("exports title, chapter order, Turkish, entities, paragraphs and no private fields or HTML to TXT", async () => {
     const text = (await createBookFile(book, "txt")).toString("utf8");
     expect(text).toContain(book.title);
     expect(text).toContain("Türkçe: ıİşŞğĞüÜöÖçÇ 😀 & <metin>");
-    expect(text).toContain("Kalın eğik alt üst\nyeni satır\n\nBiçim");
+    expect(text).toContain("Kalın eğik alt üst\n\nyeni satır\n\nBiçim");
     expect(text).toContain("1. Bir\n\n2. İki\n\n• Madde");
     expect(text.indexOf("İlk bölüm")).toBeLessThan(text.indexOf("Yayımlanmamış son bölüm"));
     expect(text).not.toMatch(/SECRET_|<p[ >]|<strong>|&amp;/);
@@ -27,9 +83,9 @@ describe("book files", () => {
     const opened = await mammoth.extractRawText({ buffer });
     const expected = bookParagraphs(book).map(p => p.runs.map(r => r.text).join("")).join("\n\n") + "\n\n";
     // Mammoth's raw-text reader ignores line breaks; its HTML reader retains them.
-    expect(opened.value).toBe(expected.replace("üst\nyeni", "üstyeni"));
+    expect(opened.value).toBe(expected.replace("üst\n\nyeni", "üstyeni"));
     const html = (await mammoth.convertToHtml({ buffer })).value;
-    expect(html).toContain("<br />yeni satır");
+    expect(html).toContain("<br /><br />yeni satır");
     expect(html).toContain("<strong>Kalın</strong>");
     expect(html).toContain("<em>eğik</em>");
     expect(html).toContain("<ol>"); expect(html).toContain("<ul>");
@@ -54,7 +110,7 @@ describe("book files", () => {
     const buffer = await createBookFile(snapshot, "docx");
     const text = (await mammoth.extractRawText({ buffer })).value;
     const expected = ["Uzun eser", ...chapters.flatMap((ch, chapter) => [ch.title,
-      ...Array.from({ length: 150 }, (_, p) => `${chapter}:${p} — İstanbul, gökyüzü ve çığlık. ${"Uzun metin. ".repeat(10)}`),
+      ...Array.from({ length: 150 }, (_, p) => `${chapter}:${p} — İstanbul, gökyüzü ve çığlık. ${"Uzun metin. ".repeat(10)}`).flatMap((text, p) => p ? ['', text] : [text]),
     ])].join("\n\n") + "\n\n";
     expect(text).toBe(expected);
   }, 30000);

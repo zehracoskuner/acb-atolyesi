@@ -30,6 +30,8 @@ export default function BookDownload({ workId, dirty = false, beforeSave, disabl
       <label>Dosya biçimi <select value={format} disabled={busy} onChange={e => setFormat(e.target.value)}>
         <option value="docx">DOCX — düzenlenebilir</option><option value="txt">TXT — UTF-8 düz metin</option>
       </select></label>
+      {format === "docx" && <p>A4 · Times New Roman 12 punto · 1,5 satır aralığı · 2,5 cm kenar boşlukları. Bölümler yeni sayfada başlar; sayfalar numaralandırılır.</p>}
+      <p>Paragraflar arasındaki tek Enter iki Enter’a tamamlanır. İki veya daha fazla Enter korunur; ayrıca paragraf boşluğu eklenmez.</p>
       {dirty && <p role="alert">Kaydedilmemiş değişiklikler var. Kayıtlı sürümü indirirseniz bu değişiklikler dosyada yer almaz.</p>}
       <div className="book-download-actions">
         {beforeSave && <button className="acb-action--primary" disabled={busy || disabled} onClick={() => download(true)}>Önce kaydet ve indir</button>}
