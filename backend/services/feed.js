@@ -14,19 +14,29 @@ const workFields = { _id: 1, title: 1, coverImage: 1 };
 export function parseFeedQuery(query) {
   const scope = query.scope ?? "public";
   const page = query.page ?? "1";
-  if (Object.keys(query).some(key => !["scope", "page"].includes(key)) ||
-      !["public", "following"].includes(scope) || typeof page !== "string" ||
+  if (Object.keys(query).some(key => !["scope", "page", "cursor"].includes(key)) ||
+      !["public", "following", "mixed"].includes(scope) || typeof page !== "string" ||
       !/^[1-9]\d*$/.test(page) || !Number.isSafeInteger(Number(page)) || Number(page) > 100000) {
     throw Object.assign(new Error("Geçersiz akış kapsamı veya sayfa."), { status: 400 });
   }
-  return { scope, page: Number(page) };
+  let cursor;
+  if (query.cursor !== undefined) {
+    try {
+      if (typeof query.cursor !== 'string' || query.cursor.length > 300 || query.page !== undefined) throw new Error();
+      cursor = JSON.parse(Buffer.from(query.cursor, 'base64url').toString());
+      if (cursor.scope !== scope || !['log', 'chapter'].includes(cursor.type) ||
+          !mongoose.isObjectIdOrHexString(cursor.id) || typeof cursor.at !== 'string' || !Number.isFinite(Date.parse(cursor.at))) throw new Error();
+    } catch { throw Object.assign(new Error('Geçersiz akış devam noktası.'), { status: 400 }); }
+  }
+  return { scope, page: Number(page), cursor };
 }
 
-export async function readFeed({ viewerId, scope, page }) {
-  const viewer = scope === "following" ? await User.findById(viewerId).select("following").lean() : null;
+export async function readFeed({ viewerId, scope = 'public', page = 1, cursor }) {
+  const viewer = scope !== "public" ? await User.findById(viewerId).select("following").lean() : null;
   const following = viewer?.following || [];
   const logFilter = scope === "following"
     ? { author: { $in: following }, visibility: { $in: ["public", "followers"] } }
+    : scope === 'mixed' ? { $or: [{ visibility: 'public' }, { author: { $in: [...following, new mongoose.Types.ObjectId(viewerId)] }, visibility: 'followers' }] }
     : { visibility: "public" };
   // Merge before paginating: no per-source cap, no lost items beyond page four.
   const pipeline = [
@@ -35,23 +45,38 @@ export async function readFeed({ viewerId, scope, page }) {
       visibility: 1, relatedWork: 1, likeCount: { $size: { $ifNull: ["$likes", []] } },
       likedByMe: { $in: [new mongoose.Types.ObjectId(viewerId), { $ifNull: ["$likes", []] }] } } },
   ];
-  if (scope === "following" && following.length) pipeline.push({ $unionWith: {
+  if (scope !== "public" && following.length) pipeline.push({ $unionWith: {
     coll: Chapter.collection.name,
     pipeline: [
-      { $match: { status: "published", moderationHold: { $ne: true }, createdAt: { $gt: new Date(Date.now() - 30 * 86400000) } } },
+      { $match: { status: "published", moderationHold: { $ne: true } } },
       { $lookup: { from: Work.collection.name, localField: "work", foreignField: "_id", as: "book",
         pipeline: [{ $match: { ...publicWork, ...matureFilter(), user: { $in: following } } }, { $project: { ...workFields, user: 1, publishedChapterIds: 1 } }] } },
       { $unwind: "$book" },
       { $match: { $expr: { $in: ["$_id", { $ifNull: ["$book.publishedChapterIds", []] }] } } },
-      { $project: { _id: 1, type: { $literal: "chapter" }, createdAt: 1, author: "$book.user",
-        chapter: { _id: "$_id", title: "$title", order: "$order" },
+      { $project: { _id: 1, type: { $literal: "chapter" }, createdAt: { $ifNull: ['$firstPublishedAt', '$createdAt'] }, author: "$book.user",
+        publicationDateEstimated: { $or: [{ $eq: [{ $ifNull: ['$firstPublishedAt', null] }, null] }, { $eq: ['$publicationDateEstimated', true] }] },
+        publishedChapterIds: '$book.publishedChapterIds',
+        chapter: { _id: "$_id", title: "$title", order: '$order' },
         work: { _id: "$book._id", title: "$book.title", coverImage: "$book.coverImage" } } },
     ],
   } });
+  if (cursor) pipeline.push({ $match: { $or: [
+    { createdAt: { $lt: new Date(cursor.at) } },
+    { createdAt: new Date(cursor.at), _id: { $lt: new mongoose.Types.ObjectId(cursor.id) } },
+    { createdAt: new Date(cursor.at), _id: new mongoose.Types.ObjectId(cursor.id), type: { $gt: cursor.type } },
+  ] } });
   pipeline.push(
     { $sort: { createdAt: -1, _id: -1, type: 1 } },
     { $facet: { count: [{ $count: "total" }], items: [
       { $skip: (page - 1) * PAGE_SIZE }, { $limit: PAGE_SIZE },
+      // Calculate reader-visible numbering only for this page, excluding drafts
+      // and held/unlisted chapters. Never expose the work's internal index.
+      { $lookup: { from: Chapter.collection.name, let: { ids: { $ifNull: ['$publishedChapterIds', []] }, order: '$chapter.order', id: '$_id' }, as: 'preceding',
+        pipeline: [{ $match: { status: 'published', moderationHold: { $ne: true }, $expr: { $and: [
+          { $in: ['$_id', '$$ids'] }, { $or: [{ $lt: ['$order', '$$order'] }, { $and: [{ $eq: ['$order', '$$order'] }, { $lt: ['$_id', '$$id'] }] }] },
+        ] } } }, { $count: 'count' }] } },
+      { $set: { chapter: { $cond: [{ $eq: ['$type', 'chapter'] }, { $mergeObjects: ['$chapter', { order: { $add: [1, { $ifNull: [{ $arrayElemAt: ['$preceding.count', 0] }, 0] }] } }] }, '$$REMOVE'] } } },
+      { $unset: ['preceding', 'publishedChapterIds'] },
       { $lookup: { from: User.collection.name, localField: "author", foreignField: "_id", as: "author",
         pipeline: [{ $project: { _id: 1, kullaniciAdi: 1, avatarUrl: 1 } }] } },
       { $set: { author: { $ifNull: [{ $arrayElemAt: ["$author", 0] }, null] } } },
@@ -83,7 +108,11 @@ export async function readFeed({ viewerId, scope, page }) {
     ...(item.type === "log" ? { commentCount: commentCounts.get(String(item._id)) ?? 0 } : {}),
     ...(item.type === "chapter" ? { likeCount: likeMap.get(String(item._id))?.count || 0, likedByMe: !!likeMap.get(String(item._id))?.mine } : {}),
     authorShelf: shelfMap.get(String(item.author?._id)) || { works: [], total: 0 } })),
-    scope, page, total, hasMore: page * PAGE_SIZE < total, isEmpty: total === 0 };
+    scope, page, total, hasMore: page * PAGE_SIZE < total, isEmpty: total === 0,
+    nextCursor: page * PAGE_SIZE < total && items.length ? Buffer.from(JSON.stringify({ scope,
+      at: items.at(-1).createdAt.toISOString(), id: String(items.at(-1)._id), type: items.at(-1).type })).toString('base64url') : null,
+    followingCount: following.length,
+    history: { logs: 'retained-records', logRetentionDays: 365, chapters: 'all-published' } };
 }
 
 export async function readLatestWork(viewerId) {

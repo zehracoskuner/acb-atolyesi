@@ -2,6 +2,8 @@ import { Router } from "express";
 import mongoose   from "mongoose";
 import Report     from "../models/Report.js";
 import Comment    from "../models/Comment.js";
+import InlineComment from '../models/InlineComment.js';
+import { commentTarget } from '../services/commentTarget.js';
 import User       from "../models/User.js";
 import { notifyWarning, notifyCommentRemoved } from "../services/notificationService.js";
 
@@ -61,7 +63,9 @@ async function populateTarget(report) {
         .populate("chapter",   "title order")
         .populate("deletedBy", "kullaniciAdi")
         .lean();
-      r.targetObj = comment || null;
+      const inline = !comment ? await InlineComment.findById(r.targetId).select('content status author workId chapterId')
+        .populate('author', 'kullaniciAdi avatarUrl email').populate('workId', 'title').populate('chapterId', 'title order').lean() : null;
+      r.targetObj = comment || (inline ? { ...inline, work: inline.workId, chapter: inline.chapterId } : null);
 
     } else if (r.targetType === "work") {
       const Work = (await import("../models/Work.js")).default;
@@ -174,8 +178,13 @@ router.delete("/:id/comment", async (req, res) => {
     if (rapor.targetType !== "comment")
       return res.status(400).json({ message: "Bu şikayet bir yorum şikayeti değil." });
 
-    const comment = await Comment.findById(rapor.targetId);
-    if (comment && !comment.isDeleted) {
+    const comment = await commentTarget(rapor.targetId);
+    if (comment?.constructor.modelName === 'InlineComment') {
+      comment.status = 'rejected';
+      comment.reviewNote = req.body?.reason?.trim() || 'Şikâyet sonucu kaldırıldı';
+      await comment.save();
+      notifyCommentRemoved({ recipientId: comment.author, workId: comment.workId }).catch(console.error);
+    } else if (comment && !comment.isDeleted) {
       comment.isDeleted       = true;
       comment.deletedAt       = new Date();
       comment.deletedBy       = req.user.id;
@@ -222,10 +231,10 @@ router.post("/:id/warn", async (req, res) => {
     let workId       = null;
 
     if (rapor.targetType === "comment") {
-      const comment = await Comment.findById(rapor.targetId)
-        .select("author content originalContent work").lean();
+      const doc = await commentTarget(rapor.targetId);
+      const comment = doc?.toObject();
       targetUserId = comment?.author;
-      workId       = comment?.work || null;
+      workId       = comment?.work || comment?.workId || null;
       const raw = (comment?.content || comment?.originalContent || "").trim();
       context = raw
         ? `yorumunuz ("${raw.slice(0, 60)}${raw.length > 60 ? "…" : ""}")`

@@ -11,7 +11,7 @@ const commentSchema = new mongoose.Schema(
     chapter: { type: ObjectId, ref: "Chapter", default: null },
     work:    { type: ObjectId, ref: "Work",    default: null },
     mentions: [{ user: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, name: String, _id: false }],
-    content: { type: String, required: true, maxlength: 2000, trim: true },
+    content: { type: String, required() { return !this.isDeleted; }, maxlength: 2000, trim: true },
     parentId: { type: ObjectId, ref: "Comment", default: null },
 
     // Beğeni — toggle destekli array. likeCount denormalize, $size ile senkron tutulur.

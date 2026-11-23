@@ -9,6 +9,7 @@ import { notifyFollow } from "../services/notificationService.js";
 import { getPublishedChapterIdsByWork } from "../services/publishedChapters.js";
 import { PUBLIC_WORK_FIELDS, serializePublicWork, serializePublicWorkCard } from "../services/publicWork.js";
 import ensureAuth, { optionalAuth } from "../middlewares/ensureAuth.js";
+import { readerPayload, readerPreviewPayload, previewLimit } from '../services/readerContent.js';
 
 const router = express.Router();
 router.use(readerAccess);
@@ -110,9 +111,10 @@ router.get("/works/:id/chapters", async (req, res) => {
     // Sıra: narrative order (chapter.order), publish sırası değil.
     const chapters = await Chapter.find({
       _id: { $in: publishedIds }, work: work._id, status: "published",
-    }).select("_id title order").sort({ order: 1 });
+    }).select("_id title order").sort({ order: 1, _id: 1 });
 
-    return res.json({ items: chapters.map(ch => ({ _id: ch._id, title: ch.title, order: ch.order })) });
+    const accessible = !req.user && req.query.reader === '1' ? chapters.slice(0, 1) : chapters;
+    return res.json({ items: accessible.map(ch => ({ _id: ch._id, title: ch.title, order: ch.order })), preview: !req.user });
   } catch (err) {
     console.error("GET /works/:id/chapters hatası:", err);
     return res.status(500).json({ message: "Bölümler yüklenemedi." });
@@ -135,10 +137,23 @@ router.get("/works/:id/chapters/:chapterId", ensureAuth, async (req, res) => {
     const chapter = await Chapter.findOne({ _id: chapterId, work: work._id, status: "published" })
       .select("_id title order content media");
     if (!chapter) return res.status(404).json({ message: "Bölüm bulunamadı." });
-    return res.json({ item: { _id: chapter._id, title: chapter.title, order: chapter.order, content: chapter.content, media: chapter.media || [] } });
+    return res.json({ item: { _id: chapter._id, title: chapter.title, order: chapter.order, content: chapter.content, media: chapter.media || [], ...readerPayload(chapter) } });
   } catch {
     return res.status(500).json({ message: "Bölüm yüklenemedi." });
   }
+});
+
+// Guests never receive a full chapter, hidden media, or later chapter excerpts.
+router.get('/works/:id/preview', async (req, res, next) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ message: 'Geçersiz eser.' });
+    const work = await Work.findOne({ _id: req.params.id, status: 'published' }).select('_id publishedChapterIds contentWarning');
+    if (!work || work.contentWarning) return res.status(404).json({ message: 'Önizleme kullanılamıyor.' });
+    const chapter = await Chapter.findOne({ _id: { $in: work.publishedChapterIds || [] }, work: work._id, status: 'published' })
+      .select('_id title order content').sort({ order: 1, _id: 1 });
+    if (!chapter) return res.status(404).json({ message: 'Yayınlanmış bölüm bulunamadı.' });
+    res.json({ preview: true, limit: previewLimit(), item: { _id: chapter._id, title: chapter.title, order: chapter.order, media: [], ...readerPreviewPayload(chapter) } });
+  } catch (error) { next(error); }
 });
 
 /* ═══════════════════════════════════════════
@@ -161,6 +176,8 @@ router.get("/profile/:id", optionalAuth, async (req, res) => {
       (id) => String(id) === req.user.id
     ) ?? false);
 
+    const workCount = await Work.countDocuments({ user: user._id, status: 'published', isAnonymous: { $ne: true } });
+
     return res.json({
       user: {
         _id:            user._id,
@@ -177,6 +194,7 @@ router.get("/profile/:id", optionalAuth, async (req, res) => {
         following:      user.following    ?? [],
         createdAt:      user.createdAt,
         isFollowedByMe,
+        workCount,
       },
     });
   } catch (err) {

@@ -62,7 +62,7 @@ describe("chapter save flow", () => {
     const saving = h.save("a");
     expect(h.request.mock.calls[0][1].media).toEqual([song]);
     h.dispatch({ type: "UPDATE_MEDIA", id: "a", update: () => [] });
-    d.resolve(result("a")); await saving;
+    d.resolve({ ...result("a"), item: { ...result("a").item, media: [song] } }); await saving;
     expect(h.chaptersRef.current[0]).toMatchObject({ media: [], _dirty: true });
     h.request.mockResolvedValueOnce(result("a", 2)); await h.save("a");
     expect(h.request.mock.calls[1][1].media).toEqual([]);

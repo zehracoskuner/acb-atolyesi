@@ -372,3 +372,90 @@ it("does not allow guests or banned members to create shares", async () => {
   expect((await request("/logs", { method: "POST", body: { content: "Kısıtlı hesap paylaşımı" } })).status).toBe(403);
   expect(await Log.countDocuments()).toBe(0);
 });
+
+it('mixed combines public journals, authorized follower journals and followed publications', async () => {
+  for (const author of [viewer, followed, stranger]) for (const visibility of ['public', 'followers', 'private']) await log(author, visibility);
+  const work = await book(followed, 'Followed publication');
+  const chapter = await Chapter.create({ work: work._id, title: 'Published title', status: 'published' });
+  await Work.updateOne({ _id: work._id }, { publishedChapterIds: [chapter._id] });
+  const res = await request('/feed?scope=mixed');
+  expect(res.status).toBe(200);
+  expect(res.body.items.filter(i => i.type === 'log').map(i => i.content).sort()).toEqual(['viewer-public', 'viewer-followers', 'followed-public', 'followed-followers', 'stranger-public'].sort());
+  expect(res.body.items.filter(i => i.type === 'chapter')).toHaveLength(1);
+  await User.updateOne({ _id: viewer._id }, { following: [] });
+  const unfollowed = (await request('/feed?scope=mixed')).body;
+  expect(unfollowed.followingCount).toBe(0);
+  expect(unfollowed.items.map(i => i.content).sort()).toEqual(['viewer-public', 'viewer-followers', 'followed-public', 'stranger-public'].sort());
+});
+
+it('cursor pagination is stable across equal dates, inserted/deleted records and content types', async () => {
+  const createdAt = new Date(Date.now() - 60000);
+  const records = await Log.insertMany(Array.from({ length: 49 }, (_, i) => ({ author: followed._id, content: `Cursor ${i}`, createdAt })));
+  const work = await book(followed, 'Cursor book');
+  await Chapter.insertMany([{ _id: records[20]._id, work: work._id, title: 'Same ID in another collection', status: 'published', createdAt }]);
+  await Work.updateOne({ _id: work._id }, { publishedChapterIds: [records[20]._id] });
+  const first = (await request('/feed?scope=mixed')).body;
+  const all = [...first.items];
+  await log(stranger, 'public', 'Inserted after first page');
+  await Log.deleteOne({ _id: first.items[0]._id });
+  let cursor = first.nextCursor;
+  while (cursor) {
+    const next = await request(`/feed?scope=mixed&cursor=${cursor}`);
+    expect(next.status).toBe(200); all.push(...next.body.items); cursor = next.body.nextCursor;
+  }
+  expect(all).toHaveLength(50);
+  expect(new Set(all.map(i => `${i.type}:${i._id}`)).size).toBe(50);
+  expect(all.some(i => i.content === 'Inserted after first page')).toBe(false);
+  expect((await request(`/feed?scope=following&cursor=${first.nextCursor}`)).status).toBe(400);
+  expect((await request('/feed?scope=mixed&cursor=bad')).status).toBe(400);
+  expect((await request(`/feed?scope=mixed&page=2&cursor=${first.nextCursor}`)).status).toBe(400);
+});
+
+it('announces an old draft at its first publication time, preserves published titles and never duplicates edits', async () => {
+  const work = await book(followed, 'Publication timing');
+  const old = new Date(Date.now() - 120 * 86400000);
+  const chapter = await Chapter.create({ work: work._id, title: 'Reader title', content: 'SPOILER BODY', createdAt: old, order: 7 });
+  expect(chapter.firstPublishedAt).toBeUndefined();
+  expect((await request('/feed?scope=mixed')).body.items).toEqual([]);
+  chapter.status = 'published'; await chapter.save();
+  await Work.updateOne({ _id: work._id }, { publishedChapterIds: [chapter._id] });
+  const first = (await request('/feed?scope=mixed')).body.items[0];
+  expect(+new Date(first.createdAt)).toBeGreaterThan(Date.now() - 60000);
+  expect(first.chapter).toMatchObject({ title: 'Reader title', order: 1 });
+  chapter.draftContent = { title: 'SECRET WORKING TITLE', content: 'PRIVATE DRAFT BODY' }; chapter.hasUnpublishedChanges = true; await chapter.save();
+  let res = await request('/feed?scope=mixed');
+  expect(res.body.items).toHaveLength(1); expect(res.body.items[0].createdAt).toBe(first.createdAt);
+  expect(JSON.stringify(res.body)).not.toMatch(/SECRET|SPOILER|PRIVATE/);
+  chapter.title = 'Updated published title'; chapter.draftContent = undefined; await chapter.save();
+  chapter.status = 'draft'; await chapter.save();
+  expect((await request('/feed?scope=mixed')).body.items).toEqual([]);
+  chapter.status = 'published'; await chapter.save();
+  res = await request('/feed?scope=mixed');
+  expect(res.body.items).toHaveLength(1); expect(res.body.items[0].createdAt).toBe(first.createdAt);
+});
+
+it('legacy publications retain recorded creation dates when edited or republished', async () => {
+  const work = await book(followed, 'Legacy'); const createdAt = new Date(Date.now() - 60 * 86400000);
+  const [legacy] = await Chapter.insertMany([{ work: work._id, title: 'Legacy chapter', status: 'published', createdAt }]);
+  await Work.updateOne({ _id: work._id }, { publishedChapterIds: [legacy._id] });
+  let item = (await request('/feed?scope=mixed')).body.items[0];
+  expect(item.createdAt).toBe(createdAt.toISOString()); expect(item.publicationDateEstimated).toBe(true);
+  const loaded = await Chapter.findById(legacy._id); loaded.status = 'draft'; await loaded.save();
+  loaded.status = 'published'; await loaded.save();
+  item = (await request('/feed?scope=mixed')).body.items[0];
+  expect(item.createdAt).toBe(createdAt.toISOString()); expect(item.publicationDateEstimated).toBe(true);
+});
+
+it('journal creation validates visibility and linked ownership; every public journal surface hides draft metadata', async () => {
+  const draft = await book(followed, 'PRIVATE LINKED TITLE', { status: 'draft', coverImage: 'https://example.test/private-cover.jpg' });
+  expect((await request('/logs', { method: 'POST', body: { content: 'Bad visibility', visibility: 'typo' } })).status).toBe(400);
+  expect((await request('/logs', { method: 'POST', body: { content: 'Not my work', relatedWork: String(draft._id) } })).status).toBe(400);
+  const created = await request('/logs', { user: followed, method: 'POST', body: { content: 'My private project', relatedWork: String(draft._id), visibility: 'public' } });
+  expect(created.status).toBe(201);
+  for (const path of [`/logs/${created.body.item._id}/detail`, `/logs/${followed._id}`, '/feed/top-logs', '/feed?scope=mixed']) {
+    const res = await request(path);
+    expect(res.status).toBe(200); expect(JSON.stringify(res.body)).not.toMatch(/PRIVATE LINKED TITLE|private-cover/);
+  }
+  const own = await request(`/logs/${created.body.item._id}/detail`, { user: followed });
+  expect(own.body.item.relatedWork.title).toBe('PRIVATE LINKED TITLE');
+});

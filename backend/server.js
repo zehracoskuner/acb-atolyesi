@@ -17,6 +17,7 @@ import "./config/passport-google.js";
 import ensureAuth from "./middlewares/ensureAuth.js";
 import readerAccess from "./middlewares/readerAccess.js";
 import { prepareUploadRateLimits } from "./services/uploadRateStore.js";
+import { prepareNotificationRetention } from "./services/notificationRetention.js";
 import { prepareSpotlight, startSpotlightWorker } from "./services/spotlight.js";
 
 // ── Rate limiters ──
@@ -286,6 +287,7 @@ const startServer = async () => {
   try {
     await connectDB();
     await Promise.all([AuthSession.init(), Work.init(), Chapter.init()]);
+    await prepareNotificationRetention();
     await prepareUploadRateLimits();
     await prepareContentModeration();
     await prepareSpotlight();

@@ -1,3 +1,4 @@
+import { chapterReviewFilter, reviewChapter } from '../services/chapterPublication.js';
 import { chapterReview } from "../services/chapterReview.js";
 import adminReportsRouter from "./adminReports.js";
 // backend/routes/admin.js
@@ -311,19 +312,19 @@ router.get("/review-queue", async (req, res) => {
     const limit = Math.min(50, parseInt(req.query.limit, 10) || 20);
 
     const [bolumler, toplam] = await Promise.all([
-      Chapter.find({ status: "pending_review" })
-        .select("title content media revision reviewNote status createdAt work")
+      Chapter.find(chapterReviewFilter)
+        .select("title content media revision reviewNote status createdAt work +reviewSubmission")
         .populate("work", "title user")
         .populate({ path: "work", populate: { path: "user", select: "kullaniciAdi email avatarUrl" } })
         .sort({ createdAt: -1 })
         .skip((sayfa - 1) * limit)
         .limit(limit)
         .lean(),
-      Chapter.countDocuments({ status: "pending_review" }),
+      Chapter.countDocuments(chapterReviewFilter),
     ]);
 
     return res.json({
-      bolumler,
+      bolumler: bolumler.map(reviewChapter),
       meta: { toplam, sayfa, limit, toplamSayfa: Math.ceil(toplam / limit) },
     });
   } catch (err) {
@@ -389,7 +390,7 @@ router.get("/stats", async (req, res) => {
       User.countDocuments({ role: "banned" }),
       Work.countDocuments(),
       Chapter.countDocuments(),
-      Chapter.countDocuments({ status: "pending_review" }),
+      Chapter.countDocuments(chapterReviewFilter),
       Report.countDocuments({ status: "pending" }),
         Report.countDocuments({ status: 'pending', ...reportCategoryFilter('copyright') }),
         Report.countDocuments({ status: 'pending', ...reportCategoryFilter('inappropriate') }),

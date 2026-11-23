@@ -5,6 +5,7 @@ import emailChange from "./emailChange.js";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import Work from "../models/Work.js";
+import Chapter from "../models/Chapter.js";
 import { serializeWorkAuthor } from "../services/publicWork.js";
 import ReadingList from "../models/ReadingList.js";
 import ensureAuth from "../middlewares/ensureAuth.js";
@@ -241,6 +242,22 @@ router.get("/works", async (req, res) => {
     const works = await Work.find({ user: req.user.id })
       .populate("user", "_id kullaniciAdi avatarUrl").sort({ updatedAt: -1 });
 
+    // Owner-only summaries: publication and private working/review versions are distinct.
+    const chapters = await Chapter.find({ work: { $in: works.map(w => w._id) } })
+      .select('work status reviewStatus hasUnpublishedChanges updatedAt').lean();
+    const summaries = new Map();
+    const publishedIds = new Set(works.flatMap(w => (w.publishedChapterIds || []).map(String)));
+    for (const chapter of chapters) {
+      const key = String(chapter.work);
+      const summary = summaries.get(key) || { chapterCount: 0, pendingReviewCount: 0, rejectedCount: 0, unpublishedChangesCount: 0, lastEdited: null };
+      if (chapter.status === 'published' && publishedIds.has(String(chapter._id))) summary.chapterCount++;
+      if (chapter.status === 'pending_review' || chapter.reviewStatus === 'pending_review') summary.pendingReviewCount++;
+      if (chapter.status === 'rejected' || chapter.reviewStatus === 'rejected') summary.rejectedCount++;
+      if (chapter.hasUnpublishedChanges) summary.unpublishedChangesCount++;
+      if (!summary.lastEdited || chapter.updatedAt > summary.lastEdited) summary.lastEdited = chapter.updatedAt;
+      summaries.set(key, summary);
+    }
+
     const cleanWorks = works.map(w => ({
       _id:         w._id,
       id:          w._id,           // frontend w.id || w._id kullanıyor
@@ -250,16 +267,19 @@ router.get("/works", async (req, res) => {
       author: serializeWorkAuthor(w),
       coverImage:  w.coverImage,
       color:       w.color,
-      genres:      w.genres,
+      genres:      w.universe?.genres || [],
       status:      w.status || "draft",   // modeldeki gerçek status
       totalWords:  w.totalWords || 0,
-      chapterCount: w.publishedChapterIds?.length || 0,
+      chapterCount: summaries.get(String(w._id))?.chapterCount || 0,
+      pendingReviewCount: summaries.get(String(w._id))?.pendingReviewCount || 0,
+      rejectedCount: summaries.get(String(w._id))?.rejectedCount || 0,
+      unpublishedChangesCount: summaries.get(String(w._id))?.unpublishedChangesCount || 0,
       stats: {
-        chapterCount: w.publishedChapterIds?.length || 0,
+        chapterCount: summaries.get(String(w._id))?.chapterCount || 0,
         totalWords:   w.totalWords || 0,
         views:        w.stats?.views || 0,
       },
-      updatedAt: w.updatedAt,
+      updatedAt: summaries.get(String(w._id))?.lastEdited > w.updatedAt ? summaries.get(String(w._id)).lastEdited : w.updatedAt,
       createdAt: w.createdAt,
     }));
 

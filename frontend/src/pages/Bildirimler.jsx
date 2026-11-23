@@ -81,6 +81,9 @@ export default function Bildirimler() {
             <p style={{ fontSize: ".8rem", color: "#9a8e80", margin: 0 }}>
               {unreadCount > 0 ? `${unreadCount} okunmamış bildirim` : "Tümü okundu"}
             </p>
+            <p style={{ fontSize: ".8rem", color: "#9a8e80", margin: ".5rem 0 0" }}>
+              Bildirimler 90 gün sonra otomatik silinir.
+            </p>
           </div>
 
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>

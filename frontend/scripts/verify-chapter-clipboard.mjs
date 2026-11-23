@@ -192,7 +192,7 @@ try {
   await dialog.getByRole("button", { name: "Kapat", exact: true }).click();
   page.on("dialog", prompt => prompt.accept());
   await page.getByRole("button", { name: "Değişiklikleri yayınla", exact: true }).click();
-  await page.getByRole("button", { name: "taslağa al", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Yayında", exact: true }).waitFor();
   assert.equal(liveContent.replace(/<[^>]+>/g, ""), "Kaydedilmemiş metin");
   assert.equal(await page.locator(".ann-veil").count(), 0);
 

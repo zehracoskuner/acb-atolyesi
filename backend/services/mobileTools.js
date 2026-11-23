@@ -13,7 +13,7 @@ const definitions = {
   personal: { model: Note, fields: ['title', 'content'] },
   notes: { model: WorkNote, fields: ['title', 'body'] },
   characters: { model: Character, fields: ['name', 'role', 'tagline', 'notes'] },
-  scenes: { model: Plot, array: 'scenes', fields: ['title', 'description', 'goal', 'act', 'status', 'draftText', 'characters'] },
+  scenes: { model: Plot, array: 'scenes', fields: ['title', 'description', 'goal', 'act', 'status', 'draftText', 'characters', 'volume'] },
   world: { model: World, fields: ['name', 'description', 'notes'] },
 };
 const fail = (status, message, current) => Object.assign(new Error(message), { status, ...(current ? { current } : {}) });
@@ -95,16 +95,20 @@ export async function saveMobileTool(userId, kind, body = {}) {
   const { recordId, draftId, expectedVersion, workId, category } = body;
   const ctx = await context(userId, kind, workId, category);
   if (typeof draftId !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(draftId) || (recordId && !validId(recordId))) throw fail(400, 'Geçersiz taslak kimliği.');
-  const data = await cleanValues(ctx, body.data);
   // Stable IDs make a retried creation safe when the first response was lost.
   const id = recordId || hash({ userId, kind, workId: workId || '', category: category || '', draftId }).slice(0, 24);
   let found = await locate(ctx, id);
+  if (kind === 'scenes' && (!body.data || typeof body.data !== 'object' || Array.isArray(body.data))) throw fail(400, 'Geçersiz içerik.');
+  const input = kind === 'scenes' ? { ...(found ? values(ctx, found.item) : { volume: '' }), ...body.data } : body.data;
+  const data = await cleanValues(ctx, input);
+  if (kind === 'scenes' && !['', 'short', 'medium', 'long'].includes(data.volume)) throw fail(400, 'Geçersiz sahne hacmi.');
   if (!recordId) {
     if (!found) {
       if (ctx.array) {
         let parent = await ctx.model.findOne(ctx.filter);
         if (!parent) { try { parent = await ctx.model.create(ctx.filter); } catch (error) { if (error.code !== 11000) throw error; } }
-        const order = (await ctx.model.findOne(ctx.filter).lean())[ctx.array]?.length || 0;
+        const entries = (await ctx.model.findOne(ctx.filter).lean())[ctx.array] || [];
+        const order = kind === 'scenes' ? Math.max(-1, ...entries.filter(s => s.act === data.act).map(s => s.order || 0)) + 1 : entries.length;
         await ctx.model.updateOne({ ...ctx.filter, [`${ctx.array}._id`]: { $ne: id } }, {
           $push: { [ctx.array]: { _id: id, ...data, order } }, $inc: { __v: 1 },
         }, { runValidators: true });
@@ -129,7 +133,8 @@ export async function saveMobileTool(userId, kind, body = {}) {
   const filter = { _id: found.parent._id, ...ctx.filter,
     ...(ctx.array ? { [ctx.array]: { $elemMatch: { _id: id, ...previous, updatedAt: found.item.updatedAt } } }
       : { ...previous, updatedAt: found.parent.updatedAt, __v: found.parent.__v === undefined ? { $exists: false } : found.parent.__v }) };
-  const patch = ctx.array ? Object.fromEntries(Object.entries({ ...data, updatedAt: new Date() }).map(([key, value]) => [`${ctx.array}.$.${key}`, value])) : storageValues(ctx, data);
+  const changed = kind === 'scenes' ? Object.fromEntries(Object.entries(data).filter(([key, value]) => stable(value) !== stable(current.data[key]))) : data;
+  const patch = ctx.array ? Object.fromEntries(Object.entries({ ...changed, updatedAt: new Date() }).map(([key, value]) => [`${ctx.array}.$.${key}`, value])) : storageValues(ctx, data);
   const updated = await ctx.model.findOneAndUpdate(filter, { $set: patch, $inc: { __v: 1 } }, { new: true, runValidators: true }).lean();
   if (!updated) {
     const latest = await locate(ctx, id);

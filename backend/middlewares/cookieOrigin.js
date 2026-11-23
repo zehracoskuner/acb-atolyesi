@@ -12,7 +12,9 @@ export function allowedOrigins() {
     }
     return url.origin;
   });
-  if (process.env.NODE_ENV !== 'production') origins.push('http://localhost:5173');
+  if (process.env.NODE_ENV !== 'production') origins.push('http://localhost:5173',
+    'https://localhost:8081'
+  );
   return origins;
 }
 

@@ -2,6 +2,7 @@
 import Work from '../models/Work.js';
 import Chapter from '../models/Chapter.js';
 import Comment from '../models/Comment.js';
+import { commentTarget } from './commentTarget.js';
 import { notifyReport } from './notificationService.js';
 
 export function fail(status, message) { throw Object.assign(new Error(message), { status }); }
@@ -38,7 +39,8 @@ export async function captureEvidence(targetType, targetId) {
     work = target && await Work.findById(target.work).select('user status publishedChapterIds').lean();
     if (!target || target.status !== 'published' || work?.status !== 'published' || !work.publishedChapterIds.some(id => same(id, targetId))) fail(404, 'Yayındaki içerik bulunamadı.');
   } else if (targetType === 'comment') {
-    target = await Comment.findById(targetId).select('content author status isDeleted updatedAt').lean();
+    const doc = await commentTarget(targetId);
+    target = doc && { _id: doc._id, content: doc.content, author: doc.author, status: doc.status, isDeleted: doc.isDeleted, updatedAt: doc.updatedAt };
     if (!target || target.isDeleted || target.status !== 'published') fail(404, 'Yayındaki içerik bulunamadı.');
   } else fail(400, 'Telif başvurusu eser, bölüm veya yorum için yapılabilir.');
   // No URL fetches; only the exact locally stored content used in this complaint.
@@ -61,7 +63,7 @@ export async function transition(r, actor, operation, body) {
         const chapter = await Chapter.findById(r.targetId).select('work').lean();
         if (chapter) owner = (await Work.findById(chapter.work).select('user').lean())?.user;
       }
-      if (r.targetType === 'comment') owner = (await Comment.findById(r.targetId).select('author').lean())?.author;
+      if (r.targetType === 'comment') owner = (await commentTarget(r.targetId))?.author;
       if (owner) { r.targetOwner = owner; set.targetOwner = owner; }
     }
     if (same(r.reporter, actor.id) || same(r.targetOwner, actor.id)) fail(403, 'Taraf olduğunuz dosyada karar veremezsiniz.');

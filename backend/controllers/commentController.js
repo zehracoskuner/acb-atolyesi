@@ -41,6 +41,10 @@ function shapeComment(c, viewerId) {
   delete shaped.originalContent;
   delete shaped.deletedReason;
   delete shaped.reviewNote;
+  delete shaped.reviewedBy;
+  delete shaped.reviewedAt;
+  delete shaped.deletedBy;
+  if (c.isDeleted) shaped.mentions = [];
 
   return shaped;
 }
@@ -51,6 +55,8 @@ function shapeComment(c, viewerId) {
    GET /api/comments/:id
 ───────────────────────────────────────────────────────────── */
 export async function getComments(req, res) {
+  // A public discussion may quote text beyond the server-limited guest excerpt.
+  if (!req.user) return res.status(401).json({ message: 'Yorumları okumak için giriş yap.' });
   try {
     const viewerId = req.user?.id || null; // misafir okuyabilir
     let { chapterId, workId, id } = req.params;
@@ -70,16 +76,19 @@ export async function getComments(req, res) {
     if (!await publishedDiscussion(workId, chapterId)) {
       return res.status(404).json({ message: "İçerik bulunamadı." });
     }
-    const limit = Math.min(50, parseInt(req.query.limit) || 20);
+    const limit = Math.max(1, Math.min(50, parseInt(req.query.limit) || 20));
     const skip  = (page - 1) * limit;
 
     const filter = chapterId
       ? { chapter: chapterId, parentId: null, status: "published" }
       : { work: workId, chapter: null, parentId: null, status: "published" };
 
+    // total counts published root threads, including tombstones, never replies.
+    if (req.query.summary === '1') return res.json({ total: await Comment.countDocuments(filter) });
+
     const [topLevel, total] = await Promise.all([
       Comment.find(filter)
-        .sort({ createdAt: -1 })
+        .sort({ createdAt: -1, _id: -1 })
         .skip(skip)
         .limit(limit)
         .populate("author",    "kullaniciAdi avatarUrl")
@@ -91,7 +100,7 @@ export async function getComments(req, res) {
     const topIds = topLevel.map((c) => c._id);
     const replies = topIds.length
       ? await Comment.find({ parentId: { $in: topIds }, status: "published" })
-          .sort({ createdAt: 1 })
+          .sort({ createdAt: 1, _id: 1 })
           .populate("author",    "kullaniciAdi avatarUrl")
           .populate("deletedBy", "kullaniciAdi")
           .lean()
@@ -131,7 +140,7 @@ export async function createComment(req, res) {
     }
 
     const { content, text, parentId, workId: bodyWorkId } = req.body;
-    const body = (content || text || "").trim();
+    const body = typeof (content ?? text) === 'string' ? (content ?? text).trim() : '';
     if (!body)              return res.status(400).json({ error: "Yorum boş olamaz." });
     if (body.length > 2000) return res.status(400).json({ error: "Yorum 2000 karakteri geçemez." });
 
@@ -147,14 +156,20 @@ export async function createComment(req, res) {
         return res.status(400).json({ error: "Geçersiz kimlik." });
     }
 
-    if (resolvedChapterId && !resolvedWorkId) {
+    if (resolvedChapterId) {
       const chapter = await Chapter.findById(resolvedChapterId).lean();
       if (!chapter) return res.status(404).json({ error: "Bölüm bulunamadı." });
-      resolvedWorkId = (chapter.work || chapter.eser)?.toString() || null;
+      const actualWorkId = (chapter.work || chapter.eser)?.toString() || null;
+      if (resolvedWorkId && String(resolvedWorkId) !== actualWorkId)
+        return res.status(400).json({ message: 'Yorumun eseri ve bölümü eşleşmiyor.' });
+      resolvedWorkId = actualWorkId;
     }
 
     if (!resolvedChapterId && !resolvedWorkId)
       return res.status(400).json({ error: "chapter veya work gerekli." });
+
+    if (!await publishedDiscussion(resolvedWorkId, resolvedChapterId))
+      return res.status(404).json({ message: 'Yorum yapılabilecek yayınlanmış içerik bulunamadı.' });
 
     // Eseri bir kez çek; hem görünürlük kontrolü hem bildirim için kullanılır.
     // (Work şemasında ayrı "gizlilik" alanı yok; status taslak/arşiv erişimini belirler.)
@@ -173,10 +188,14 @@ export async function createComment(req, res) {
       parentComment = await Comment.findById(parentId).lean();
       if (!parentComment)       return res.status(404).json({ error: "Yanıtlanacak yorum bulunamadı." });
       if (parentComment.parentId) return res.status(400).json({ error: "İkinci seviye yanıt desteklenmiyor." });
+      if (String(parentComment.work) !== String(resolvedWorkId) || String(parentComment.chapter) !== String(resolvedChapterId))
+        return res.status(400).json({ message: 'Yanıt aynı eser ve bölümdeki bir ana yoruma ait olmalı.' });
+      if (parentComment.isDeleted || parentComment.status !== 'published')
+        return res.status(410).json({ message: 'Bu yorum artık yanıtlanamıyor.' });
     }
 
     const mentions = await resolveMentions(body);
-    const comment = await Comment.create({
+    const fields = {
       mentions,
       author:   req.user.id,
       chapter:  resolvedChapterId,
@@ -184,7 +203,15 @@ export async function createComment(req, res) {
       content:  body,
       parentId: parentId || null,
       status:   "published",
-    });
+    };
+    const comment = parentId ? await mongoose.connection.transaction(async session => {
+      // Serialize reply creation with deletion of its root, across server instances.
+      const parent = await Comment.findOneAndUpdate({ _id: parentId, parentId: null,
+        work: resolvedWorkId, chapter: resolvedChapterId, status: 'published', isDeleted: false },
+        { $inc: { __v: 1 } }, { session, new: true });
+      if (!parent) throw Object.assign(new Error('Bu yorum artık yanıtlanamıyor.'), { status: 410 });
+      return (await Comment.create([fields], { session }))[0];
+    }) : await Comment.create(fields);
 
     await comment.populate("author", "kullaniciAdi avatarUrl");
 
@@ -224,7 +251,7 @@ export async function updateComment(req, res) {
     if (!isValidId(commentId)) return res.status(400).json({ error: "Geçersiz kimlik." });
 
     const { content, text } = req.body;
-    const body = (content || text || "").trim();
+    const body = typeof (content ?? text) === 'string' ? (content ?? text).trim() : '';
     if (!body)              return res.status(400).json({ error: "Yorum boş olamaz." });
     if (body.length > 2000) return res.status(400).json({ error: "Yorum 2000 karakteri geçemez." });
 
@@ -233,16 +260,17 @@ export async function updateComment(req, res) {
     if (comment.isDeleted)                         return res.status(410).json({ error: "Bu yorum silinmiş." });
     if (comment.author.toString() !== req.user.id) return res.status(403).json({ error: "Yetkisiz." });
 
+    if (comment.status !== 'published' || !await publishedDiscussion(comment.work, comment.chapter))
+      return res.status(404).json({ message: 'İçerik bulunamadı.' });
     const previous = comment.mentions || [];
-    comment.mentions = await resolveMentions(body);
-    comment.content  = body;
-    comment.isEdited = true;
-    comment.editedAt = new Date();
-    await comment.save();
-    await comment.populate("author", "kullaniciAdi avatarUrl");
+    const mentions = await resolveMentions(body);
+    const updated = await Comment.findOneAndUpdate({ _id: commentId, author: req.user.id, isDeleted: false, status: 'published' },
+      { $set: { content: body, mentions, isEdited: true, editedAt: new Date() } }, { new: true, runValidators: true })
+      .populate('author', 'kullaniciAdi avatarUrl');
+    if (!updated) return res.status(410).json({ message: 'Bu yorum artık düzenlenemiyor.' });
 
-    await notifyMentions({ senderId: req.user.id, mentions: comment.mentions, previous, workId: comment.work, chapterId: comment.chapter }).catch(console.error);
-    res.json({ item: shapeComment(comment.toObject(), req.user.id), message: "Yorum güncellendi." });
+    await notifyMentions({ senderId: req.user.id, mentions, previous, workId: comment.work, chapterId: comment.chapter }).catch(console.error);
+    res.json({ item: shapeComment(updated.toObject(), req.user.id), message: "Yorum güncellendi." });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ message: err.message });
     console.error("updateComment:", err);
@@ -260,49 +288,31 @@ export async function deleteComment(req, res) {
     const { commentId } = req.params;
     if (!isValidId(commentId)) return res.status(400).json({ error: "Geçersiz kimlik." });
 
-    const { reason } = req.body || {}; // moderatör/admin sebep belirtebilir
-
-    const comment = await Comment.findById(commentId);
-    if (!comment) return res.status(404).json({ error: "Yorum bulunamadı." });
-    if (comment.isDeleted) return res.status(410).json({ error: "Bu yorum zaten silinmiş." });
-
-    const isOwner = comment.author.toString() === req.user.id;
-    const isPriv  = ["admin", "moderator"].includes(req.user.role);
-
-    if (!isOwner && !isPriv) return res.status(403).json({ error: "Yetkisiz." });
-
-    const tombstone = async (deletedReason) => {
-      comment.isDeleted       = true;
-      comment.deletedAt       = new Date();
-      comment.deletedBy       = req.user.id;
-      comment.deletedReason   = deletedReason;
-      comment.originalContent = comment.content;
-      comment.content         = ""; // API response'da gizlenir
-      await comment.save();
-    };
-
-    if (isPriv && !isOwner) {
-      // Moderatör/admin: soft delete — içerik korunur
-      await tombstone(reason?.trim() || "Moderatör kararı");
-
-      notifyCommentRemoved({ recipientId: comment.author, workId: comment.work })
-        .catch((e) => console.error("notifyCommentRemoved:", e.message));
-    } else {
-      // Kullanıcı kendi yorumunu siliyor
-      const hasReplies = await Comment.exists({ parentId: commentId });
-      if (hasReplies) {
-        // Yanıtlar var: thread'i korumak için tombstone bırak
-        await tombstone(reason?.trim() || "");
-      } else {
-        // Yanıtı yok: temizce hard delete
-        await comment.deleteOne();
-      }
-    }
-
-    res.json({ message: "Yorum silindi." });
+    const result = await mongoose.connection.transaction(async session => {
+      const comment = await Comment.findById(commentId).session(session);
+      if (!comment) throw Object.assign(new Error('Yorum bulunamadı.'), { status: 404 });
+      if (comment.isDeleted) throw Object.assign(new Error('Bu yorum zaten silinmiş.'), { status: 410 });
+      const isOwner = String(comment.author) === req.user.id;
+      const isPriv = ['admin', 'moderator'].includes(req.user.role);
+      if (!isOwner && !isPriv) throw Object.assign(new Error('Yetkisiz.'), { status: 403 });
+      // This write conflicts with a concurrent reply's root lock.
+      await Comment.updateOne({ _id: commentId }, { $inc: { __v: 1 } }, { session });
+      const hasReplies = await Comment.exists({ parentId: commentId }).session(session);
+      const tombstone = !!hasReplies || (isPriv && !isOwner);
+      if (tombstone) {
+        await Comment.updateOne({ _id: commentId }, { $set: {
+          isDeleted: true, deletedAt: new Date(), deletedBy: req.user.id,
+          deletedReason: isPriv && !isOwner ? String(req.body?.reason || 'Moderatör kararı').trim() : '',
+          originalContent: comment.content, content: '', mentions: [],
+        } }, { session });
+      } else await Comment.deleteOne({ _id: commentId }, { session });
+      return { tombstone, notify: isPriv && !isOwner, author: comment.author, work: comment.work };
+    });
+    if (result.notify) notifyCommentRemoved({ recipientId: result.author, workId: result.work }).catch(console.error);
+    res.json({ message: 'Yorum silindi.', deletedId: commentId, tombstone: result.tombstone });
   } catch (err) {
     console.error("deleteComment:", err);
-    res.status(500).json({ error: "Yorum silinemedi." });
+    res.status(err.status || 500).json({ error: err.status ? err.message : "Yorum silinemedi." });
   }
 }
 

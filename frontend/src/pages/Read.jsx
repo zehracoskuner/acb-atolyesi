@@ -16,18 +16,13 @@ import ReportModal from "../components/ReportModal";
 import { useReadingProgress } from "../hooks/useReadingProgress";
 import { getProgressForStory, resolveReadingResume } from "../services/readingProgressService";
 import { cleanHtml } from "../lib/sanitize";
+import { visibleWordCount, readingTime } from "../lib/readingTime";
 
 
 /* ════════════════════════════
    HELPERS
 ════════════════════════════ */
 
-
-function readingTime(text = "") {
-  const words = text.trim().split(/\s+/).filter(Boolean).length;
-  const mins  = Math.ceil(words / 200);
-  return mins < 1 ? "< 1 dk" : `${mins} dk`;
-}
 
 function timeAgo(iso) {
   if (!iso) return "";
@@ -90,36 +85,49 @@ function Avatar({ user, size = 34 }) {
 /* ════════════════════════════
    KOPYA KORUMA
 ════════════════════════════ */
-function useCopyProtection(workTitle, authorName, enabled = true) {
+function useCopyProtection(enabled = true) {
   useEffect(() => {
     if (!enabled) return;
+
+    const selectionTouchesProtectedContent = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
+
+      const range = selection.getRangeAt(0);
+      return [...document.querySelectorAll(".rd-body")].some((body) => {
+        try {
+          return range.intersectsNode(body);
+        } catch {
+          return false;
+        }
+      });
+    };
 
     const onContextMenu = (e) => {
       if (e.target.closest(".rd-body")) e.preventDefault();
     };
 
     const onCopy = (e) => {
-      const selection = window.getSelection();
-      if (!selection || selection.isCollapsed) return;
-      if (!selection.anchorNode?.parentElement?.closest(".rd-body")) return;
+      if (!selectionTouchesProtectedContent()) return;
       e.preventDefault();
-      const selectedText = selection.toString();
-      if (!selectedText.trim()) return;
-      const attribution = `\n\n— "${workTitle}", ${authorName}\n(ACB Atölyesi · acbatolyesi.com)`;
-      e.clipboardData.setData("text/plain", selectedText + attribution);
-      e.clipboardData.setData(
-        "text/html",
-        `<p>${selectedText}</p><p><em>— "${workTitle}", ${authorName} · ACB Atölyesi</em></p>`
-      );
+      e.clipboardData?.clearData();
+    };
+
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c" && selectionTouchesProtectedContent()) {
+        e.preventDefault();
+      }
     };
 
     document.addEventListener("contextmenu", onContextMenu);
     document.addEventListener("copy", onCopy);
+    document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("contextmenu", onContextMenu);
       document.removeEventListener("copy", onCopy);
+      document.removeEventListener("keydown", onKeyDown);
     };
-  }, [workTitle, authorName, enabled]);
+  }, [enabled]);
 }
 
 /* ════════════════════════════
@@ -248,16 +256,16 @@ function InlineParagraph({ html, index, comments, onOpenDrawer }) {
     <div className={`rdic-para-wrap ${count > 0 ? "rdic-para-wrap--has-comments" : ""}`}>
       {/* html zaten cleanHtml'den geçti → güvenli */}
       <div className="rd-paragraph" style={alignStyle} dangerouslySetInnerHTML={{ __html: html }} />
-      <div className="rdic-gutter" style={!plain.trim() ? { display: "none" } : undefined}>
+      <div className="rdic-gutter" style={index < 0 || !plain.trim() ? { display: 'none' } : undefined}>
         {count > 0 && (
-          <button className="rdic-bubble" onClick={() => onOpenDrawer(index, plain)} title={`${count} yorum`}>
+          <button className="rdic-bubble" onClick={() => onOpenDrawer(index, plain)} title={`${count} yorum`} aria-label={`${count} paragraf yorumunu aç`}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
             {count}
           </button>
         )}
-        <button className="rdic-add" onClick={() => onOpenDrawer(index, plain)} title="Yorum ekle">
+        <button className="rdic-add" onClick={() => onOpenDrawer(index, plain)} title="Yorum ekle" aria-label="Paragrafa yorum ekle">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M12 5v14M5 12h14"/>
           </svg>
@@ -271,7 +279,7 @@ function InlineParagraph({ html, index, comments, onOpenDrawer }) {
 // <b>/<i>/<span>/<a>/<br> vb. satır-içi öğeler) aynı paragraf tamponunda birikir.
 const RDIC_BLOCK_TAGS = new Set(["P", "DIV", "H1", "H2", "H3", "UL", "OL", "BLOCKQUOTE", "HR", "IMG"]);
 
-function InlineParagraphs({ text, commentMap, onOpenDrawer }) {
+function InlineParagraphs({ text, canonicalBlocks, commentMap, onOpenDrawer }) {
   const blocks = useMemo(() => {
     const clean = cleanHtml(text || "");      // ← tek kapı: önce temizle
     if (!clean.trim()) return [];
@@ -296,7 +304,7 @@ function InlineParagraphs({ text, commentMap, onOpenDrawer }) {
 
       if (RDIC_BLOCK_TAGS.has(node.tagName)) {
         flush();
-        // Keep intentional empty paragraphs visible.
+        // Empty blocks preserve the author's intentional paragraph breaks.
         result.push(node.outerHTML);
       } else {
         // satır-içi öğe (b, i, span, a, code, ...) → tampona ekle, ayrı blok açma
@@ -308,26 +316,20 @@ function InlineParagraphs({ text, commentMap, onOpenDrawer }) {
     return result;
   }, [text]);
 
-  let paragraphIndex = 0;
   if (!blocks.length)
     return <p className="rd-empty-para">Bu bölümde henüz içerik yok.</p>;
 
   return (
     <>
-      {blocks.map((html, i) => {
-        const node = document.createElement("div");
-        node.innerHTML = html;
-        // Empty spacing blocks must not shift existing comment indices.
-        const index = node.textContent.trim() ? paragraphIndex++ : -1;
-        return (
+      {(canonicalBlocks ? canonicalBlocks.map(block => block.html) : blocks).map((html, i) => (
         <InlineParagraph
           key={i}
           html={html}
-          index={index}
-          comments={index < 0 ? [] : commentMap[index] || []}
+          index={canonicalBlocks ? canonicalBlocks[i].index : i}
+          comments={commentMap[canonicalBlocks ? canonicalBlocks[i].index : i] || []}
           onOpenDrawer={onOpenDrawer}
         />
-      ); })}
+      ))}
     </>
   );
 }
@@ -362,7 +364,7 @@ function InlineCommentDrawer({ open, onClose, paragraph, chapterId, workId, curr
     setSubmit(true);
     try {
       const data = await apiPost("/inline-comments", {
-        workId, chapterId, paragraphIndex: paragraph.index, content: text.trim(),
+        workId, chapterId, paragraphIndex: paragraph.index, blockId: paragraph.blockId, contentVersion: paragraph.contentVersion, content: text.trim(),
       });
       onCommentAdded(data.item);
       setText("");
@@ -408,7 +410,7 @@ function InlineCommentDrawer({ open, onClose, paragraph, chapterId, workId, curr
           )}
         </div>
 
-        {currentUser ? (
+        {currentUser && paragraph?.index >= 0 ? (
           <div className="rdic-drawer-compose">
             <Avatar user={currentUser} size={28} />
             <div className="rdic-drawer-compose-inner">
@@ -431,7 +433,7 @@ function InlineCommentDrawer({ open, onClose, paragraph, chapterId, workId, curr
             </div>
           </div>
         ) : (
-          <p className="rdic-empty" style={{ marginTop: 12 }}>Yorum yapmak için giriş yapmalısın.</p>
+          <p className="rdic-empty" style={{ marginTop: 12 }}>{paragraph?.index === -1 ? 'Yeni yorum için güncel metinden bir pasaj seç.' : 'Yorum yapmak için giriş yapmalısın.'}</p>
         )}
       </aside>
     </>
@@ -626,6 +628,7 @@ function InlineCommentItem({ comment, currentUser, onUpdated, onDeleted }) {
    YORUM SATIRI
 ════════════════════════════ */
 function CommentItem({ comment, workId, chapterId, currentUser, isReply = false, onDeleted }) {
+  const [removed, setRemoved] = useState(!!comment.isDeleted);
   const { liked, likeCount, busy: liking, error: likeError, toggle: toggleLike } = useLike({
     path: `/comments/${comment._id}/like`, initialLiked: comment.isLiked, initialCount: comment.likeCount,
   });
@@ -709,9 +712,9 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
     if (deleting) return;
     setDeleting(true);
     try {
-      await apiDelete(`/comments/${comment._id}`);
-      setDeleted(true);
-      onDeleted?.(comment._id);
+      const result = await apiDelete(`/comments/${comment._id}`);
+      if (result.tombstone) { setRemoved(true); setDisplayContent(''); setDisplayMentions([]); setDeleteConfirm(false); }
+      else { setDeleted(true); onDeleted?.(comment._id); }
     } catch {
       setDeleteConfirm(false);
     } finally {
@@ -723,7 +726,7 @@ function CommentItem({ comment, workId, chapterId, currentUser, isReply = false,
 
   if (deleted) return null;
 
-  if (comment.isDeleted) {
+  if (removed) {
   return (
     <div className={`rd-comment-item ${isReply ? "rd-comment--reply" : ""}`}>
       <div className="rd-comment-left">
@@ -1163,7 +1166,7 @@ export default function ReadPage() {
     ? "Anonim Yazar"
     : (work?.author?.kullaniciAdi || work?.author?.username || "Yazar");
 
-  useCopyProtection(work?.title ?? "", authorName, !!work);
+  useCopyProtection(!!work);
 
   /* ─── Veri yükle + URL param önceliği ─── */
   useEffect(() => {
@@ -1269,8 +1272,10 @@ export default function ReadPage() {
   /* ─── Inline yorumları yükle ─── */
   useEffect(() => {
     if (!chapter?._id) return;
-    apiGet(`/inline-comments?chapterId=${chapter._id}`)
+    let active = true;
+    apiGet(`/inline-comments?chapterId=${chapter._id}&contentVersion=${chapter.contentVersion || ""}`)
       .then(data => {
+        if (!active) return;
         const map = {};
         (data.items || []).forEach(c => {
           if (!map[c.paragraphIndex]) map[c.paragraphIndex] = [];
@@ -1279,7 +1284,8 @@ export default function ReadPage() {
         setInlineCommentMap(prev => ({ ...prev, [chapter._id]: map }));
       })
       .catch(() => {});
-  }, [chapter?._id]);
+    return () => { active = false; };
+  }, [chapter?._id, chapter?.contentVersion]);
 
   /* ─── Klavye kısayolları ─── */
   useEffect(() => {
@@ -1520,23 +1526,24 @@ export default function ReadPage() {
                 <div className="rd-header-meta">
                   <span>{readingTime(chapter.content)} okuma</span>
                   <span className="rd-dot">·</span>
-                  <span>{(chapter.content?.trim().split(/\s+/).filter(Boolean).length ?? 0).toLocaleString("tr-TR")} kelime</span>
+                  <span>{visibleWordCount(chapter.content).toLocaleString("tr-TR")} kelime</span>
                 </div>
                 <div className="rd-header-rule" />
               </header>
 
               <div className="rd-body">
                 <InlineParagraphs
-                  text={chapter.content} chapterId={chapter._id} workId={workId}
+                  text={chapter.content} canonicalBlocks={chapter.blocks} chapterId={chapter._id} workId={workId}
                   commentMap={inlineCommentMap[chapter._id] || {}}
                   onOpenDrawer={(paragraphIndex, paragraphText) => {
-                    setDrawerParagraph({ index: paragraphIndex, text: paragraphText });
+                    setDrawerParagraph({ index: paragraphIndex, text: paragraphText, blockId: chapter.blocks?.find(b => b.index === paragraphIndex)?.id, contentVersion: chapter.contentVersion });
                     setDrawerOpen(true);
                   }}
                 />
               </div>
 
               <ChapterMedia key={chapter._id} media={chapter.media} />
+              {!!inlineCommentMap[chapter._id]?.[-1]?.length && <button className="rd-next-btn" onClick={() => { setDrawerParagraph({ index: -1, text: 'Bu eski yorumların pasaj eşleşmesi doğrulanamıyor. Güncel metne bağlanmadan korunuyor.' }); setDrawerOpen(true); }}>Eski pasaj yorumları ({inlineCommentMap[chapter._id][-1].length})</button>}
 
               <InlineCommentDrawer
                 open={drawerOpen} onClose={() => setDrawerOpen(false)}

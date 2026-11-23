@@ -10,6 +10,7 @@ const schema = new mongoose.Schema(
     chapterNumber:  { type: Number, required: true },
     chapterTitle:   { type: String, required: true },
     scrollPosition: { type: Number, default: 0, min: 0, max: 100 },
+    clientSavedAt: { type: Number },
   },
   { timestamps: true }
 );

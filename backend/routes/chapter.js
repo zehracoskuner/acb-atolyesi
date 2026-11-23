@@ -7,7 +7,7 @@ import Chapter      from "../models/Chapter.js";
 import Work         from "../models/Work.js";
 import Notification from "../models/Notification.js";
 import User         from "../models/User.js";
-import { sendMail, sendStaffMail, SITE_URL } from "../services/emailService.js";
+import { sendStaffMail } from "../services/emailService.js";
 import ChapterVersion from "../models/ChapterVersion.js";
 import { ownedChapter, saveChapterVersion, createChapterVersion, markChapterCheckpoint, updateChapterOrder } from "../services/chapterHistory.js";
 
@@ -15,7 +15,7 @@ import { readDevelopment } from "../services/developmentProgress.js";
 import { runDevelopmentCoach, readLatestDevelopment, listDevelopmentAnalyses } from "../services/developmentCoach.js";
 import { aiLimiter } from "../middlewares/rateLimiter.js";
 import { deleteLikedChapter } from "../services/likes.js";
-import { ownerChapter, applyChapterDraft } from "../services/chapterPublication.js";
+import { ownerChapter, publishChapterVersion } from "../services/chapterPublication.js";
 import { CHAPTER_HISTORY_ENABLED, DEVELOPMENT_COACH_LAUNCH_ENABLED } from "../../shared/features.js";
 
 const router = express.Router();
@@ -35,15 +35,6 @@ async function assertWorkOwner(workId, userId) {
   const work = await Work.findOne({ _id: workId, user: userId });
   if (!work) throw Object.assign(new Error("Erişim reddedildi."), { status: 403 });
   return work;
-}
-
-/* ── Work.status senkronize — TEK KURAL: 0 published → draft, 1+ → published ── */
-async function syncWorkStatus(workId) {
-  const work = await Work.findById(workId);
-  if (!work) return;
-  const hasPublished = (work.publishedChapterIds?.length ?? 0) > 0;
-  const newStatus    = hasPublished ? "published" : "draft";
-  if (work.status !== newStatus) { work.status = newStatus; await work.save(); }
 }
 
 async function notifyAuthor({ userId, workId, type, text }) {
@@ -74,9 +65,9 @@ router.get("/", ensureAuth, async (req, res) => {
     if (!workId) return res.status(400).json({ message: "workId gerekli." });
     await assertWorkOwner(workId, userId);
     const chapters = await Chapter.find({ work: workId })
-      .select("_id title order +draftContent")
+      .select("_id title order status reviewStatus hasUnpublishedChanges +draftContent")
       .sort({ order: 1 });
-    res.json({ items: chapters.map(ch => ({ _id: ch._id, title: ownerChapter(ch).title, order: ch.order })) });
+    res.json({ items: chapters.map(ch => ({ _id: ch._id, title: ownerChapter(ch).title, order: ch.order, status: ch.status, reviewStatus: ch.reviewStatus, hasUnpublishedChanges: ch.hasUnpublishedChanges })) });
   } catch (err) {
     res.status(err.status || 500).json({ message: err.status && err.status < 500 ? err.message : "Bölümler yüklenemedi." });
   }
@@ -189,106 +180,20 @@ router.post("/:id/versions/:revision/restore", ensureAuth, async (req, res) => {
 // ════════════════════════════════════════════
 router.patch("/:id/status", ensureAuth, async (req, res) => {
   try {
-    const { status, workId } = req.body;
     const userId = req.user?.id || req.userId;
-
-    if (!["draft", "published"].includes(status))
-      return res.status(400).json({ message: "Geçersiz status. 'draft' veya 'published' olmalı." });
-
-    const chapter = await Chapter.findById(req.params.id).select("+draftContent");
-    if (!chapter) return res.status(404).json({ message: "Bölüm bulunamadı." });
-
-    const targetWorkId = chapter.work;
-    const work = await assertWorkOwner(targetWorkId, userId);
-    if (req.body.expectedRevision !== undefined && req.body.expectedRevision !== (chapter.revision ?? 0)) {
-      return res.status(409).json({ code: "CHAPTER_CONFLICT", message: "Bölüm değişti; yayınlamadan önce güncel metni kontrol edin.", current: ownerChapter(chapter) });
+    const result = await publishChapterVersion({ id: req.params.id, userId,
+      expectedRevision: req.body.expectedRevision, status: req.body.status, workId: req.body.workId });
+    if (result.pending) {
+      await notifyStaff({ workId: result.item.work, type: 'chapter_pending', text: `"${result.item.title}" bölümü moderatör onayı bekliyor.` });
+      await notifyAuthor({ userId, workId: result.item.work, type: 'chapter_pending', text: result.message });
+      try { await sendStaffMail({ subject: 'Bölüm inceleme başvurusu', urgency: 'medium', html: '<p>Yeni bölüm başvurusu moderatör panelinde inceleme bekliyor.</p>' }); }
+      catch (error) { console.error('Staff mail gönderilemedi:', error.message); }
     }
-    if (workId !== undefined &&
-        (typeof workId !== "string" || workId.toLowerCase() !== targetWorkId.toString())) {
-      return res.status(400).json({ message: "workId bölümün eseriyle uyuşmuyor." });
-    }
-
-    // ── Taslağa al ──────────────────────────────────────────────────────
-    if (status === "draft") {
-      if (["pending_review", "rejected"].includes(chapter.status)) chapter.moderationHold = true;
-      applyChapterDraft(chapter);
-      chapter.publishedRevision = undefined;
-      chapter.status = "draft";
-      await chapter.save();
-      await Work.findByIdAndUpdate(targetWorkId, { $pull: { publishedChapterIds: chapter._id } });
-      await syncWorkStatus(targetWorkId);
-      return res.json({ item: chapter, message: "Bölüm taslağa alındı." });
-    }
-
-    if (!ownerChapter(chapter).content?.trim())
-      return res.status(400).json({ message: "Bölüm içeriği boş, yayınlanamaz." });
-
-    // ── contentBanned: ensureAuth token'ında YOK — DB'den oku ───────────
-    const dbUser = await User.findById(userId).select("contentBanned").lean();
-    if (dbUser?.contentBanned || chapter.moderationHold || ["pending_review", "rejected"].includes(chapter.status)) {
-      applyChapterDraft(chapter);
-      chapter.publishedRevision = undefined;
-      chapter.moderationHold = true;
-      chapter.status     = "pending_review";
-      chapter.reviewNote = "Kullanıcının içerik kısıtlaması var — moderatör onayı bekleniyor.";
-      await chapter.save();
-      await Work.findByIdAndUpdate(targetWorkId, { $pull: { publishedChapterIds: chapter._id } });
-      await syncWorkStatus(targetWorkId);
-
-      await notifyStaff({
-        workId: targetWorkId, type: "chapter_pending",
-        text: `"${chapter.title}" bölümü moderatör onayı bekliyor (içerik kısıtlamalı kullanıcı).`,
-      });
-      await notifyAuthor({
-        userId, workId: targetWorkId, type: "chapter_pending",
-        text: `"${chapter.title}" bölümünüz moderatör onayına gönderildi. Onaylandıktan sonra yayına alınacak.`,
-      });
-
-      try {
-        await sendStaffMail({
-          subject: `Moderasyon Kuyruğu: "${chapter.title}" — İçerik Kısıtlı Kullanıcı`,
-          urgency: "medium",
-          html: `
-            <h3>Yeni Kuyruk Girdisi</h3>
-            <p><strong>Bölüm:</strong> ${chapter.title}</p>
-            <p><strong>Hikaye:</strong> ${work.title}</p>
-            <p><strong>Sebep:</strong> Kullanıcının içerik kısıtlaması var.</p>
-            <br>
-            <a href="${SITE_URL}/moderator"
-               style="background:#3a8080;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px">
-              Moderatör Panelinde İncele
-            </a>
-          `,
-        });
-      } catch (e) { console.error("Staff mail gönderilemedi:", e.message); }
-
-      return res.status(202).json({
-        item: chapter, status: "pending_review", pending: true,
-        message: "Bölümünüz moderatör onayına gönderildi. Onaylandıktan sonra yayına alınacak.",
-      });
-    }
-
-    const publicationUpdated = chapter.status === "published";
-    applyChapterDraft(chapter);
-    chapter.publishedRevision = chapter.revision ?? 0;
-    chapter.status = "published"; chapter.reviewNote = "";
-    await chapter.save();
-    await Work.findByIdAndUpdate(targetWorkId, { $addToSet: { publishedChapterIds: chapter._id } });
-    await syncWorkStatus(targetWorkId);
-    return res.json({ item: ownerChapter(chapter), message: publicationUpdated ? "Değişiklikler yayınlandı." : "Bölüm yayınlandı.", status: "published", publicationUpdated });
-  } catch (err) {
-    console.error("Status Update Error:", err);
-    if (err.name === "VersionError") {
-      const chapter = await Chapter.findById(req.params.id).select("+draftContent");
-      return res.status(409).json({ code: "CHAPTER_CONFLICT", message: "Bölüm değişti; güncel metni kontrol edin.", current: chapter && ownerChapter(chapter) });
-    }
-    res.status(err.status || 500).json({ message: err.status && err.status < 500 ? err.message : "Durum güncellenemedi." });
-  }
+    res.status(result.pending ? 202 : 200).json(result);
+  } catch (error) { historyError(res, error); }
 });
 
-// ════════════════════════════════════════════
-// 6. ONAYLA — PATCH /api/chapters/:id/approve
-// ════════════════════════════════════════════
+
 router.patch("/:id/approve", ensureAuth, chapterReview('approve'));
 router.patch("/:id/reject", ensureAuth, chapterReview('reject'));
 

@@ -1,11 +1,9 @@
 import readerAccess from "../middlewares/readerAccess.js";
 // backend/routes/search.js
 import { Router } from "express";
-import Work from "../models/Work.js";
 import User from "../models/User.js";
 
-import { PUBLIC_WORK_FIELDS, serializePublicWorkCard } from "../services/publicWork.js";
-import { getPublishedChapterIdsByWork } from "../services/publishedChapters.js";
+import { discoverWorks, searchText, literalRegex, listPage, writerCard } from "../services/discovery.js";
 
 const router = Router();
 router.use(readerAccess);
@@ -15,36 +13,8 @@ router.use(readerAccess);
 ═══════════════════════════════════════════ */
 router.get("/works", async (req, res) => {
   try {
-    const { q, genre } = req.query;
-    if (!q || q.trim().length < 2)
-      return res.json({ items: [] });
-
-    const regex = new RegExp(q.trim(), "i");
-
-    const filter = {
-      status: "published",
-      publishedChapterIds: { $exists: true, $not: { $size: 0 } },
-      $or: [
-        { title:       regex },
-        { description: regex },
-      ],
-    };
-
-    if (genre && genre !== "all") {
-      filter["universe.genre"] = genre;
-    }
-
-    const works = await Work.find(filter)
-      .select(PUBLIC_WORK_FIELDS)
-      .populate("user", "_id kullaniciAdi avatarUrl")
-      .sort({ updatedAt: -1 })
-      .limit(20)
-      .lean();
-
-    const publishedIds = await getPublishedChapterIdsByWork(works);
-    const items = works.map(work => serializePublicWorkCard(work, publishedIds.get(String(work._id))));
-
-    return res.json({ items });
+    if (searchText(req.query.q).length < 2) return res.json({ items: [], pagination: { page: 1, total: 0, totalPages: 0 } });
+    return res.json(await discoverWorks(req.query));
   } catch (err) {
     console.error("GET /search/works hatası:", err);
     return res.status(500).json({ message: "Arama başarısız." });
@@ -64,31 +34,18 @@ router.get("/users", async (req, res) => {
         .select("_id kullaniciAdi avatarUrl").sort({ kullaniciAdi: 1 }).limit(5).lean();
       return res.json({ items });
     }
-    const { q } = req.query;
-    if (!q || q.trim().length < 2)
-      return res.json({ items: [] });
-
-    const regex = new RegExp(q.trim(), "i");
-
-    const users = await User.find({
-      $or: [
-        { kullaniciAdi: regex },
-        { bio:          regex },
-      ],
-    })
-      .select("_id kullaniciAdi avatarUrl bio followers")
-      .limit(15)
-      .lean();
-
-    const items = users.map(u => ({
-      _id:           u._id,
-      kullaniciAdi:  u.kullaniciAdi,
-      avatarUrl:     u.avatarUrl ?? "",
-      bio:           u.bio       ?? "",
-      followerCount: u.followers?.length ?? 0,
-    }));
-
-    return res.json({ items });
+    const term = searchText(req.query.q);
+    if (term.length < 2) return res.json({ items: [], pagination: { page: 1, total: 0, totalPages: 0 } });
+    const { page, limit } = listPage(req.query, 15);
+    const regex = literalRegex(term);
+    const filter = { $or: [{ kullaniciAdi: regex }, { bio: regex }] };
+    const [users, total] = await Promise.all([
+      User.find(filter).select("_id kullaniciAdi avatarUrl bio followers")
+        .sort({ kullaniciAdi: 1, _id: 1 }).skip((page - 1) * limit).limit(limit).lean(),
+      User.countDocuments(filter),
+    ]);
+    return res.json({ items: users.map(u => writerCard(u, req.user?.id)),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   } catch (err) {
     console.error("GET /search/users hatası:", err);
     return res.status(500).json({ message: "Arama başarısız." });

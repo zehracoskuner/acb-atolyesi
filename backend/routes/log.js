@@ -10,7 +10,7 @@ import User           from "../models/User.js";
 import ensureAuth, { optionalAuth } from "../middlewares/ensureAuth.js";
 import { notifyLogLike, notifyLogComment } from "../services/notificationService.js";
 
-import { canReadLog } from "../services/logAccess.js";
+import { canReadLog, logWorkPopulation, validateLogWork } from "../services/logAccess.js";
 import { logCommentCounts } from "../services/logCommentCounts.js";
 import { arrayLikeUpdate, desiredLike, validateLikeId } from "../services/likes.js";
 
@@ -23,9 +23,11 @@ router.get("/:id/detail", optionalAuth, async (req, res) => {
     const log = await Log.findById(req.params.id);
     if (!await canReadLog(log, req.user?.id)) return res.status(404).json({ message: "Bu günlük girdisi silinmiş veya artık erişime kapalı." });
     await log.populate("author", "kullaniciAdi avatarUrl");
-    await log.populate("relatedWork", "title coverImage");
+    await log.populate(logWorkPopulation(req.user?.id));
     const item = log.toObject();
+    const counts = await logCommentCounts([item]);
     res.json({ item: { ...item, likes: undefined, likeCount: item.likes.length,
+      commentCount: counts.get(String(item._id)) ?? 0,
       likedByMe: item.likes.some(id => String(id) === String(req.user?.id)) } });
   } catch (err) {
     res.status(err.status || 500).json({ message: "Günlük girdisi yüklenemedi." });
@@ -69,8 +71,8 @@ router.get("/:userId", optionalAuth, async (req, res, next) => {
     const [logs, total] = await Promise.all([
       Log.find(query)
         .populate("author",      "_id kullaniciAdi avatarUrl")
-        .populate("relatedWork", "_id title coverImage")
-        .sort({ createdAt: -1 })
+        .populate(logWorkPopulation(viewerId))
+        .sort({ createdAt: -1, _id: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -106,7 +108,7 @@ router.get("/my", ensureAuth, async (req, res) => {
 
     const [logs, total] = await Promise.all([
       Log.find({ author: req.user.id })
-        .populate("relatedWork", "_id title coverImage")
+        .populate(logWorkPopulation(req.user.id))
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -150,6 +152,10 @@ router.post("/", ensureAuth, async (req, res) => {
     if (content.trim().length > 800)
       return res.status(400).json({ message: "Günlük girdisi en fazla 800 karakter olabilir." });
 
+    if (visibility !== undefined && !['public', 'followers', 'private'].includes(visibility))
+      return res.status(400).json({ message: 'Geçersiz günlük görünürlüğü.' });
+    await validateLogWork(relatedWork, req.user.id);
+
     const mentions = await resolveMentions(content.trim());
     const log = await Log.create({
       mentions,
@@ -163,7 +169,7 @@ router.post("/", ensureAuth, async (req, res) => {
     await notifyNewLog(log).catch(console.error);
     const populated = await log.populate([
       { path: "author",      select: "_id kullaniciAdi avatarUrl" },
-      { path: "relatedWork", select: "_id title coverImage" },
+      logWorkPopulation(req.user.id),
     ]);
 
     return res.status(201).json({
@@ -198,7 +204,11 @@ router.patch("/:id", ensureAuth, async (req, res) => {
     log.content = content.trim();
     await log.save();
     await notifyMentions({ senderId: req.user.id, mentions: log.mentions, previous, log, isLogEntry: true }).catch(console.error);
-    return res.json({ item: log });
+    await log.populate([{ path: 'author', select: '_id kullaniciAdi avatarUrl' }, logWorkPopulation(req.user.id)]);
+    const item = log.toObject();
+    const counts = await logCommentCounts([item]);
+    return res.json({ item: { ...item, likes: undefined, likeCount: item.likes.length,
+      likedByMe: item.likes.some(id => String(id) === String(req.user.id)), commentCount: counts.get(String(item._id)) ?? 0 } });
   } catch (err) {
     return res.status(err.status || 500).json({ message: err.status ? err.message : "Girdi düzenlenemedi." });
   }

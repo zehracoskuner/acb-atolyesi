@@ -1,0 +1,71 @@
+// Native components rendered through RN Web with explicit fixtures; not a device test.
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+(async () => {
+  const browser = await chromium.launch({ executablePath: process.env.MOBILE_EDITOR_BROWSER || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', headless: true });
+  try {
+    const page = await browser.newPage(); const errors = []; page.on('pageerror', e => errors.push(e.message));
+    fs.mkdirSync('artifacts/design', { recursive: true });
+    for (const width of [320, 430, 1024]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto('http://127.0.0.1:5186/?theme=light#/plot-map');
+      await page.getByRole('button', { name: 'Kayıp mektup', exact: true }).click();
+      await page.getByRole('button', { name: 'Bağlantı kur', exact: true }).waitFor();
+      await page.screenshot({ path: `artifacts/design/plot-map-${width}.png` });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      await page.getByRole('button', { name: 'Sahne ayrıntısını kapat' }).click();
+      await page.getByRole('button', { name: 'Haritayı uzaklaştır' }).click();
+      await page.getByRole('button', { name: 'Haritayı yakınlaştır' }).click();
+      await page.getByRole('button', { name: 'Seçime odaklan' }).click();
+      console.log(`PASS map layout and zoom ${width}px`);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('http://127.0.0.1:5186/?theme=dark#/plot-map');
+    const firstScene = page.getByRole('button', { name: 'Kayıp mektup', exact: true });
+    await firstScene.click({ trial: true }); const beforePan = await firstScene.boundingBox();
+    const panCdp = await page.context().newCDPSession(page); await panCdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 12, y: 400 }] }); for (let x = 24; x <= 108; x += 12) await panCdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: 400 }] }); await panCdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await panCdp.detach();
+    await page.waitForTimeout(100); const afterPan = await firstScene.boundingBox();  assert.ok(afterPan.x > beforePan.x + 50, 'drag moves graph');
+    await page.getByRole('button', { name: 'Seçime odaklan' }).click();
+    const beforePinch = await firstScene.boundingBox();
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 100, y: 380 }, { x: 190, y: 420 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 90, y: 375 }, { x: 200, y: 425 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 65, y: 360 }, { x: 225, y: 440 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 45, y: 350 }, { x: 245, y: 450 }] }); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await page.waitForTimeout(100);
+    const afterPinch = await firstScene.boundingBox(); assert.ok(afterPinch.width > beforePinch.width, 'two-finger pinch zooms graph');
+    await cdp.detach(); await page.getByRole('button', { name: 'Seçime odaklan' }).click();
+    console.log('PASS touch pan and two-finger pinch in browser renderer');
+    await page.getByRole('button', { name: 'Kayıp mektup', exact: true }).click();
+    await page.getByRole('button', { name: 'Bağlantı kur', exact: true }).click();
+    await page.getByLabel('Bağlanacak sahneyi ara…').fill('Eve dönüş');
+    await page.getByRole('button', { name: 'Eve dönüş', exact: true }).click();
+    await page.getByRole('button', { name: 'Karar', exact: true }).click();
+    await page.evaluate(() => { window.__failPlotSave = true; });
+    await page.getByRole('button', { name: 'Bağlantıyı kaydet', exact: true }).click();
+    await page.getByText('Bağlantı kaydedilemedi. Yeniden dene.').waitFor();
+    assert.equal(await page.evaluate(() => window.__lastPlotWrite), undefined);
+    await page.evaluate(() => { window.__failPlotSave = false; });
+    await page.getByRole('button', { name: 'Bağlantıyı kaydet', exact: true }).click();
+    await page.getByText('→ Karar · Eve dönüş', { exact: true }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.__lastPlotWrite), { from: '0', to: '5', remove: false, type: 'karar' });
+    await page.screenshot({ path: 'artifacts/design/plot-map-dark.png' });
+    console.log('PASS typed connection, failed save and retry');
+    await page.getByRole('button', { name: 'Düzenle', exact: true }).click();
+    await page.getByRole('button', { name: 'Haritayı aç', exact: true }).waitFor();
+    console.log('PASS edit returns to scene editor callback');
+    await page.goto('http://127.0.0.1:5186/?theme=light#/relationship-map');
+    await page.getByRole('button', { name: 'Ada', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Yakın çevresi', exact: true }).click(); await page.getByRole('button', { name: 'Bu karakterden bağ kur', exact: true }).click();
+    await page.getByRole('button', { name: 'Meryem', exact: true }).first().click();
+    await page.getByLabel('İlişki türü').fill('Aile'); await page.getByRole('button', { name: 'Karşılıklı ↔', exact: true }).click();
+    await page.getByRole('button', { name: 'İlişkiyi kaydet', exact: true }).click();
+    await page.getByRole('button', { name: '↔ Meryem · Aile', exact: true }).waitFor();
+    await page.screenshot({ path: 'artifacts/design/relationship-map-390.png' });
+    await page.goto('http://127.0.0.1:5186/?theme=light#/relationship-map');
+    await page.reload(); await page.getByRole('button', { name: 'Haritayı ortala', exact: true }).click();
+    await page.screenshot({ path: 'artifacts/design/relationship-overview-390.png' });
+    console.log('PASS character relationship creation');
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+})().catch(e => { console.error(e); process.exit(1); });

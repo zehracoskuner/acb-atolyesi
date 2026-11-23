@@ -21,9 +21,9 @@ import DOMPurify from "dompurify";
 import ChapterMediaEditor from "../components/ChapterMediaEditor";
 import { setWritingFocus } from "../lib/writingFocus";
 import { chapterClipboardHtml, insertChapterHtml } from "../lib/chapterClipboard";
+import { visibleWordCount as wcFromHtml, readTime } from "../lib/readingTime";
 
 const AUTOSAVE_DELAY   = 2000;
-const WORDS_PER_MINUTE = 200;
 const MAX_UNDO         = 50;
 
 /* ── Theme ── */
@@ -40,29 +40,13 @@ function applyTheme(t) {
 }
 
 /* ── Helpers ── */
-function wcFromHtml(html) {
-  if (!html) return 0;
-  const d = document.createElement("div");
-  d.innerHTML = html;
-  d.querySelectorAll("br").forEach(node => node.replaceWith(document.createTextNode(" ")));
-  d.querySelectorAll("p, div, li, h1, h2, h3, h4, h5, h6, blockquote, pre, tr").forEach(node => node.append(" "));
-  const t = (d.textContent || "").trim();
-  return t ? t.split(/\s+/).filter(Boolean).length : 0;
-}
-function readTime(w) {
-  const m = Math.ceil(w / WORDS_PER_MINUTE);
-  return m < 1 ? "<1 dk" : `${m} dk`;
-}
-
 function htmlify(raw) {
   if (!raw) return "";
   // Zaten HTML tag varsa dokunma
   if (/<[a-z][\s\S]*>/i.test(raw)) return raw;
   // Düz metin → paragraf bloklarına çevir
-  return raw
-    .split(/\n\n+/)
-    .map((p) => `<div>${p.replace(/\n/g, "<br>") || "<br>"}</div>`)
-    .join("");
+  return raw.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+    .replace(/\r\n?/g, "\n").replace(/\n/g, "<br>");
 }
 
 function normalizeChapter(ch) {
@@ -76,6 +60,7 @@ function normalizeChapter(ch) {
     status:     ch.status      || "draft",
     reviewNote: ch.reviewNote  || "",
     order:      ch.order       ?? 0,
+    _baseTitle: ch.title || "", _baseContent: fullContent, _baseMedia: ch.media || [],
     _dirty:     false,
     revision: ch.revision ?? 0,
     savedAt: ch.savedAt || ch.updatedAt || null,
@@ -119,7 +104,7 @@ function chaptersReducer(state, action) {
         return { ...ch, content: action.content, _eligibleWords: (ch._eligibleWords || 0) + (action.eligibleWords || 0), _dirty: true, _edit: ch._edit + 1, _saveError: false };
       });
     case "UPDATE_STATUS":
-      return state.map((c) => c._id !== action.id ? c : { ...c, status: action.status, hasUnpublishedChanges: action.hasUnpublishedChanges ?? c.hasUnpublishedChanges, reviewNote: action.reviewNote ?? c.reviewNote });
+      return state.map((c) => c._id !== action.id ? c : { ...c, status: action.status, reviewStatus: action.reviewStatus, hasUnpublishedChanges: action.hasUnpublishedChanges ?? c.hasUnpublishedChanges, reviewNote: action.reviewNote ?? c.reviewNote });
     case "DEVELOPMENT_STATUS":
       return state.map(c => (c._developmentSequence || 0) > (action.development.analysisCount || 0) ? c : {
         ...c, _developmentSequence: action.development.analysisCount || 0,
@@ -130,11 +115,12 @@ function chaptersReducer(state, action) {
     case "SAVE_SUCCESS":
       return state.map(c => c._id !== action.id || c._request !== action.request ? c : {
         ...c, revision: action.item.revision, savedAt: action.item.savedAt,
+        _baseTitle: action.sent?.title ?? action.item.title, _baseContent: action.sent?.content ?? action.item.content, _baseMedia: action.sent?.media ?? action.item.media ?? [],
         _savedEligibleWords: action.eligibleWords ?? c._savedEligibleWords,
         _developmentSequence: Math.max(c._developmentSequence || 0, action.development?.analysisCount || 0),
         _developmentEligible: (action.development?.analysisCount || 0) < (c._developmentSequence || 0)
           ? c._developmentEligible : action.development?.eligibleForDevelopmentReview ?? c._developmentEligible,
-        status: action.item.status, hasUnpublishedChanges: !!action.item.hasUnpublishedChanges, reviewNote: action.item.reviewNote ?? "",
+        status: action.item.status, reviewStatus: action.item.reviewStatus, hasUnpublishedChanges: !!action.item.hasUnpublishedChanges, reviewNote: action.item.reviewNote ?? "",
         // A receipt acknowledges a snapshot; it must not rewrite the live DOM
         // (even harmless sanitizer serialization like <br /> moves the caret).
         _saving: false, _saveError: false, _dirty: c._edit !== action.edit,
@@ -408,7 +394,8 @@ function ChapterDocument({ chapter, chapterIndex, onContentChange, onTitleChange
       {chapter.status === "published" && <p className="chapter-document-note">{chapter.hasUnpublishedChanges || chapter._dirty
         ? "Son yayınlanan metin yayında · düzenlemelerin taslakta. Hazır olduğunda değişiklikleri yayınla."
         : "Yayında · okurlar görebiliyor"}</p>}
-      {chapter.status === "pending_review" && <p className="chapter-document-note">İnceleniyor · moderatör onayı bekleniyor</p>}
+      {(chapter.status === "pending_review" || chapter.reviewStatus === "pending_review") && <p className="chapter-document-note">İnceleniyor · moderatör onayı bekleniyor</p>}
+      {chapter.reviewStatus === "rejected" && <p className="chapter-document-note">Değişiklikler reddedildi · mevcut yayın korunuyor</p>}
       {chapter.reviewNote && <p className="chapter-document-note">{chapter.reviewNote}</p>}
     </header>
     <RichEditor readOnly={chapter._deleting} value={chapter.content}
@@ -697,11 +684,13 @@ useEffect(() => {
     const request = (async () => {
       try {
         const result = await apiPut(`/chapters/${chapterId}`, {
-          title: ch.title, content: ch.content, media: ch.media, expectedRevision: ch.revision ?? 0,
+          ...(ch.title !== ch._baseTitle ? { title: ch.title } : {}),
+          ...(ch.content !== ch._baseContent ? { content: ch.content } : {}),
+          ...(JSON.stringify(ch.media) !== JSON.stringify(ch._baseMedia) ? { media: ch.media } : {}), expectedRevision: ch.revision ?? 0,
           eligibleWordDelta: Math.max(0, (ch._eligibleWords || 0) - (ch._savedEligibleWords || 0)),
         });
         if (!isChapterSaveReceipt(result, chapterId, ch.revision ?? 0)) throw new Error("Geçersiz kayıt yanıtı.");
-        dispatch({ type: "SAVE_SUCCESS", id: chapterId, request: requestId, edit: ch._edit, eligibleWords: ch._eligibleWords || 0, development: result.development, item: { ...result.item, revision: result.revision, savedAt: result.savedAt } });
+        dispatch({ type: "SAVE_SUCCESS", id: chapterId, request: requestId, edit: ch._edit, sent: { title: ch.title, content: ch.content, media: ch.media }, eligibleWords: ch._eligibleWords || 0, development: result.development, item: { ...result.item, revision: result.revision, savedAt: result.savedAt } });
         return true;
       } catch (err) {
         dispatch({ type: "SAVE_ERROR", id: chapterId, request: requestId, current: err.status === 409 ? err.data?.current : null });
@@ -772,12 +761,13 @@ useEffect(() => {
     const ch = chaptersRef.current.find(c => c._id === activeChapterId);
     if (!ch || ch._deleting || ch._mediaUploading || publishingIds.current.has(ch._id)) return;
     const updatePublished = ch.status === "published" && !unpublish && (ch.hasUnpublishedChanges || ch._dirty);
-    const toDraft = !updatePublished && (ch.status === "published" || ch.status === "pending_review");
+    const toDraft = unpublish;
+    if (ch.status === "published" && !updatePublished && !toDraft) return;
     if (!toDraft && !ch.content) { alert("Bölüm içeriği boş."); return; }
-    if (!window.confirm(toDraft ? "Bölümü taslağa almak istediğinden emin misin?"
+    if (!window.confirm(toDraft ? `“${ch.title}” okurlardan kaldırılıp taslağa alınacak. Devam etmek istiyor musun?`
       : ch.status === "rejected" ? "Yeniden incelemeye göndermek istiyor musun?"
-      : updatePublished ? "Düzenlemelerini okurlara yayınlamak istediğinden emin misin?"
-      : "Bu bölümü yayınlamak istediğinden emin misin?")) return;
+      : updatePublished ? `“${ch.title}” · Değişiklikler okurlara yansıyacak. Yayınlamak istiyor musun?`
+      : `“${ch.title}” bölümünü yayınlamak istiyor musun?`)) return;
     setPublishing(true);
     let acquired = false;
     try {
@@ -796,8 +786,8 @@ useEffect(() => {
         result = err.data;
       }
       if (result.item?._id !== ch._id || !result.item.status) throw new Error("Geçersiz durum yanıtı.");
-      dispatch({ type: "UPDATE_STATUS", id: ch._id, status: result.item.status, hasUnpublishedChanges: !!result.item.hasUnpublishedChanges, reviewNote: result.item.reviewNote ?? "" });
-      if (result.item.status === "pending_review") {
+      dispatch({ type: "UPDATE_STATUS", id: ch._id, status: result.item.status, reviewStatus: result.item.reviewStatus, hasUnpublishedChanges: !!result.item.hasUnpublishedChanges, reviewNote: result.item.reviewNote ?? "" });
+      if (result.pending || result.item.reviewStatus === "pending_review" || result.item.status === "pending_review") {
         setReviewPending(true); setTimeout(() => setReviewPending(false), 8000);
       } else if (result.item.status === "rejected") {
         alert(result.message || "İçerik politikasına aykırı.");
@@ -900,7 +890,8 @@ useEffect(() => {
     if(publishing)return"inceleniyor…";
     if(!activeChapter)return"yayınla";
     if(activeChapter.status==="published"&&(activeChapter.hasUnpublishedChanges||activeChapter._dirty))return"Değişiklikleri yayınla";
-    if(activeChapter.status==="published"||activeChapter.status==="pending_review")return"taslağa al";
+    if(activeChapter.status==="published")return"Yayında";
+    if(activeChapter.status==="pending_review")return"İncelemeye gönder";
     if(activeChapter.status==="rejected")return"yeniden gönder";
     return"yayınla";
   };
@@ -996,7 +987,7 @@ useEffect(() => {
             </>}
             <button className="cp-tb-btn cp-theme-btn" onClick={() => setTheme(t => t === "light" ? "dark" : "light")} aria-label={theme === "light" ? "Karanlık moda geç" : "Aydınlık moda geç"} title={theme === "light" ? "Karanlık moda geç" : "Aydınlık moda geç"}>{theme === "light" ? "☾" : "☀"}</button>
             <details className="cp-tools-menu"><summary>Araçlar</summary><div className="cp-tools-popover">
-              {activeChapter?.status === "published" && <button className="cp-tb-btn" disabled={publishing} onClick={() => handlePublish({ unpublish: true })}>Yayından kaldır</button>}
+              {["published", "pending_review"].includes(activeChapter?.status) && <button className="cp-tb-btn" disabled={publishing} onClick={() => handlePublish({ unpublish: true })}>Yayından kaldır</button>}
               {!DEVELOPMENT_COACH_LAUNCH_ENABLED && <button className="cp-tb-btn" disabled>Gelişim Koçu · Beta · Çok yakında</button>}
               {DEVELOPMENT_COACH_LAUNCH_ENABLED && coachPreference === "enabled" && hasDevelopmentAnalysis && <button className="cp-tb-btn" onClick={openLatestDevelopment}>Son gelişim değerlendirmesi</button>}
               <BookDownload workId={workId} buttonClass="cp-tb-btn" dirty={chapters.some(ch => ch._dirty || ch._saving || ch._saveError || ch._conflict || ch._recovery)} disabled={loading || !!error || publishing} beforeSave={() => saveBeforeBookDownload(() => chaptersRef.current, saveChapter)} />

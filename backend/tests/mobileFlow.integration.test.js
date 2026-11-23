@@ -16,6 +16,8 @@ import logs from '../routes/log.js';
 import progress from '../routes/readingProgress.js';
 import mobile from '../routes/mobile.js';
 import plots from '../routes/plots.js';
+import characters from '../routes/characters.js';
+import relationships from '../routes/relationships.js';
 import userRoutes from '../routes/user.js';
 import readingLists from '../routes/readingLists.js';
 import quotes from '../routes/quotes.js';
@@ -39,7 +41,7 @@ describe('native login → feed → writing → reopen → publication → readi
     await Promise.all([User.init(), ChapterVersion.init(), PushDevice.init(), PushDelivery.init()]);
     await User.create({ email: 'mobile@example.test', kullaniciAdi: 'gezgin_yazar', sifreHash: await bcrypt.hash('a-real-test-password', 4), emailVerified: true, profileComplete: true, birthYear: 1990, ...newTermsAcceptance() });
     const app = express(); app.use(express.json()); app.use(cookieParser()); app.use('/api', (req, res, next) => req.path.startsWith('/auth/') ? next() : readerAccess(req, res, next));
-    for (const [path, router] of Object.entries({ auth, works, chapters, public: publicRoutes, feed, logs, 'reading-progress': progress, mobile, plots, user: userRoutes, 'reading-lists': readingLists, quotes, library })) app.use(`/api/${path}`, router);
+    for (const [path, router] of Object.entries({ auth, works, chapters, public: publicRoutes, feed, logs, 'reading-progress': progress, mobile, plots, characters, relationships, user: userRoutes, 'reading-lists': readingLists, quotes, library })) app.use(`/api/${path}`, router);
     app.use((error, _req, res, _next) => res.status(error.status || 500).json({ message: error.message }));
     server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); }); base = `http://127.0.0.1:${server.address().port}/api`;
   }, 600000);
@@ -47,6 +49,31 @@ describe('native login → feed → writing → reopen → publication → readi
   async function request(path, method = 'GET', body) {
     const r = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }); return { status: r.status, data: await r.json(), cookie: r.headers.get('set-cookie') };
   }
+  it('isolates characters by work and preserves hidden fields through character and relationship CRUD', async () => {
+    token = (await request('/auth/login', 'POST', { email: 'mobile@example.test', sifre: 'a-real-test-password', client: 'native' })).data.token;
+    const a = (await request('/works', 'POST', { title: 'Karakter eseri A' })).data.item._id;
+    const b = (await request('/works', 'POST', { title: 'Karakter eseri B' })).data.item._id;
+    const one = (await request('/characters', 'POST', { workId: a, name: 'Ada', x: 901, y: 402, faction: 'Kuzey', tagline: 'Saklı ses' })).data.item;
+    const two = (await request('/characters', 'POST', { workId: a, name: 'İpek' })).data.item;
+    const foreign = (await request('/characters', 'POST', { workId: b, name: 'Başka eser' })).data.item;
+    const saved = await request(`/characters/${one._id}`, 'PATCH', { workId: a, notes: 'Uzun not\nİkinci satır', role: 'Tanık', color: '#aabbcc' });
+    expect(saved.status).toBe(200); expect(saved.data.item).toMatchObject({ x: 901, y: 402, faction: 'Kuzey', tagline: 'Saklı ses', notes: 'Uzun not\nİkinci satır' });
+    expect((await request(`/characters/${one._id}`, 'PATCH', { workId: b, notes: 'Yanlış eser' })).status).toBe(404);
+    const reopened = (await request(`/characters?workId=${a}`)).data.items;
+    expect(reopened.map(c => c._id).sort()).toEqual([one._id, two._id].sort());
+    expect(reopened.find(c => c._id === one._id).notes).toBe('Uzun not\nİkinci satır');
+    expect((await request('/relationships', 'POST', { workId: a, from: one._id, to: foreign._id, type: 'love' })).status).toBe(400);
+    expect((await request('/relationships', 'POST', { workId: a, from: one._id, to: one._id, type: 'love' })).status).toBe(400);
+    const relation = await request('/relationships', 'POST', { workId: a, from: two._id, to: one._id, type: 'custom_web_key', directed: true, strength: 5, label: 'Gizli anlaşma' });
+    expect(relation.status).toBe(201); expect(relation.data.item).toMatchObject({ type: 'custom_web_key', directed: true, strength: 5, label: 'Gizli anlaşma' });
+    expect((await request(`/relationships?workId=${b}`)).data.items).toEqual([]);
+    expect((await request(`/relationships/${relation.data.item._id}?workId=${b}`, 'DELETE')).status).toBe(404);
+    expect((await request(`/relationships/${relation.data.item._id}?workId=${a}`, 'DELETE')).status).toBe(200);
+    expect((await request(`/relationships?workId=${a}`)).data.items).toEqual([]);
+    expect((await request(`/characters/${one._id}?workId=${b}`, 'DELETE')).status).toBe(404);
+    expect((await request(`/characters/${one._id}?workId=${a}`, 'DELETE')).status).toBe(200);
+    expect((await request(`/characters?workId=${a}`)).data.items.map(c => c._id)).toEqual([two._id]);
+  });
   it('uses real native sessions and preserves rich text through versioned saves and reopen', async () => {
     const login = await request('/auth/login', 'POST', { email: 'mobile@example.test', sifre: 'a-real-test-password', client: 'native' });
     expect(login.status).toBe(200); expect(login.cookie).toBeNull(); token = login.data.token; expect(token).toBeTruthy();

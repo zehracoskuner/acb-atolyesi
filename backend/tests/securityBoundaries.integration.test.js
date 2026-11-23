@@ -69,12 +69,12 @@ it('excludes reset and verification credentials from authenticated profile respo
 it('checks publication for normal and inline comments even when a withdrawn chapter ID is known', async () => {
   await Comment.create({ author: owner._id, work: work._id, chapter: chapter._id, content: 'visible-comment', status: 'published' });
   await InlineComment.create({ author: owner._id, workId: work._id, chapterId: chapter._id, paragraphIndex: 0, content: 'inline-visible', status: 'published' });
-  expect((await request(`/comments/chapter/${chapter._id}`)).status).toBe(200);
-  expect((await request(`/inline-comments?chapterId=${chapter._id}`)).data.items).toHaveLength(1);
+  expect((await request(`/comments/chapter/${chapter._id}`, { auth: true })).status).toBe(200);
+  expect((await request(`/inline-comments?chapterId=${chapter._id}`, { auth: true })).data.items).toHaveLength(1);
   await Chapter.updateOne({ _id: chapter._id }, { status: 'draft' });
-  const hidden = await request(`/comments/chapter/${chapter._id}`);
+  const hidden = await request(`/comments/chapter/${chapter._id}`, { auth: true });
   expect(hidden.status).toBe(404); expect(JSON.stringify(hidden.data)).not.toContain('visible-comment');
-  expect((await request(`/inline-comments?chapterId=${chapter._id}`)).data.items).toHaveLength(0);
+  expect((await request(`/inline-comments?chapterId=${chapter._id}`, { auth: true })).data.items).toHaveLength(0);
 });
 it('does not attach an inline comment to another work or a private chapter', async () => {
   const send = (workId = work._id) => request('/inline-comments', { auth: true, method: 'POST', body: { workId, chapterId: chapter._id, paragraphIndex: 0, content: 'comment' } });

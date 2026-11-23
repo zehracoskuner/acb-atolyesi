@@ -1,6 +1,7 @@
 import readerAccess from "../middlewares/readerAccess.js";
 // backend/routes/works.js
 import express from "express";
+import { discoverWorks, publishedWorkStages } from "../services/discovery.js";
 import mongoose from "mongoose";
 import ensureAuth from "../middlewares/ensureAuth.js";
 import Work from "../models/Work.js";
@@ -10,8 +11,7 @@ import uploadOrigin from '../middlewares/uploadOrigin.js';
 import { readBookSnapshot } from "../services/bookSnapshot.js";
 import { BOOK_TYPES, createBookFile } from "../services/bookExport.js";
 
-import { PUBLIC_WORK_FIELDS, serializePublicWorkCard, serializeWorkAuthor } from "../services/publicWork.js";
-import { getPublishedChapterIdsByWork } from "../services/publishedChapters.js";
+import { serializeWorkAuthor } from "../services/publicWork.js";
 
 const router = express.Router();
 router.use(readerAccess);
@@ -150,51 +150,7 @@ router.get("/", ensureAuth, async (req, res) => {
 // ── GET /api/works/discover ──────────────────────────────────────────────────
 router.get("/discover", async (req, res) => {
   try {
-    const { genres: genresParam, q, page = 1, limit = 20, sort = "newest" } = req.query;
-
-    const pageNum  = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
-
-    const filter = { status: "published" };
-
-    if (genresParam) {
-      const genreList = genresParam
-        .split(",")
-        .map((g) => g.trim())
-        .filter((g) => ALL_GENRES.includes(g));
-      if (genreList.length) filter["universe.genres"] = { $in: genreList };
-    }
-
-    if (q?.trim()) {
-      const regex = new RegExp(q.trim(), "i");
-      filter.$or = [{ title: regex }, { description: regex }];
-    }
-
-    const sortMap = {
-      newest:  { createdAt: -1 },
-      popular: { likeCount: -1, createdAt: -1 },
-    };
-
-    const [works, total] = await Promise.all([
-      Work.find(filter)
-        .sort(sortMap[sort] || sortMap.newest)
-        .skip((pageNum - 1) * limitNum)
-        .limit(limitNum)
-        .populate("user", USER_POPULATE)
-        .select(PUBLIC_WORK_FIELDS),
-      Work.countDocuments(filter),
-    ]);
-
-    const publishedIds = await getPublishedChapterIdsByWork(works);
-    return res.json({
-      items: works.map(work => serializePublicWorkCard(work, publishedIds.get(String(work._id)))),
-      pagination: {
-        total,
-        page:       pageNum,
-        limit:      limitNum,
-        totalPages: Math.ceil(total / limitNum),
-      },
-    });
+    return res.json(await discoverWorks({ ...req.query, sort: req.query.sort || "newest" }));
   } catch (err) {
     console.error("GET /works/discover error:", err);
     return res.status(500).json({ message: "Keşif yüklenemedi." });
@@ -205,7 +161,7 @@ router.get("/discover", async (req, res) => {
 router.get("/genres", async (req, res) => {
   try {
     const counts = await Work.aggregate([
-      { $match: { status: "published" } },
+      ...publishedWorkStages(),
       { $unwind: "$universe.genres" },
       { $group: { _id: "$universe.genres", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
@@ -272,9 +228,9 @@ router.get("/:id/chapters", ensureAuth, async (req, res) => {
     const work = await Work.findOne({ _id: req.params.id, user: userId });
     if (!work) return res.status(404).json({ message: "Çalışma bulunamadı veya yetkiniz yok." });
 
-    const chapters = await Chapter.find({ work: req.params.id }).select("_id title order status revision savedAt updatedAt reviewNote hasUnpublishedChanges +draftContent").sort({ order: 1 });
+    const chapters = await Chapter.find({ work: req.params.id }).select("_id title order status revision savedAt updatedAt reviewNote reviewStatus hasUnpublishedChanges +draftContent").sort({ order: 1 });
 
-    return res.json({ items: chapters.map(ch => ({ _id: ch._id, title: ch.draftContent?.title ?? ch.title, order: ch.order, status: ch.status, hasUnpublishedChanges: ch.hasUnpublishedChanges, revision: ch.revision ?? 0, savedAt: ch.savedAt, updatedAt: ch.updatedAt, reviewNote: ch.reviewNote || "" })) });
+    return res.json({ items: chapters.map(ch => ({ _id: ch._id, title: ch.draftContent?.title ?? ch.title, order: ch.order, status: ch.status, reviewStatus: ch.reviewStatus, hasUnpublishedChanges: ch.hasUnpublishedChanges, revision: ch.revision ?? 0, savedAt: ch.savedAt, updatedAt: ch.updatedAt, reviewNote: ch.reviewNote || "" })) });
   } catch (err) {
     console.error("GET /works/:id/chapters error:", err);
     return res.status(500).json({ message: "Bölümler yüklenemedi." });

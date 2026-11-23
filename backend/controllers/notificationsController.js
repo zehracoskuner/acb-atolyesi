@@ -1,14 +1,18 @@
 import Notification from "../models/Notification.js";
 import Log from "../models/Log.js";
 import { canReadLog } from "../services/logAccess.js";
+import { notificationCutoff } from "../config/notificationRetention.js";
 
 export const getNotifications = async (req, res) => {
   try {
     const userId = req.user.id;
     const limit  = parseInt(req.query.limit) || 30;
+    // TTL deletion runs asynchronously; expired items must already be absent
+    // from both clients' inbox and unread count while MongoDB catches up.
+    const active = { recipient: userId, createdAt: { $gt: notificationCutoff() } };
 
     const [notifications, unreadCount] = await Promise.all([
-      Notification.find({ recipient: userId })
+      Notification.find(active)
         .sort({ createdAt: -1 })
         .limit(limit)
         .populate("sender", "username kullaniciAdi")
@@ -16,7 +20,7 @@ export const getNotifications = async (req, res) => {
         .populate("chapter", "title order")
         .lean(),
       // 🔥 DÜZELTME 1: isRead yerine read kullanıyoruz
-      Notification.countDocuments({ recipient: userId, read: false }),
+      Notification.countDocuments({ ...active, read: false }),
     ]);
 
     // Preserve log IDs for existing clients; only expose previews the recipient may read.

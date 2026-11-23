@@ -118,7 +118,7 @@ export async function saveChapterVersion({ id, userId, expectedRevision, title, 
     }], { session });
     const acceptedWords = await captureDevelopmentWriting({ chapter, work, beforeContent: current.content, nextContent, claimed: eligibleWordDelta, excluded: !!source || !contentChanged, session });
     const savedAt = new Date();
-    const keepPublished = chapter.status === "published" && !chapter.moderationHold;
+    const keepPublished = chapter.status === "published";
     const drafted = !keepPublished && chapter.status !== "draft";
     if (["pending_review", "rejected"].includes(chapter.status)) chapter.moderationHold = true;
     if (keepPublished) {

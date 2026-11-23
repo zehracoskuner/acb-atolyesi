@@ -16,6 +16,9 @@ const inlineCommentSchema = new mongoose.Schema({
   workId:         { type: mongoose.Schema.Types.ObjectId, ref: "Work",    required: true },
   chapterId:      { type: mongoose.Schema.Types.ObjectId, ref: "Chapter", required: true },
   paragraphIndex: { type: Number, required: true },
+  blockId:        { type: String },
+  paragraphText:  { type: String },
+  contentVersion: { type: String },
     mentions: [{ user: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, name: String, _id: false }],
     content: { type: String, required: true, maxlength: 1000 },
   author:         { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -26,9 +29,10 @@ const inlineCommentSchema = new mongoose.Schema({
     enum:    ["published", "pending_review", "rejected"],
     default: "published",
   },
-  reviewNote: { type: String, default: "" },
+  reviewNote: { type: String, default: "", select: false },
 }, { timestamps: true });
 
 inlineCommentSchema.index({ chapterId: 1, paragraphIndex: 1, createdAt: 1 });
+inlineCommentSchema.index({ chapterId: 1, blockId: 1, createdAt: 1 });
 
 export default mongoose.model("InlineComment", inlineCommentSchema);

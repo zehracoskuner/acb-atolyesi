@@ -51,13 +51,14 @@ let db, writes, server, baseUrl, issue;
 function matches(row, filter) {
   return Object.entries(filter).every(([key, expected]) => {
     if (key === "$or") return expected.some(part => matches(row, part));
-    const actual = row[key];
+    const actual = key.split('.').reduce((value, part) => value?.[part], row);
     if (expected instanceof RegExp) return expected.test(actual ?? "");
     if (expected && typeof expected === "object" && !(expected instanceof Array) && !expected.toHexString) {
       if (Object.hasOwn(expected, "$ne")) return actual !== expected.$ne;
       if (expected.$in) return expected.$in.some((value) => String(value) === String(actual));
       if (expected.$exists !== undefined && (actual !== undefined) !== expected.$exists) return false;
       if (expected.$not?.$size !== undefined) return actual?.length !== expected.$not.$size;
+      if (expected.$exists !== undefined) return true;
     }
     return String(actual) === String(expected);
   });
@@ -187,6 +188,22 @@ beforeEach(() => {
     return rows;
   });
   mockStorage(Work, "works");
+  // This suite substitutes storage only. The real lookup/facet pipeline and
+  // its pagination are exercised in discovery.integration.test.js.
+  vi.spyOn(Work, "aggregate").mockImplementation(async pipeline => {
+    let rows = structuredClone(Object.values(db.works));
+    for (const stage of pipeline) {
+      if (stage.$match) rows = rows.filter(row => matches(row, stage.$match));
+      else if (stage.$lookup) rows = rows.map(row => ({ ...row, publicChapters: (row.publishedChapterIds || []).filter(id => db.chapters[id]?.work === row._id && db.chapters[id]?.status === 'published').map(_id => ({ _id })) }));
+      else if (stage.$facet) {
+        const skip = stage.$facet.items.find(s => s.$skip !== undefined)?.$skip || 0;
+        const limit = stage.$facet.items.find(s => s.$limit !== undefined)?.$limit || rows.length;
+        return [{ items: rows.slice(skip, skip + limit), total: [{ count: rows.length }] }];
+      }
+    }
+    return rows;
+  });
+  vi.spyOn(Work, "populate").mockImplementation(async rows => rows.map(row => ({ ...row, user: db.users[String(row.user)] || null })));
   vi.spyOn(Work, "findOneAndUpdate").mockImplementation((filter, update) => {
     const row = Object.values(db.works).find(row => matches(row, filter));
     if (!row) return query(null);
@@ -276,7 +293,7 @@ describe("Direct HTTP reader access", () => {
       const result = await request(user, "GET", textPath);
       expect(result.status).toBe(200);
       expect(result.body.item.content).toBe(db.chapters[CA].content);
-      expect(Object.keys(result.body.item).sort()).toEqual(["_id", "content", "media", "order", "title"]);
+      expect(Object.keys(result.body.item).sort()).toEqual(["_id", "blocks", "content", "contentVersion", "media", "order", "title"]);
       expect(result.headers.get("cache-control")).toBe("private, no-store");
       expect(result.headers.get("vary")).toContain("Authorization");
       expect(result.headers.get("vary")).toContain("Cookie");
@@ -389,12 +406,12 @@ describe("İki kullanıcı arasında bölüm sahipliği", () => {
     const otherWork = structuredClone(db.works[WA]);
     let result = await request(B, "GET", `/api/chapters/${CB}`);
     expect(result.body.item.content).toBe("B özel içeriği");
-    result = await request(B, "PATCH", `/api/chapters/${CB}/status`, { status: "draft", workId });
+    result = await request(B, "PATCH", `/api/chapters/${CB}/status`, { status: "draft", workId, expectedRevision: 0 });
     expect(result.status).toBe(200);
     expect(db.chapters[CB].status).toBe("draft");
     expect(db.works[WB].publishedChapterIds).toEqual([]);
     expect(db.works[WB].status).toBe("draft");
-    result = await request(B, "PATCH", `/api/chapters/${CB}/status`, { status: "published", workId });
+    result = await request(B, "PATCH", `/api/chapters/${CB}/status`, { status: "published", workId, expectedRevision: 0 });
     expect(result.status).toBe(200);
     expect(db.chapters[CB].status).toBe("published");
     expect(db.works[WB].publishedChapterIds).toEqual([CB]);
@@ -414,16 +431,17 @@ describe("İki kullanıcı arasında bölüm sahipliği", () => {
   });
 
   it.each([
-    ["clean", true, "pending_review", 202],
+    ["clean", true, "published", 202],
   ])("Moderasyon %s / kısıt %s: liste ve bildirim gerçek eseri kullanır", async (severity, banned, status, code) => {
     db.users[B].contentBanned = banned;
     moderateChapter.mockResolvedValue({ severity, reason: "Test incelemesi" });
     const otherWork = structuredClone(db.works[WA]);
-    const result = await request(B, "PATCH", `/api/chapters/${CB}/status`, { status: "published", workId: WB });
+    const result = await request(B, "PATCH", `/api/chapters/${CB}/status`, { status: "published", workId: WB, expectedRevision: 0 });
     expect(result.status).toBe(code);
     expect(db.chapters[CB].status).toBe(status);
-    expect(db.works[WB].publishedChapterIds).toEqual([]);
-    expect(db.works[WB].status).toBe("draft");
+    expect(db.chapters[CB].reviewStatus).toBe('pending_review');
+    expect(db.works[WB].publishedChapterIds).toEqual([CB]);
+    expect(db.works[WB].status).toBe("published");
     expect(db.works[WA]).toEqual(otherWork);
     expect(db.notifications.length).toBeGreaterThan(0);
     expect(db.notifications.every((notification) => notification.work === WB)).toBe(true);
@@ -549,7 +567,7 @@ describe("Anonim yayının kaldırılması ve eski eserlerin gizliliği", () => 
   it("Sıradan düzenleme ve yeniden yayınlama anonimliği korur", async () => {
     expect((await request(A, "PATCH", `/api/works/${WA}`, { title: "Güncel eser" })).status).toBe(200);
     for (const status of ["draft", "published"]) {
-      expect((await request(A, "PATCH", `/api/chapters/${CA}/status`, { status })).status).toBe(200);
+      expect((await request(A, "PATCH", `/api/chapters/${CA}/status`, { status, expectedRevision: 0 })).status).toBe(200);
       expect(db.works[WA].isAnonymous).toBe(true);
     }
     const result = await request(null, "GET", `/api/public/works/${WA}`);

@@ -4,7 +4,7 @@ import { authLimiter, writeLimiter } from '../middlewares/rateLimiter.js';
 import { TERMS_VERSION } from '../config/terms.js';
 import legal from '../config/mobileLegal.json' with { type: 'json' };
 import { CHAPTER_HISTORY_ENABLED, DEVELOPMENT_COACH_LAUNCH_ENABLED, PLOTWORLD_SCENE_AI_ENABLED } from '../../shared/features.js';
-import { validPushToken, verifyMobileEmail, reorderMobileScenes } from '../services/mobile.js';
+import { validPushToken, verifyMobileEmail, reorderMobileScenes, moveMobileScene } from '../services/mobile.js';
 import PushDevice from '../models/PushDevice.js';
 import PushDelivery from '../models/PushDelivery.js';
 import jwt from 'jsonwebtoken';
@@ -28,6 +28,9 @@ router.post('/verify-email', authLimiter, async (req, res, next) => {
 });
 router.post('/plots/:workId/order', writeLimiter, ensureAuth, async (req, res, next) => {
   try { await reorderMobileScenes(req.params.workId, req.user.id, req.body); res.json({ ok: true }); } catch (error) { next(error); }
+});
+router.post('/plots/:workId/move', ensureAuth, writeLimiter, async (req, res, next) => {
+  try { await moveMobileScene(req.params.workId, req.user.id, req.body); res.json({ ok: true }); } catch (error) { next(error); }
 });
 router.post('/push-device', writeLimiter, ensureAuth, async (req, res, next) => {
   try {

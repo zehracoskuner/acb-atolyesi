@@ -1,6 +1,6 @@
-import { notifyNewChapter } from '../services/activityNotifications.js';
 // backend/models/Chapter.js
 import mongoose from "mongoose";
+import { notifyNewChapter } from '../services/activityNotifications.js';
 import { chapterMediaSchema } from "./chapterMediaSchema.js";
 import { matureFilter } from "../services/matureAccess.js";
 import Work from "./Work.js";
@@ -18,6 +18,12 @@ const chapterSchema = new mongoose.Schema(
       select: false,
     },
     hasUnpublishedChanges: { type: Boolean, default: false },
+    // Immutable author-confirmed submission; later autosaves never alter it.
+    reviewSubmission: {
+      type: new mongoose.Schema({ title: String, content: String, media: [chapterMediaSchema], revision: Number }, { _id: false }),
+      select: false,
+    },
+    reviewStatus: { type: String, enum: ['pending_review', 'rejected', ''], default: '' },
     media: { type: [chapterMediaSchema], default: [] },
     publishedRevision: Number,
     moderationHold: { type: Boolean, default: false },
@@ -82,15 +88,24 @@ const chapterSchema = new mongoose.Schema(
 
 // pending_review kuyruğunu hızlı çekmek için index
 chapterSchema.index({ status: 1, createdAt: -1 });
+chapterSchema.index({ reviewStatus: 1, createdAt: -1 });
 chapterSchema.index({ work: 1, savedAt: -1 });
+chapterSchema.index({ status: 1, firstPublishedAt: -1, _id: -1 });
 
 chapterSchema.post('init', function (chapter) {
   chapter.$locals.previouslyPublished = chapter.status === 'published';
 });
+
 chapterSchema.pre("save", async function () {
   this.$locals.announcePublication = this.status === 'published' && !this.firstPublishedAt && !this.$locals.previouslyPublished;
-  if (this.status === "published" && !this.firstPublishedAt) {
+  if (!this.firstPublishedAt && this.$locals.previouslyPublished) {
+    // Legacy publication time is unknown. Preserve its recorded date instead
+    // of promoting an edit (or unpublish/republish) to a new announcement.
+    this.firstPublishedAt = this.createdAt;
+    this.publicationDateEstimated = true;
+  } else if (this.status === "published" && !this.firstPublishedAt) {
     this.firstPublishedAt = await databaseNow();
+    this.publicationDateEstimated = false;
   }
 });
 chapterSchema.post("save", async function (chapter) {

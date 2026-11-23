@@ -18,6 +18,7 @@ import { chapterVersion } from "../services/contentModeration.js";
 import { captureEvidence } from "../services/reportWorkflow.js";
 import chapterRouter from "../routes/chapter.js";
 import publicRouter from "../routes/public.js";
+import { reviewChapter } from '../services/chapterPublication.js';
 vi.mock("../services/emailService.js", () => ({ sendMail: vi.fn(), sendStaffMail: vi.fn(), SITE_URL: "https://example.test" }));
 const uri = process.env.CHAPTER_TEST_MONGO_URI;
 describe.skipIf(!uri)("private edits to published chapters", () => {
@@ -102,7 +103,57 @@ describe.skipIf(!uri)("private edits to published chapters", () => {
     await User.updateOne({ _id: owner._id }, { contentBanned: true });
     const result = await publish(1);
     expect(result.status).toBe(202);
-    expect(result.body.item).toMatchObject({ status: "pending_review", content: "<p>Restricted edit</p>", moderationHold: true });
+    expect(result.body.item).toMatchObject({ status: "published", reviewStatus: 'pending_review', content: "<p>Restricted edit</p>", moderationHold: true });
+    expect((await read()).body.item.content).toBe('<p>Live text</p>');
+  });
+  async function review(action, revision) {
+    const moderator = await User.create({ email: `${randomUUID()}@staff.test`, kullaniciAdi: randomUUID(), role: 'moderator', birthYear: 1990, ...newTermsAcceptance() });
+    const previous = token; token = await createNativeSession(moderator);
+    try { return await request(`/chapters/${chapter._id}/${action}`, 'PATCH', { expectedRevision: revision, reason: 'İnceleme sonucu' }); }
+    finally { token = previous; }
+  }
+  it('keeps a confirmed review snapshot while newer title/content are saved, then publishes only the approved pair', async () => {
+    await save('<p>Submitted</p>', 0, 'Submitted title');
+    await User.updateOne({ _id: owner._id }, { contentBanned: true });
+    expect((await publish(1)).status).toBe(202);
+    await save('<p>Newer private text</p>', 1, 'Newer private title');
+    const queued = reviewChapter(await Chapter.findById(chapter._id).select('+reviewSubmission'));
+    expect(queued).toMatchObject({ title: 'Submitted title', content: '<p>Submitted</p>', revision: 1, status: 'pending_review' });
+    expect((await read()).body.item).toMatchObject({ title: 'Live title', content: '<p>Live text</p>' });
+    expect((await review('approve', 1)).status).toBe(200);
+    expect((await read()).body.item).toMatchObject({ title: 'Submitted title', content: '<p>Submitted</p>' });
+    expect((await request(`/chapters/${chapter._id}`)).body.item).toMatchObject({ title: 'Newer private title', content: '<p>Newer private text</p>', hasUnpublishedChanges: true, revision: 2 });
+    const guest = await fetch(`${base}/public/works/${work._id}/chapters/${chapter._id}`);
+    expect(guest.status).toBe(401); // Existing policy: guests see chapter titles, full text requires membership.
+    const listing = await (await fetch(`${base}/public/works/${work._id}/chapters`)).json();
+    expect(listing.items[0].title).toBe('Submitted title'); expect(listing.items[0].draftContent).toBeUndefined(); expect(listing.items[0].reviewSubmission).toBeUndefined();
+  });
+  it('rejects changes without removing the existing publication or losing the latest working copy', async () => {
+    await save('<p>Submitted</p>', 0, 'Submitted title');
+    await User.updateOne({ _id: owner._id }, { contentBanned: true });
+    await publish(1); await save('<p>Keep my work</p>', 1, 'Working');
+    expect((await review('reject', 1)).status).toBe(200);
+    expect((await read()).body.item).toMatchObject({ title: 'Live title', content: '<p>Live text</p>' });
+    expect((await request(`/chapters/${chapter._id}`)).body.item).toMatchObject({ title: 'Working', content: '<p>Keep my work</p>', reviewStatus: 'rejected', status: 'published' });
+    expect((await review('reject', 2)).status).toBe(409);
+    expect((await read()).status).toBe(200);
+  });
+  it('keeps both versions after a failed publication transaction', async () => {
+    await save('<p>Private work</p>', 0, 'Private title');
+    const failure = vi.spyOn(Work.prototype, 'save').mockRejectedValueOnce(new Error('write failed'));
+    expect((await publish(1)).status).toBe(503); failure.mockRestore();
+    expect((await read()).body.item).toMatchObject({ title: 'Live title', content: '<p>Live text</p>' });
+    expect((await request(`/chapters/${chapter._id}`)).body.item).toMatchObject({ title: 'Private title', content: '<p>Private work</p>', hasUnpublishedChanges: true });
+    expect((await publish(1)).status).toBe(200);
+  });
+  it('can approve an unpublished submitted chapter without publishing subsequent unconfirmed edits', async () => {
+    await request(`/chapters/${chapter._id}/status`, 'PATCH', { status: 'draft', expectedRevision: 0 });
+    await User.updateOne({ _id: owner._id }, { contentBanned: true });
+    await save('<p>First submission</p>', 0, 'First title'); await publish(1);
+    await save('<p>Later writing</p>', 1, 'Later title');
     expect((await read()).status).toBe(404);
+    expect((await review('approve', 1)).status).toBe(200);
+    expect((await read()).body.item).toMatchObject({ title: 'First title', content: '<p>First submission</p>' });
+    expect((await request(`/chapters/${chapter._id}`)).body.item).toMatchObject({ title: 'Later title', content: '<p>Later writing</p>', hasUnpublishedChanges: true });
   });
 });

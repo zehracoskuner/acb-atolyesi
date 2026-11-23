@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { NOTIFICATION_RETENTION_SECONDS } from '../config/notificationRetention.js';
 const schema = new mongoose.Schema({
   device: { type: mongoose.Schema.Types.ObjectId, ref: 'PushDevice', required: true },
   notification: { type: mongoose.Schema.Types.ObjectId, ref: 'Notification', required: true },
@@ -6,5 +7,5 @@ const schema = new mongoose.Schema({
   ticket: String, attemptedAt: Date, attempts: { type: Number, default: 0 }, error: String,
 }, { timestamps: true });
 schema.index({ device: 1, notification: 1 }, { unique: true });
-schema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 86400 });
+schema.index({ createdAt: 1 }, { expireAfterSeconds: NOTIFICATION_RETENTION_SECONDS });
 export default mongoose.model('PushDelivery', schema);

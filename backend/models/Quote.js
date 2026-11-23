@@ -1,6 +1,7 @@
 // models/Quote.js
 import mongoose from "mongoose";
 import { protectWorkReferences } from "../services/matureAccess.js";
+import { QUOTE_POLICY } from '../config/reader.js';
 
 const quoteSchema = new mongoose.Schema(
   {
@@ -24,7 +25,7 @@ const quoteSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      maxlength: 500,
+      maxlength: QUOTE_POLICY.max,
     },
 
     /* Gösterim için snapshot — eser silinse bile alıntı kalsın */

@@ -1,3 +1,4 @@
+import { chapterReviewFilter, reviewChapter } from '../services/chapterPublication.js';
 import { chapterReview } from "../services/chapterReview.js";
 // backend/routes/moderator.js
 // server.js'e ekle:
@@ -25,7 +26,7 @@ function isValidId(id) { return mongoose.Types.ObjectId.isValid(id); }
 router.get("/stats", async (req, res) => {
   try {
     const [bekleyenBolum, bekleyenYorum] = await Promise.all([
-      Chapter.countDocuments({ status: "pending_review" }),
+      Chapter.countDocuments(chapterReviewFilter),
       Comment.countDocuments({ status: "pending_review" }),
     ]);
 
@@ -47,13 +48,13 @@ router.get("/chapters", async (req, res) => {
     const neden = req.query.neden || "all"; // content_ban | ai_flag | all
 
     // reviewNote varsa AI flagledi, yoksa content_ban nedeniyle düştü
-    const filtre = { status: "pending_review" };
+    const filtre = { ...chapterReviewFilter };
     if (neden === "ai_flag")      filtre.reviewNote = { $ne: "" };
     if (neden === "content_ban")  filtre.reviewNote = "";
 
     const [bolumler, toplam] = await Promise.all([
       Chapter.find(filtre)
-        .select("title content media revision reviewNote status createdAt work")
+        .select("title content media revision reviewNote status createdAt work +reviewSubmission")
         .populate({
           path:     "work",
           select:   "title user",
@@ -67,7 +68,7 @@ router.get("/chapters", async (req, res) => {
     ]);
 
     return res.json({
-      bolumler,
+      bolumler: bolumler.map(reviewChapter),
       meta: { toplam, sayfa, limit, toplamSayfa: Math.ceil(toplam / limit) },
     });
   } catch (err) {

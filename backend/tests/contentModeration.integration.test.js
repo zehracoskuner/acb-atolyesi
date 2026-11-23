@@ -206,7 +206,7 @@ it('chapter removal keeps text/history, survives draft saves, and requires revis
   await decision(r.contentCase, 'remove', moderator);
   expect((await Chapter.findById(chapter._id)).content).toBe('<p>Original context</p>');
   expect(await VisualAccount.countDocuments()).toBe(0);
-  expect((await request(`/chapters/${chapter._id}/status`, owner, 'PATCH', { status: 'published' })).status).toBe(202);
+  expect((await request(`/chapters/${chapter._id}/status`, owner, 'PATCH', { status: 'published', expectedRevision: 0 })).status).toBe(202);
   await saveChapterVersion({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Revised context</p>' });
   expect((await Chapter.findById(chapter._id)).moderationHold).toBe(true);
   expect(await ChapterVersion.countDocuments({ chapter: chapter._id })).toBe(2);
@@ -241,7 +241,10 @@ it('private drafting does not invalidate complaints against the text still live'
   expect(stored.draftContent.content).toBe('<p>Private draft</p>');
   expect(stored.moderationHold).toBe(true);
   expect((await request(`/chapters/${chapter._id}/status`, owner, 'PATCH', { status: 'published', expectedRevision: 1 })).status).toBe(202);
-  expect((await Chapter.findById(chapter._id)).content).toBe('<p>Private draft</p>');
+  const submitted = await Chapter.findById(chapter._id).select('+reviewSubmission +draftContent');
+  expect(submitted.content).toBe('<p>Live version</p>');
+  expect(submitted.reviewSubmission.content).toBe('<p>Private draft</p>');
+  expect(submitted.draftContent.content).toBe('<p>Private draft</p>');
 });
 
 it('keeps the authenticated writing coach operational independently of content moderation', async () => {

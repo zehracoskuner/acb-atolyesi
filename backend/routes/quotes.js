@@ -4,9 +4,12 @@ import express from "express";
 import Quote   from "../models/Quote.js";
 import Work from "../models/Work.js";
 import ensureAuth from "../middlewares/ensureAuth.js";
+import { QUOTE_POLICY } from '../config/reader.js';
+import { serializeWorkAuthor } from '../services/publicWork.js';
 
 const router = express.Router();
 router.use(readerAccess);
+router.get('/policy', (_req, res) => res.json(QUOTE_POLICY));
 
 /* ────────────────────────────────────────
    POST /api/quotes
@@ -14,16 +17,17 @@ router.use(readerAccess);
 ──────────────────────────────────────── */
 router.post("/", ensureAuth, async (req, res) => {
   try {
-    const { workId, text, workTitle, authorName, genre, tags } = req.body;
-    if (!await Work.exists({ _id: workId, status: "published" })) return res.status(404).json({ error: "Eser bulunamadı." });
+    const { workId, text, genre, tags } = req.body;
+    const work = await Work.findOne({ _id: workId, status: 'published' }).select('title user isAnonymous universe.genres').populate('user', 'kullaniciAdi');
+    if (!work) return res.status(404).json({ error: "Eser bulunamadı." });
 
-    if (!workId || !text?.trim()) {
+    if (!workId || typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ error: "workId ve text zorunludur." });
     }
-    if (text.trim().length < 10) {
+    if (text.trim().length < QUOTE_POLICY.min) {
       return res.status(400).json({ error: "Alıntı en az 10 karakter olmalıdır." });
     }
-    if (text.trim().length > 500) {
+    if (text.trim().length > QUOTE_POLICY.max) {
       return res.status(400).json({ error: "Alıntı en fazla 500 karakter olabilir." });
     }
 
@@ -31,8 +35,8 @@ router.post("/", ensureAuth, async (req, res) => {
       user:       req.user.id,
       work:       workId,
       text:       text.trim(),
-      workTitle:  workTitle || "Bilinmeyen Eser",
-      authorName: authorName || "Anonim",
+      workTitle:  work.title,
+      authorName: serializeWorkAuthor(work)?.kullaniciAdi || 'Anonim yazar',
       genre:      genre || "belirtilmemiş",
       tags:       Array.isArray(tags) ? tags.slice(0, 10) : [],
     });
@@ -93,6 +97,7 @@ router.get("/my", ensureAuth, async (req, res) => {
    ?page=1&limit=20&genre=roman
 ──────────────────────────────────────── */
 router.get("/user/:userId", async (req, res) => {
+  if (!req.user) return res.status(401).json({ message: 'Herkese açık alıntıları görmek için giriş yap.' });
   try {
     const { userId } = req.params;
 

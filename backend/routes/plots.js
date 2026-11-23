@@ -18,6 +18,13 @@ function findScene(plot, sceneId) {
   return plot.scenes?.id(sceneId) || null;
 }
 
+async function saveConnections(plot, scene) {
+  // Do not overwrite a connection created/deleted by a concurrent web/mobile request.
+  return Plot.updateOne({ _id: plot._id, updatedAt: plot.updatedAt, __v: plot.__v, 'scenes._id': scene._id }, {
+    $set: { 'scenes.$.connections': scene.connections, 'scenes.$.updatedAt': new Date() }, $inc: { __v: 1 },
+  });
+}
+
 /* ── Yardımcı: eski ObjectId bağlantılarını yeni formata çevir ── */
 function migrateConnections(plot) {
   plot.scenes.forEach(scene => {
@@ -259,6 +266,9 @@ router.patch("/:workId/scenes/:sceneId/connect", ensureAuth, async (req, res) =>
     const scene = findScene(plot, sceneId);
     if (!scene) return res.status(404).json({ message: "Sahne bulunamadı." });
 
+    if (String(sceneId) === String(targetId)) return res.status(400).json({ message: 'Sahne kendisine bağlanamaz.' });
+    if (!findScene(plot, targetId)) return res.status(400).json({ message: 'Hedef sahne aynı eserde olmalı.' });
+    if (!['karar', 'sonuc', 'kacis', 'yuzlesme', 'kesif', 'zorunluluk'].includes(edgeType)) return res.status(400).json({ message: 'Geçersiz bağlantı türü.' });
     // Önce eski formatları migrate et
     migrateConnections(plot);
 
@@ -267,9 +277,11 @@ router.patch("/:workId/scenes/:sceneId/connect", ensureAuth, async (req, res) =>
       return tid === String(targetId);
     });
 
-    if (!already) scene.connections.push({ target: targetId, edgeType });
-
-    await plot.save();
+    if (!already) {
+      scene.connections.push({ target: targetId, edgeType });
+      const result = await saveConnections(plot, scene);
+      if (!result.matchedCount) return res.status(409).json({ message: 'Bağlantılar başka bir işlemde değişti. Tekrar dene.' });
+    }
     return res.json({ message: "Bağlantı eklendi.", connections: scene.connections });
   } catch (err) {
     console.error("PATCH connect:", err);
@@ -301,7 +313,8 @@ router.patch("/:workId/scenes/:sceneId/disconnect", ensureAuth, async (req, res)
       return tid !== String(targetId);
     });
 
-    await plot.save();
+    const result = await saveConnections(plot, scene);
+    if (!result.matchedCount) return res.status(409).json({ message: 'Bağlantılar başka bir işlemde değişti. Tekrar dene.' });
     return res.json({ message: "Bağlantı kaldırıldı.", connections: scene.connections });
   } catch (err) {
     console.error("PATCH disconnect:", err);

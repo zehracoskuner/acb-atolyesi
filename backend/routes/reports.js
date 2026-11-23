@@ -4,11 +4,15 @@ import mongoose   from "mongoose";
 import Report     from "../models/Report.js";
 import Work from "../models/Work.js";
 import Chapter from "../models/Chapter.js";
+import { commentTarget } from '../services/commentTarget.js';
+import { publishedDiscussion } from '../services/discussionAccess.js';
+import readerAccess from '../middlewares/readerAccess.js';
 import { sendStaffMail, sendAdminMail, SITE_URL } from "../services/emailService.js";
 
 import { captureEvidence, publicReport, textField, transition } from '../services/reportWorkflow.js';
 import { fileContentReport, imageKinds } from "../services/contentModeration.js";
 const router = Router();
+router.use(readerAccess);
 router.use((req, res, next) => req.user ? next() : res.status(401).json({ message: 'Giriş gerekli.' }));
 
 function isValidId(id) { return mongoose.Types.ObjectId.isValid(id); }
@@ -25,6 +29,8 @@ const SEBEP_ETIKETLERI = {
 const TARGET_LABELS = {
   work: "Eser", chapter: "Bölüm", user: "Kullanıcı", comment: "Yorum",
 };
+
+router.get('/reasons', (_req, res) => res.json({ reasons: SEBEP_ETIKETLERI }));
 
 /* ─── Şikayet oluştur ─────────────────────────
    POST /api/reports
@@ -46,7 +52,7 @@ router.post("/", async (req, res) => {
     }
 
     const gecerliTargetler = ["work", "chapter", "user", "comment"];
-    const gecerliSebepler  = ["spam", "uygunsuz_icerik", "telif_ihlali", "taciz", "nefret_soylemi", "diger"];
+    const gecerliSebepler  = Object.keys(SEBEP_ETIKETLERI);
 
     if (!gecerliTargetler.includes(targetType))
       return res.status(400).json({ message: "Geçersiz hedef türü." });
@@ -57,8 +63,19 @@ router.post("/", async (req, res) => {
     if (targetType === "user" && targetId === req.user.id)
       return res.status(400).json({ message: "Kendinizi şikayet edemezsiniz." });
 
+    if (targetType === 'comment') {
+      const comment = await commentTarget(targetId);
+      if (!comment || comment.isDeleted || comment.status !== 'published' ||
+          !await publishedDiscussion(comment.work || comment.workId, comment.chapter || comment.chapterId))
+        return res.status(404).json({ message: 'Şikâyet edilecek yorum bulunamadı.' });
+      if (String(comment.author) === req.user.id)
+        return res.status(400).json({ message: 'Kendi yorumunu şikâyet edemezsin.' });
+    }
+    if (description !== undefined && (typeof description !== 'string' || description.trim().length > 500))
+      return res.status(400).json({ message: 'Açıklama en fazla 500 karakter olabilir.' });
+
     const copyright = reason === 'telif_ihlali';
-    const extra = copyright ? { originalWork: textField(req.body.originalWork), description: textField(description, 500), stage: 'received', ...await captureEvidence(targetType, targetId) } : {};
+    const extra = copyright ? { originalWork: textField(req.body.originalWork), description: description?.trim() || '', stage: 'received', ...await captureEvidence(targetType, targetId) } : {};
     const sikayet = await Report.create({
       reporter:    req.user.id,
       targetType,

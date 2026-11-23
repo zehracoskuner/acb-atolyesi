@@ -1,13 +1,15 @@
 import readerAccess from "../middlewares/readerAccess.js";
 // backend/routes/feed.js
 import { Router } from "express";
-import User       from "../models/User.js";
 import Work       from "../models/Work.js";
 import Log        from "../models/Log.js";
 import ensureAuth from "../middlewares/ensureAuth.js";
 import { serializeWorkAuthor } from "../services/publicWork.js";
+import { getPublishedChapterIdsByWork } from "../services/publishedChapters.js";
+import { discoverWorks, discoverWriters } from "../services/discovery.js";
 import { readSpotlight } from "../services/spotlight.js";
 import { parseFeedQuery, readFeed, readLatestWork } from "../services/feed.js";
+import { logWorkPopulation } from '../services/logAccess.js';
 
 const router = Router();
 router.use(readerAccess);
@@ -49,68 +51,10 @@ router.get("/atelier", ensureAuth, async (req, res) => {
 ═══════════════════════════════════════════ */
 router.get("/discover", async (req, res) => {
   try {
-    const { genres: genresParam } = req.query;
-
-    // Tür filtresi
-    const workFilter = {
-      status:              "published",
-      publishedChapterIds: { $exists: true, $not: { $size: 0 } },
-    };
-
-    if (genresParam) {
-      const genreList = genresParam
-        .split(",")
-        .map(g => g.trim())
-        .filter(Boolean);
-      if (genreList.length) {
-        workFilter["universe.genres"] = { $in: genreList };
-      }
-    }
-
-    const worksPromise = Work.find(workFilter)
-      .populate("user", "_id kullaniciAdi avatarUrl")
-      .sort({ updatedAt: -1 })
-      .limit(Math.min(20, Math.max(1, parseInt(req.query.limit, 10) || 6)))
-      .lean();
-
-    const recentLogAuthors = await Log.find({ visibility: "public" })
-      .sort({ createdAt: -1 })
-      .limit(20)
-      .distinct("author");
-
-    const activeWritersPromise = User.find({
-      _id: { $in: recentLogAuthors.slice(0, 5) },
-    })
-      .select("_id kullaniciAdi avatarUrl bio followers")
-      .lean();
-
-    const [works, activeWriters] = await Promise.all([worksPromise, activeWritersPromise]);
-
-    return res.json({
-      works: works.map(w => {
-        // FIX: anonim eserde gerçek yazar kimliğini hiç gönderme (devtools sızıntısı)
-        const anon = !!w.isAnonymous;
-        return {
-          _id:          w._id,
-          title:        w.title,
-          description:  w.description ?? "",
-          preface:      w.preface ?? "",
-          coverImage:   w.coverImage ?? null,
-          chapterCount: w.publishedChapterIds?.length ?? 0,
-          universe:     { genres: w.universe?.genres ?? [] },  // ← array olarak gönder
-          isAnonymous:  anon,
-          author: serializeWorkAuthor(w),
-          updatedAt: w.updatedAt,
-        };
-      }),
-      writers: activeWriters.map(u => ({
-        _id:           u._id,
-        kullaniciAdi:  u.kullaniciAdi,
-        avatarUrl:     u.avatarUrl,
-        bio:           u.bio || "",
-        followerCount: u.followers?.length ?? 0,
-      })),
-    });
+    const [catalog, writers] = await Promise.all([
+      discoverWorks({ ...req.query, sort: "updated" }, 6), discoverWriters(req.user?.id),
+    ]);
+    return res.json({ works: catalog.items, writers, pagination: catalog.pagination });
   } catch (err) {
     console.error("GET /feed/discover hatası:", err);
     return res.status(500).json({ message: "Keşfet yüklenemedi." });
@@ -120,6 +64,12 @@ router.get("/discover", async (req, res) => {
 /* ═══════════════════════════════════════════
    GET /api/feed/top-logs
 ═══════════════════════════════════════════ */
+// Independent resource: author-service errors do not hide the book shelf.
+router.get("/writers", async (req, res) => {
+  try { res.json({ items: await discoverWriters(req.user?.id) }); }
+  catch { res.status(500).json({ message: "Yazarlar yüklenemedi." }); }
+});
+
 router.get("/top-logs", async (req, res) => {
   try {
     const LogComment = (await import("../models/LogComment.js")).default;
@@ -131,7 +81,7 @@ router.get("/top-logs", async (req, res) => {
       createdAt:  { $gt: since },
     })
       .populate("author",      "_id kullaniciAdi avatarUrl")
-      .populate("relatedWork", "_id title")
+      .populate(logWorkPopulation(null))
       .lean();
 
     const logIds        = logs.map(l => l._id);
@@ -180,7 +130,7 @@ router.get("/needs-review", async (req, res) => {
     const sevenDays  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
     const thirtyDays = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    const works = await Work.find({
+    const candidatesWithIds = await Work.find({
       status:              "published",
       updatedAt:           { $gt: sevenDays },
       publishedChapterIds: { $exists: true, $not: { $size: 0 } },
@@ -188,14 +138,18 @@ router.get("/needs-review", async (req, res) => {
       .populate("user", "_id kullaniciAdi avatarUrl")
       // FIX: isAnonymous'u da seç — yoksa lean doc'ta gelmez, anonim sızar
       .select("_id title coverImage user universe updatedAt publishedChapterIds isAnonymous")
+      .sort({ updatedAt: -1, _id: -1 })
       .limit(30)
       .lean();
+
+    const publishedIds = await getPublishedChapterIdsByWork(candidatesWithIds);
+    const works = candidatesWithIds.filter(w => publishedIds.get(String(w._id))?.length);
 
     if (works.length === 0) return res.json({ items: [] });
 
     const workIds       = works.map(w => w._id);
     const commentCounts = await Comment.aggregate([
-      { $match: { work: { $in: workIds } } },
+      { $match: { work: { $in: workIds }, status: "published", isDeleted: { $ne: true } } },
       { $group: { _id: "$work", count: { $sum: 1 } } },
     ]);
     const commentMap = Object.fromEntries(
@@ -218,7 +172,7 @@ router.get("/needs-review", async (req, res) => {
         title:        w.title,
         coverImage:   w.coverImage ?? null,
         universe:     { genres: w.universe?.genres ?? [] },  // ← array
-        chapterCount: w.publishedChapterIds?.length ?? 0,
+        chapterCount: publishedIds.get(String(w._id))?.length ?? 0,
         commentCount: commentMap[w._id.toString()] ?? 0,
         updatedAt:    w.updatedAt,
         isAnonymous:  anon,

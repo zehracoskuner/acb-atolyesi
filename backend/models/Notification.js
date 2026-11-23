@@ -1,5 +1,6 @@
 // backend/models/Notification.js
 import mongoose from "mongoose";
+import { NOTIFICATION_RETENTION_SECONDS } from "../config/notificationRetention.js";
 
 const notificationSchema = new mongoose.Schema(
   {
@@ -54,6 +55,6 @@ const notificationSchema = new mongoose.Schema(
 );
 
 // 90 gün sonra otomatik sil
-notificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 90 });
+notificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: NOTIFICATION_RETENTION_SECONDS });
 
 export default mongoose.model("Notification", notificationSchema);

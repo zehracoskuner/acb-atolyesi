@@ -1,0 +1,328 @@
+diff --git a/backend/middlewares/rateLimiter.js b/backend/middlewares/rateLimiter.js
+index 0481c35..bd0f15e 100644
+--- a/backend/middlewares/rateLimiter.js
++++ b/backend/middlewares/rateLimiter.js
+@@ -28,6 +28,15 @@ export const registerLimiter = rateLimit({
+   message: { message: "Bu IP'den Ã§ok fazla hesap oluÅŸturuldu. 1 saat sonra tekrar dene." },
+ });
+ 
++/* E-posta doğrulama yeniden gönderim sınırı; başarılı istekler de sayılır. */
++export const verificationLimiter = rateLimit({
++  windowMs: 15 * 60 * 1000,
++  max: 5,
++  standardHeaders: true,
++  legacyHeaders: false,
++  message: { code: "RATE_LIMITED", message: "Çok fazla doğrulama isteği. Lütfen biraz sonra tekrar dene." },
++});
++
+ /* â”€â”€â”€ Yazma limiti (yorum, beÄŸeni, gÃ¼nlÃ¼k) â”€â”€â”€ */
+ export const writeLimiter = rateLimit({
+   windowMs: 60 * 1000,
+diff --git a/backend/routes/auth.js b/backend/routes/auth.js
+index 780abb4..6a5cceb 100644
+--- a/backend/routes/auth.js
++++ b/backend/routes/auth.js
+@@ -115,11 +115,24 @@ router.post("/register", async (req, res) => {
+       emailVerifyExpires: verifyExpires,
+     });
+ 
+-    sendVerificationEmail(email, verifyToken).catch(err =>
+-      console.error("DoÄŸrulama e-postasÄ± gÃ¶nderilemedi:", err.message)
+-    );
++    try {
++      const messageId = await sendVerificationEmail(email, verifyToken);
++      console.info("Doğrulama e-postası Resend tarafından kabul edildi:", messageId);
++    } catch (err) {
++      console.error("Doğrulama e-postası gönderilemedi:", err.message);
++      return res.status(503).json({
++        code: "EMAIL_SEND_FAILED",
++        accountCreated: true,
++        emailAccepted: false,
++        message: "Hesabın oluşturuldu ancak doğrulama e-postası gönderilemedi. Tekrar gönder seçeneğini kullanabilirsin.",
++      });
++    }
+ 
+-    return res.status(201).json({ message: "Hesap oluÅŸturuldu. DoÄŸrulama e-postasÄ± gÃ¶nderildi." });
++    return res.status(201).json({
++      accountCreated: true,
++      emailAccepted: true,
++      message: "Hesap oluşturuldu. Doğrulama e-postası gönderimi kabul edildi.",
++    });
+   } catch (err) {
+     console.error("Register hatasÄ±:", err);
+     return res.status(500).json({ message: "Sunucu hatasÄ±." });
+@@ -272,22 +285,44 @@ router.post("/resend-verification", async (req, res) => {
+     const { email } = req.body;
+     const user = await User.findOne({ email });
+ 
+-    if (!user || user.emailVerified)
+-      return res.json({ message: "EÄŸer hesap varsa e-posta gÃ¶nderildi." });
++    // Hesap var/yok veya zaten doğrulanmış bilgisini açık etmeyelim.
++    if (!user || user.emailVerified) {
++      return res.json({ message: "Bu adres için doğrulama gerekiyorsa gönderim isteği işlendi." });
++    }
+ 
+     const verifyToken   = crypto.randomBytes(32).toString("hex");
+     const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+ 
+-    await User.updateOne(
+-      { _id: user._id },
++    // Eski bağlantıyı yalnızca yeni gönderimi denemek için değiştir.
++    // Yarışan isteklerde tek bir güncelleme yapılabilmesi için koşullu güncelleme.
++    const updated = await User.updateOne(
++      { _id: user._id, emailVerified: false, emailVerifyToken: user.emailVerifyToken ?? null },
+       { $set: { emailVerifyToken: verifyToken, emailVerifyExpires: verifyExpires } }
+     );
++    if (updated.modifiedCount !== 1) {
++      return res.status(409).json({
++        code: "VERIFICATION_REQUEST_IN_PROGRESS",
++        message: "Başka bir doğrulama isteği işleniyor. Lütfen biraz sonra tekrar dene.",
++      });
++    }
+ 
+-    sendVerificationEmail(email, verifyToken).catch(err =>
+-      console.error("Yeniden doÄŸrulama maili gÃ¶nderilemedi:", err)
+-    );
++    try {
++      await sendVerificationEmail(email, verifyToken);
++    } catch (err) {
++      console.error("Yeniden doğrulama maili gönderilemedi:", err.message);
++      // Başarısız gönderim, daha önceki geçerli bağlantıyı bozmamalı.
++      await User.updateOne(
++        { _id: user._id, emailVerified: false, emailVerifyToken: verifyToken },
++        { $set: { emailVerifyToken: user.emailVerifyToken ?? null, emailVerifyExpires: user.emailVerifyExpires ?? null } }
++      );
++      return res.status(503).json({
++        code: "EMAIL_SEND_FAILED",
++        emailAccepted: false,
++        message: "Doğrulama e-postası gönderilemedi. Lütfen daha sonra tekrar dene.",
++      });
++    }
+ 
+-    return res.json({ message: "DoÄŸrulama e-postasÄ± tekrar gÃ¶nderildi." });
++    return res.json({ message: "Doğrulama gönderim isteği kabul edildi.", emailAccepted: true });
+   } catch (err) {
+     console.error("resend-verification hatasÄ±:", err);
+     return res.status(500).json({ message: "Sunucu hatasÄ±." });
+diff --git a/backend/server.js b/backend/server.js
+index 90ef7ad..1450937 100644
+--- a/backend/server.js
++++ b/backend/server.js
+@@ -14,6 +14,7 @@ import {
+   generalLimiter,
+   authLimiter,
+   registerLimiter,
++  verificationLimiter,
+   writeLimiter,
+   aiLimiter,
+   uploadLimiter,
+@@ -162,6 +163,7 @@ app.get("/.well-known/assetlinks.json", (_, res) => {
+ // â”€â”€ Rate limit â€” auth (genel limiter'dan Ã¶nce, daha kÄ±sÄ±tlayÄ±cÄ±) â”€â”€
+ app.use("/api/auth/login",    authLimiter);
+ app.use("/api/auth/register", registerLimiter);
++app.use("/api/auth/resend-verification", verificationLimiter);
+ 
+ // â”€â”€ Upload (limiterli, auth gerektirmez) â”€â”€
+ app.use("/api/upload", uploadLimiter);
+diff --git a/backend/services/emailService.js b/backend/services/emailService.js
+index baef6b3..a0c8c1e 100644
+--- a/backend/services/emailService.js
++++ b/backend/services/emailService.js
+@@ -2,7 +2,14 @@
+ import { Resend } from "resend";
+ import User       from "../models/User.js";
+ 
+-const resend = new Resend(process.env.RESEND_API_KEY);
++let resend;
++function getResend() {
++  if (!process.env.RESEND_API_KEY?.trim()) {
++    throw new Error("RESEND_API_KEY ayarlanmamış.");
++  }
++  resend ??= new Resend(process.env.RESEND_API_KEY);
++  return resend;
++}
+ 
+ export const SITE_URL =
+   process.env.SITE_URL ||
+@@ -10,17 +17,29 @@ export const SITE_URL =
+   (process.env.NODE_ENV === "production" ? "https://xn--acbatlyesi-icb.com" : "http://localhost:5173");
+ 
+ // DoÄŸrulama linki backend'e gider (redirect-temelli endpoint), frontend'e deÄŸil.
+-const API_BASE_URL =
+-  process.env.API_URL ||
+-  (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/api` : null) ||
+-  "http://localhost:5000/api";
++function getApiBaseUrl() {
++  const raw = process.env.API_URL ||
++    (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/api` : null) ||
++    (process.env.NODE_ENV === "production" ? null : "http://localhost:5000/api");
++
++  if (!raw) throw new Error("Üretimde API_URL (veya RAILWAY_PUBLIC_DOMAIN) gerekli.");
++  const url = new URL(raw);
++  if (process.env.NODE_ENV === "production" && url.protocol !== "https:") {
++    throw new Error("Üretimde API_URL HTTPS olmalı.");
++  }
++  if (!/^\/api\/?$/.test(url.pathname) || url.search || url.hash) {
++    throw new Error("API_URL canlı API adresini /api dahil içermeli.");
++  }
++  return url.toString().replace(/\/$/, "");
++}
+ 
+ const FROM     = process.env.EMAIL_FROM;
+-const REPLY_TO = process.env.EMAIL_REPLY_TO;
++const REPLY_TO = process.env.EMAIL_REPLY_TO || "acbatolyesi@gmail.com";
+ 
+ /* â”€â”€ Resend Ã¼zerinden gÃ¶nderim (ortak) â”€â”€ */
+ async function send({ to, subject, html, text }) {
+-  const { error } = await resend.emails.send({
++  if (!FROM?.trim()) throw new Error("EMAIL_FROM ayarlanmamış.");
++  const { data, error } = await getResend().emails.send({
+     from:    FROM,
+     to,
+     replyTo: REPLY_TO,
+@@ -29,10 +48,12 @@ async function send({ to, subject, html, text }) {
+     ...(text ? { text } : {}),
+   });
+ 
+-  if (error) {
+-    console.error("Resend gÃ¶nderim hatasÄ±:", error);
+-    throw new Error(error.message || "E-posta gÃ¶nderilemedi.");
++  if (error || !data?.id) {
++    console.error("Resend gönderim hatası:", error?.message || "Geçerli gönderim kimliği alınamadı.");
++    throw new Error(error?.message || "E-posta gönderimi Resend tarafından kabul edilmedi.");
+   }
++  // API kabulü teslim edildi anlamına gelmez; teslimatı Resend Events üzerinden izle.
++  return data.id;
+ }
+ 
+ /* â”€â”€ Generic mail â”€â”€ */
+@@ -92,10 +113,10 @@ export async function sendAdminMail({ subject, html }) {
+ 
+ /* â”€â”€ E-posta doÄŸrulama â”€â”€ */
+ export async function sendVerificationEmail(email, token) {
+-  const link = `${API_BASE_URL}/auth/verify-email?token=${token}`;
+-  await send({
++  const link = `${getApiBaseUrl()}/auth/verify-email?token=${encodeURIComponent(token)}`;
++  return await send({
+     to:      email,
+-    subject: "E-posta adresini doÄŸrula â€” ACB AtÃ¶lyesi",
++    subject: "E-posta adresini doğrula — ACB Atölyesi",
+     html: `
+       <!DOCTYPE html><html lang="tr">
+       <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+diff --git a/frontend/src/pages/Login.jsx b/frontend/src/pages/Login.jsx
+index b3d13ef..3aae601 100644
+--- a/frontend/src/pages/Login.jsx
++++ b/frontend/src/pages/Login.jsx
+@@ -41,6 +41,7 @@ export default function Login() {
+   const [verifyHata, setVerifyHata]             = useState(false);
+   const [verifyBilgi, setVerifyBilgi]           = useState(false);
+   const [tekrarGonderildi, setTekrarGonderildi] = useState(false);
++  const [tekrarBekleniyor, setTekrarBekleniyor] = useState(false);
+ 
+   useEffect(() => {
+     document.title = "GiriÅŸ Yap Â· ACB AtÃ¶lyesi";
+@@ -78,14 +79,19 @@ export default function Login() {
+ 
+   // email state'inden okur â€” form submit edilmeden tÄ±klanÄ±rsa boÅŸ gitmez
+   const handleTekrarGonder = async () => {
+-    if (!email) return;
++    if (!email || tekrarBekleniyor) return;
++    setTekrarBekleniyor(true);
++    setMesaj(null);
++    setTekrarGonderildi(false);
+     try {
+       await axios.post(`${API}/auth/resend-verification`, { email });
+-    } catch {
+-      // GÃ¼venlik gereÄŸi hata sessizce yutulur
+-    } finally {
+       setTekrarGonderildi(true);
+       setVerifyHata(false);
++    } catch (err) {
++      setMesaj({ type: "err", text: err.response?.data?.message || "E-posta gönderilemedi. Tekrar deneyebilirsin." });
++      setVerifyHata(true);
++    } finally {
++      setTekrarBekleniyor(false);
+     }
+   };
+ 
+@@ -235,6 +241,7 @@ export default function Login() {
+               <button
+                 type="button"
+                 onClick={handleTekrarGonder}
++                disabled={tekrarBekleniyor}
+                 style={{
+                   background:    "none",
+                   border:        "none",
+diff --git a/frontend/src/pages/Register.jsx b/frontend/src/pages/Register.jsx
+index bbcc76c..ae63781 100644
+--- a/frontend/src/pages/Register.jsx
++++ b/frontend/src/pages/Register.jsx
+@@ -39,6 +39,9 @@ export default function Register() {
+   const [mesaj, setMesaj]   = useState(null);
+   const [loading, setLoad]  = useState(false);
+   const [verified, setVerified] = useState(false);
++  const [mailGonderimHatasi, setMailGonderimHatasi] = useState(false);
++  const [tekrarYukleniyor, setTekrarYukleniyor] = useState(false);
++  const [tekrarMesaj, setTekrarMesaj] = useState(null);
+   const navigate = useNavigate();
+ 
+   useEffect(() => { document.title = "KayÄ±t Ol Â· ACB AtÃ¶lyesi"; }, []);
+@@ -68,12 +71,34 @@ export default function Register() {
+     setLoad(true); setMesaj(null);
+     try {
+       await axios.post(`${API}/auth/register`, form, { withCredentials: true });
++      setMailGonderimHatasi(false);
+       setVerified(true);
+     } catch (err) {
+-      setMesaj({ type: "err", text: err.response?.data?.message || "KayÄ±t baÅŸarÄ±sÄ±z." });
++      if (err.response?.data?.accountCreated && err.response?.data?.code === "EMAIL_SEND_FAILED") {
++        setVerified(true);
++        setMailGonderimHatasi(true);
++      } else {
++        setMesaj({ type: "err", text: err.response?.data?.message || "Kayıt başarısız." });
++      }
+     } finally { setLoad(false); }
+   };
+ 
++  const handleTekrarGonder = async () => {
++    if (tekrarYukleniyor) return;
++    setTekrarYukleniyor(true);
++    setTekrarMesaj(null);
++    try {
++      await axios.post(`${API}/auth/resend-verification`, { email: form.email });
++      setMailGonderimHatasi(false);
++      setTekrarMesaj({ type: "ok", text: "İstek işlendi. Adres doğrulama bekliyorsa e-postanı kontrol et." });
++    } catch (err) {
++      setMailGonderimHatasi(true);
++      setTekrarMesaj({ type: "err", text: err.response?.data?.message || "E-posta gönderilemedi. Tekrar deneyebilirsin." });
++    } finally {
++      setTekrarYukleniyor(false);
++    }
++  };
++
+   /* â”€â”€ Breakpoint stiller â”€â”€ */
+   const responsive = {
+     page: {
+@@ -134,12 +159,18 @@ export default function Register() {
+           <div style={s.envCircle}><EnvelopeIcon/></div>
+           <h2 style={{...s.formTitle, fontSize:"1.6rem", marginBottom:".5rem"}}>E-postanÄ± <em style={s.formTitleEm}>doÄŸrula</em></h2>
+           <p style={{...s.formSub, marginBottom:"1.5rem"}}>
+-            <strong style={{color:"#1a1209"}}>{form.email}</strong> adresine<br/>bir doÄŸrulama baÄŸlantÄ±sÄ± gÃ¶nderdik.<br/>DoÄŸrulamadan da giriÅŸ yapabilirsin.
++            <strong style={{color:"#1a1209"}}>{form.email}</strong> adresin için doğrulama işlemi bekleniyor.<br/>
++            {mailGonderimHatasi
++              ? "Hesabın oluşturuldu ancak e-posta servisinde hata oluştu. Aşağıdan tekrar deneyebilirsin."
++              : "E-postandaki 24 saat geçerli bağlantıyı açarak hesabını doğrula. Doğrulamadan giriş yapamazsın."}
+           </p>
+-          <button style={responsive.btnMain} onClick={() => navigate("/login")}>GiriÅŸ sayfasÄ±na git</button>
++          {tekrarMesaj && <div style={tekrarMesaj.type === "ok" ? s.msgOk : s.msgErr}>{tekrarMesaj.text}</div>}
++          <button style={responsive.btnMain} onClick={() => navigate("/login")}>Giriş sayfasına git</button>
+           <p style={{...s.switchTxt, marginTop:".75rem"}}>
+             E-posta gelmediyse{" "}
+-            <button style={s.textBtn} onClick={() => axios.post(`${API}/auth/resend-verification`, { email: form.email }).catch(()=>{})}>tekrar gÃ¶nder</button>
++            <button type="button" style={s.textBtn} onClick={handleTekrarGonder} disabled={tekrarYukleniyor}>
++              {tekrarYukleniyor ? "Gönderiliyor..." : "tekrar gönder"}
++            </button>
+           </p>
+         </div>
+       </div>

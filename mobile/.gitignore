@@ -1,0 +1,16 @@
+node_modules/
+.expo/
+dist/
+.npm-cache/
+.test-cache/
+.tools/
+.android-home/
+.env
+android/
+artifacts/
+ios/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+google-services.json
