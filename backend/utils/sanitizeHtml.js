@@ -1,5 +1,6 @@
 // backend/utils/sanitizeHtml.js
 import sanitizeHtmlLib from "sanitize-html";
+import { paragraphAttribute, paragraphTags, paragraphIdPattern } from "../../shared/chapterParagraphs.js";
 
 /*
   Editörün (contentEditable + execCommand) ürettiği HTML'i temizler.
@@ -38,7 +39,20 @@ const OPTIONS = {
   enforceHtmlBoundary: true,
 };
 
-export function sanitizeChapterHtml(html) {
+export function sanitizeChapterHtml(html, { paragraphIds = false } = {}) {
   if (!html || typeof html !== "string") return "";
-  return sanitizeHtmlLib(html, OPTIONS);
+  if (!paragraphIds) return sanitizeHtmlLib(html, OPTIONS);
+  return sanitizeHtmlLib(html, {
+    ...OPTIONS,
+    allowedAttributes: {
+      ...OPTIONS.allowedAttributes,
+      ...Object.fromEntries(paragraphTags.map(tag => [tag, [paragraphAttribute]])),
+    },
+    transformTags: {
+      "*": (tagName, attribs) => {
+        if (!paragraphIdPattern.test(attribs[paragraphAttribute] ?? "")) delete attribs[paragraphAttribute];
+        return { tagName, attribs };
+      },
+    },
+  });
 }

@@ -56,10 +56,10 @@ describe('PUT routing preserves versioned text saves', () => {
   function route() {
     let handler;
     const order = vi.fn().mockResolvedValue({ item: { order: 0 } });
-    const save = vi.fn().mockResolvedValue({ revision: 6 });
-    new Function('router', 'ensureAuth', 'updateChapterOrder', 'saveChapterVersion', 'historyError', handlerSource)(
+    const save = vi.fn().mockResolvedValue({ revision: 6, item: {} });
+    new Function('router', 'ensureAuth', 'updateChapterOrder', 'saveChapterVersion', 'historyError', 'editorView', handlerSource)(
       { put: (_, auth, fn) => { expect(auth).toBe('auth'); handler = fn; } },
-      'auth', order, save, (_, error) => { throw error; });
+      'auth', order, save, (_, error) => { throw error; }, item => item);
     const res = { code: 200, status(code) { this.code = code; return this; }, json: vi.fn() };
     return { handler, order, save, res };
   }
@@ -78,8 +78,8 @@ describe('PUT routing preserves versioned text saves', () => {
   });
   it('text saves keep expectedRevision and the existing history service', async () => {
     const f = route();
-    await f.handler({ params: { id: 'c' }, user: { id: 'owner' }, body: { title: 'New', expectedRevision: 5 } }, f.res);
-    expect(f.save).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 5, title: 'New' }));
+    await f.handler({ params: { id: 'c' }, query: { editor: '1' }, user: { id: 'owner' }, body: { title: 'New', expectedRevision: 5 } }, f.res);
+    expect(f.save).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 5, title: 'New', paragraphEditing: true }));
     expect(f.order).not.toHaveBeenCalled();
   });
 });

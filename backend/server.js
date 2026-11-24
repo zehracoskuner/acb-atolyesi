@@ -40,6 +40,7 @@ import profileRoutes        from "./routes/profile.js";
 import worksRoutes          from "./routes/works.js";
 import chapterRoutes        from "./routes/chapter.js";
 import charactersRoutes     from "./routes/characters.js";
+import { authorCharacterGuide } from "./routes/characterGuide.js";
 import relationshipsRoutes  from "./routes/relationships.js";
 import plotsRoutes          from "./routes/plots.js";
 import worldRouter          from "./routes/world.js";
@@ -231,6 +232,7 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/reading-lists", readingListsRoutes);
 
 // ── Eser & İçerik ──
+app.use("/api/works/:id/character-guide", authorCharacterGuide);
 app.use("/api/works",         worksRoutes);
 app.use("/api/chapters",      chapterRoutes);
 app.use("/api/chapters",      chapterLikesRouter);

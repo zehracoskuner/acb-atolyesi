@@ -1,4 +1,7 @@
 import MentionInput from "../components/MentionInput";
+import { BookOpen } from "lucide-react";
+import { ReaderCharacterGuide } from "../components/characters/CharacterGuideCards";
+import { markCharacterMentions } from "../components/characters/characterMentions";
 import MentionText from "../components/MentionText";
 import ReportActions from "../components/ReportActions";
 import ChapterMedia from "../components/ChapterMedia";
@@ -234,7 +237,7 @@ function QuoteBubble({ workId, workTitle, authorName, genre, currentUser }) {
 /* ════════════════════════════
    INLINE PARAGRAPH
 ════════════════════════════ */
-function InlineParagraph({ html, index, comments, onOpenDrawer }) {
+function InlineParagraph({ html, index, comments, onOpenDrawer, onOpenCharacter }) {
   const count = comments.length;
   // Drawer önizlemesi için düz metin (etiketsiz)
   const plain = useMemo(() => {
@@ -255,7 +258,11 @@ function InlineParagraph({ html, index, comments, onOpenDrawer }) {
   return (
     <div className={`rdic-para-wrap ${count > 0 ? "rdic-para-wrap--has-comments" : ""}`}>
       {/* html zaten cleanHtml'den geçti → güvenli */}
-      <div className="rd-paragraph" style={alignStyle} dangerouslySetInnerHTML={{ __html: html }} />
+      <div className="rd-paragraph" style={alignStyle} dangerouslySetInnerHTML={{ __html: html }}
+        onClick={onOpenCharacter && (event => {
+          const trigger = event.target.closest("button[data-guide-character]");
+          if (trigger) onOpenCharacter(trigger.dataset.guideCharacter, trigger);
+        })} />
       <div className="rdic-gutter" style={index < 0 || !plain.trim() ? { display: 'none' } : undefined}>
         {count > 0 && (
           <button className="rdic-bubble" onClick={() => onOpenDrawer(index, plain)} title={`${count} yorum`} aria-label={`${count} paragraf yorumunu aç`}>
@@ -279,7 +286,7 @@ function InlineParagraph({ html, index, comments, onOpenDrawer }) {
 // <b>/<i>/<span>/<a>/<br> vb. satır-içi öğeler) aynı paragraf tamponunda birikir.
 const RDIC_BLOCK_TAGS = new Set(["P", "DIV", "H1", "H2", "H3", "UL", "OL", "BLOCKQUOTE", "HR", "IMG"]);
 
-function InlineParagraphs({ text, canonicalBlocks, commentMap, onOpenDrawer }) {
+function InlineParagraphs({ text, canonicalBlocks, commentMap, onOpenDrawer, guideCharacters, onOpenCharacter }) {
   const blocks = useMemo(() => {
     const clean = cleanHtml(text || "");      // ← tek kapı: önce temizle
     if (!clean.trim()) return [];
@@ -316,18 +323,21 @@ function InlineParagraphs({ text, canonicalBlocks, commentMap, onOpenDrawer }) {
     return result;
   }, [text]);
 
-  if (!blocks.length)
+  const content = useMemo(() => markCharacterMentions(canonicalBlocks ? canonicalBlocks.map(block => block.html) : blocks, guideCharacters),
+    [canonicalBlocks, blocks, guideCharacters]);
+  if (!content.length)
     return <p className="rd-empty-para">Bu bölümde henüz içerik yok.</p>;
 
   return (
     <>
-      {(canonicalBlocks ? canonicalBlocks.map(block => block.html) : blocks).map((html, i) => (
+      {content.map((html, i) => (
         <InlineParagraph
           key={i}
           html={html}
           index={canonicalBlocks ? canonicalBlocks[i].index : i}
           comments={commentMap[canonicalBlocks ? canonicalBlocks[i].index : i] || []}
           onOpenDrawer={onOpenDrawer}
+          onOpenCharacter={guideCharacters?.length ? onOpenCharacter : undefined}
         />
       ))}
     </>
@@ -599,6 +609,16 @@ function InlineCommentItem({ comment, currentUser, onUpdated, onDeleted }) {
         </div>
       ) : (
         <p className="rdic-comment-text"><MentionText content={displayContent} mentions={displayMentions} /></p>
+      )}
+
+      {comment.attached === false && comment.paragraphText && (
+        <blockquote className="rdic-passage-version">{comment.paragraphText}</blockquote>
+      )}
+      {comment.previousPassage && (
+        <details className="rdic-passage-version">
+          <summary>Önceki sürüme yazıldı</summary>
+          <blockquote>{comment.paragraphText}</blockquote>
+        </details>
       )}
 
       {deleteConfirm && (
@@ -1144,6 +1164,12 @@ export default function ReadPage() {
   const [prefaceOpen, setPrefaceOpen] = useState(false);
   const [fontScale,   setFontScale]   = useState(1);
   const [theme,       setTheme]       = useState("dark");
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideCharacter, setGuideCharacter] = useState("");
+  const [guideResult, setGuideResult] = useState(null);
+  const [guideRefresh, setGuideRefresh] = useState(0);
+  const guideTrigger = useRef(null);
+  const guideButton = useRef(null);
 
   const [drawerOpen,       setDrawerOpen]       = useState(false);
   const [drawerParagraph,  setDrawerParagraph]  = useState(null);
@@ -1162,11 +1188,42 @@ export default function ReadPage() {
   const selectedChapter = chapters[activeIdx] ?? null;
   const chapter = chapterResult?.workId === workId && chapterResult.item._id === selectedChapter?._id
     ? chapterResult.item : null;
+  const hasGuide = work?._id === workId && work.hasCharacterGuide;
+  const guideScope = (!prefaceOpen && chapter?._id) || "start";
+  const shouldLoadGuide = hasGuide && !loading && (guideScope !== "start" || guideOpen);
+  const guideViewer = currentUser?._id || currentUser?.id;
+  const currentGuide = hasGuide && guideResult?.workId === workId && guideResult.scope === guideScope &&
+    guideResult.viewer === guideViewer ? guideResult : null;
   const authorName = work?.isAnonymous
     ? "Anonim Yazar"
     : (work?.author?.kullaniciAdi || work?.author?.username || "Yazar");
 
   useCopyProtection(!!work);
+
+  useEffect(() => {
+    if (!shouldLoadGuide) return;
+    let active = true;
+    const context = { workId, scope: guideScope, viewer: guideViewer, refresh: guideRefresh };
+    apiGet(`/public/works/${workId}/character-guide?duringChapter=${guideScope}`)
+      .then(({ item }) => { if (active) setGuideResult({ ...context, item }); })
+      .catch(() => { if (active) setGuideResult(context); });
+    return () => { active = false; };
+  }, [shouldLoadGuide, workId, guideScope, guideViewer, guideRefresh]);
+
+  function openCharacterGuide(id, trigger) {
+    guideTrigger.current = trigger;
+    setGuideCharacter(id);
+    setGuideOpen(true);
+    setGuideRefresh(value => value + 1);
+  }
+
+  function closeCharacterGuide() {
+    setGuideOpen(false);
+    requestAnimationFrame(() => {
+      const trigger = guideTrigger.current?.isConnected ? guideTrigger.current : guideButton.current;
+      trigger?.focus({ preventScroll: true });
+    });
+  }
 
   /* ─── Veri yükle + URL param önceliği ─── */
   useEffect(() => {
@@ -1290,14 +1347,14 @@ export default function ReadPage() {
   /* ─── Klavye kısayolları ─── */
   useEffect(() => {
     const onKey = (e) => {
-      if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+      if (guideOpen || e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
       if (e.key === "ArrowRight" && !prefaceOpen && activeIdx < chapters.length - 1) goToChapter(activeIdx + 1);
       if (e.key === "ArrowLeft"  && !prefaceOpen && activeIdx > 0) goToChapter(activeIdx - 1);
       if (e.key === "Escape") setTocOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeIdx, chapters.length, prefaceOpen, goToChapter]);
+  }, [activeIdx, chapters.length, prefaceOpen, goToChapter, guideOpen]);
 
   /* ─── TOC dışına tıklayınca kapat ─── */
   useEffect(() => {
@@ -1375,6 +1432,10 @@ export default function ReadPage() {
             </svg>
             <span className="rd-tb-label">İçindekiler</span>
           </button>
+          {hasGuide && <button type="button" ref={guideButton} className="rd-tb-btn" title="Karakter Rehberi"
+            aria-label="Karakter Rehberi" aria-haspopup="dialog" onClick={event => openCharacterGuide("", event.currentTarget)}>
+            <BookOpen size={16} aria-hidden="true" /><span className="rd-tb-label">Karakter Rehberi</span>
+          </button>}
         </div>
 
         <div className="rd-tb-center">
@@ -1534,6 +1595,7 @@ export default function ReadPage() {
               <div className="rd-body">
                 <InlineParagraphs
                   text={chapter.content} canonicalBlocks={chapter.blocks} chapterId={chapter._id} workId={workId}
+                  guideCharacters={currentGuide?.item?.characters} onOpenCharacter={openCharacterGuide}
                   commentMap={inlineCommentMap[chapter._id] || {}}
                   onOpenDrawer={(paragraphIndex, paragraphText) => {
                     setDrawerParagraph({ index: paragraphIndex, text: paragraphText, blockId: chapter.blocks?.find(b => b.index === paragraphIndex)?.id, contentVersion: chapter.contentVersion });
@@ -1543,7 +1605,7 @@ export default function ReadPage() {
               </div>
 
               <ChapterMedia key={chapter._id} media={chapter.media} />
-              {!!inlineCommentMap[chapter._id]?.[-1]?.length && <button className="rd-next-btn" onClick={() => { setDrawerParagraph({ index: -1, text: 'Bu eski yorumların pasaj eşleşmesi doğrulanamıyor. Güncel metne bağlanmadan korunuyor.' }); setDrawerOpen(true); }}>Eski pasaj yorumları ({inlineCommentMap[chapter._id][-1].length})</button>}
+              {!!inlineCommentMap[chapter._id]?.[-1]?.length && <button className="rd-next-btn" onClick={() => { setDrawerParagraph({ index: -1, text: 'Önceki sürümdeki paragraf yorumları' }); setDrawerOpen(true); }}>Eski pasaj yorumları ({inlineCommentMap[chapter._id][-1].length})</button>}
 
               <InlineCommentDrawer
                 open={drawerOpen} onClose={() => setDrawerOpen(false)}
@@ -1633,6 +1695,9 @@ export default function ReadPage() {
         </div>
       </main>
 
+      {hasGuide && guideOpen && <ReaderCharacterGuide item={currentGuide?.refresh === guideRefresh ? currentGuide.item : undefined}
+        pending={currentGuide?.refresh !== guideRefresh}
+        selected={guideCharacter} onSelect={setGuideCharacter} onClose={closeCharacterGuide} workId={workId} theme={theme} />}
       <Footer />
     </div>
   );

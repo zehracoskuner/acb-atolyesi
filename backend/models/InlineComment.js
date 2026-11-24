@@ -17,6 +17,7 @@ const inlineCommentSchema = new mongoose.Schema({
   chapterId:      { type: mongoose.Schema.Types.ObjectId, ref: "Chapter", required: true },
   paragraphIndex: { type: Number, required: true },
   blockId:        { type: String },
+  paragraphId:    { type: String },
   paragraphText:  { type: String },
   contentVersion: { type: String },
     mentions: [{ user: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, name: String, _id: false }],
@@ -34,5 +35,6 @@ const inlineCommentSchema = new mongoose.Schema({
 
 inlineCommentSchema.index({ chapterId: 1, paragraphIndex: 1, createdAt: 1 });
 inlineCommentSchema.index({ chapterId: 1, blockId: 1, createdAt: 1 });
+inlineCommentSchema.index({ chapterId: 1, paragraphId: 1, createdAt: 1 });
 
 export default mongoose.model("InlineComment", inlineCommentSchema);

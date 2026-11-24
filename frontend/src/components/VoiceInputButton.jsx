@@ -13,7 +13,7 @@ import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognitio
  *
  * Tarayıcı desteklemiyorsa (örn. Firefox) buton hiç render edilmez — sessiz fallback.
  */
-export default function VoiceInputButton({ onResult, lang = "tr-TR", className = "" }) {
+export default function VoiceInputButton({ onResult, lang = "tr-TR", className = "", disabled = false }) {
   const {
     interimTranscript,
     finalTranscript,
@@ -122,6 +122,7 @@ export default function VoiceInputButton({ onResult, lang = "tr-TR", className =
       <button
         type="button"
         onClick={toggle}
+        disabled={disabled}
         className={`voice-input-btn ${listening ? "is-listening" : ""} ${className}`}
         title={listening ? "Dinlemeyi durdur" : "Sesle yaz"}
         aria-label={listening ? "Dinlemeyi durdur" : "Sesle yaz"}

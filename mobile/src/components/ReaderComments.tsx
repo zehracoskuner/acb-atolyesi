@@ -6,7 +6,7 @@ import type { Comment } from '../types';
 import type { ReaderBlock, ReaderPalette } from '../readerModel';
 import { focusReaderControl, ReaderButton, ReaderField } from './ReaderControls';
 
-type Inline = Comment & { paragraphText?: string; attached?: boolean };
+type Inline = Comment & { paragraphText?: string; attached?: boolean; previousPassage?: boolean };
 type Drafts = { root: string; replies: Record<string, string>; edit?: { id: string; original: string; text: string } };
 type Listing = { items: Inline[]; total: number; page: number; pages: number };
 type Props = {
@@ -24,8 +24,8 @@ export function ReaderComments({ chapterId, workId, userId, block, detached, ver
   const [drafts, setDrafts] = useState<Drafts>(emptyDrafts), [draftReady, setDraftReady] = useState(false);
   const [reply, setReply] = useState<{ id: string; name: string }>(), [focused, setFocused] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({}), [menu, setMenu] = useState<Inline>(), [confirm, setConfirm] = useState<Inline>(), [report, setReport] = useState<Inline>();
+  const [expandedPassages, setExpandedPassages] = useState<Record<string, boolean>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({}), [reason, setReason] = useState(''), [description, setDescription] = useState('');
-  const [originalWork, setOriginalWork] = useState('');
   const [error, setError] = useState(''), [authError, setAuthError] = useState(false), [loadError, setLoadError] = useState(''), [notice, setNotice] = useState(''), [loading, setLoading] = useState(false), [busy, setBusy] = useState(false);
   const running = useRef(false), fetching = useRef(false), generation = useRef(0), alive = useRef(true), draftTouched = useRef(false), draftWrites = useRef(Promise.resolve());
   const dialogHeading = useRef<Text>(null);
@@ -124,8 +124,10 @@ export function ReaderComments({ chapterId, workId, userId, block, detached, ver
   });
   const openReport = (item: Inline) => {
     if (!userId) { onLogin(); return; }
-    setMenu(undefined); setReport(item); setReason(''); setDescription(''); setOriginalWork(''); setError('');
-    void api<{ reasons: Record<string, string> }>('/reports/reasons').then(r => { if (alive.current) setReasons(r.reasons); }).catch(e => { if (alive.current) setError(message(e)); });
+    setMenu(undefined); setReport(item); setReason(''); setDescription(''); setError('');
+    void api<{ reasons: Record<string, string> }>('/reports/reasons').then(r => {
+      if (alive.current) setReasons(Object.fromEntries(Object.entries(r.reasons).filter(([key]) => key !== 'telif_ihlali')));
+    }).catch(e => { if (alive.current) setError(message(e)); });
   };
   const dialog = menu || confirm || report;
   if (dialog) return <View accessibilityViewIsModal style={{ flex: 1, gap: 12 }}>
@@ -133,30 +135,38 @@ export function ReaderComments({ chapterId, workId, userId, block, detached, ver
     <Text numberOfLines={3} style={{ color: c.muted }}>{dialog.content?.slice(0, 160)}</Text>
     {menu && (menu.author?._id === userId ? <>{button('Düzenle', () => { setDrafts(d => ({ ...d, edit: { id: menu._id, original: menu.content, text: menu.content } })); setReply(undefined); setMenu(undefined); setFocused(true); })}{button('Sil', () => { setConfirm(menu); setMenu(undefined); })}</> : button('Şikâyet et', () => openReport(menu)))}
     {confirm && <>{!!confirm.replies?.length && <Text style={{ color: c.ink }}>Yanıtlar korunacak, yorumun kaldırıldığı bilgisi görünecek.</Text>}{button('Sil', () => void act(async () => { await api(`/${inline ? 'inline-comments' : 'comments'}/${confirm._id}`, 'DELETE'); if (alive.current) { setConfirm(undefined); setDrafts(d => d.edit?.id === confirm._id ? { ...d, edit: undefined } : d); } }, true))}</>}
-    {report && <FlatList data={Object.entries(reasons)} keyExtractor={item => item[0]} keyboardShouldPersistTaps="handled" renderItem={({ item: [key, label] }) => <ReaderButton palette={c} title={label} selected={reason === key} onPress={() => setReason(key)} disabled={busy}/>} ListHeaderComponent={<><ReaderField palette={c} label="Açıklama (isteğe bağlı, en fazla 500 karakter)" value={description} onChangeText={setDescription}/>{reason === 'telif_ihlali' && <ReaderField palette={c} label="Özgün eser ve hak sahipliği (zorunlu)" value={originalWork} onChangeText={setOriginalWork}/>}</>} ListFooterComponent={<>{!Object.keys(reasons).length && button('Nedenleri tekrar yükle', () => openReport(report))}<ReaderButton palette={c} primary title={busy ? 'Gönderiliyor…' : 'Şikâyeti gönder'} disabled={busy || !reason || description.trim().length > 500 || (reason === 'telif_ihlali' && (!originalWork.trim() || originalWork.length > 4000))} onPress={() => void act(async () => { await api('/reports', 'POST', { targetType: 'comment', targetId: report._id, reason, description: description.trim(), originalWork: originalWork.trim() }); if (alive.current) { setReport(undefined); setNotice('Şikâyetin incelemeye alındı.'); } })}/></>}/>}
+    {report && <FlatList data={Object.entries(reasons)} keyExtractor={item => item[0]} keyboardShouldPersistTaps="handled" renderItem={({ item: [key, label] }) => <ReaderButton palette={c} title={label} selected={reason === key} onPress={() => setReason(key)} disabled={busy}/>} ListHeaderComponent={<ReaderField compact={!!block} palette={c} label="Açıklama (isteğe bağlı, en fazla 500 karakter)" value={description} onChangeText={setDescription}/>} ListFooterComponent={<>{!Object.keys(reasons).length && button('Nedenleri tekrar yükle', () => openReport(report))}<ReaderButton palette={c} primary title={busy ? 'Gönderiliyor…' : 'Şikâyeti gönder'} disabled={busy || !reason || description.trim().length > 500} onPress={() => void act(async () => { await api('/reports', 'POST', { targetType: 'comment', targetId: report._id, reason, description: description.trim() }); if (alive.current) { setReport(undefined); setNotice('Şikâyetin incelemeye alındı.'); } })}/></>}/>}
     {!!error && <Text accessibilityRole="alert" style={{ color: c.ink }}>{error}</Text>}
     {button('Vazgeç', () => { setMenu(undefined); setConfirm(undefined); setReport(undefined); setError(''); })}
   </View>;
 
   const rows: { item: Inline; root: Inline; nested: boolean }[] = items.flatMap(item => [{ item, root: item, nested: false }, ...(expanded[item._id] ? (item.replies || []).map(child => ({ item: child, root: item, nested: true })) : [])]);
-  const composer = <View style={{ borderTopWidth: 1, borderColor: c.line, paddingTop: 10, gap: 8 }}>
+  const composer = <View style={{ borderTopWidth: 1, borderColor: c.line, paddingTop: block ? 8 : 10, gap: 8 }}>
     {!userId ? button('Yorum yapmak için giriş yap', onLogin) : (!detached || edit) && <>
       {reply && <Text style={{ color: c.ink }}>@{reply.name} kullanıcısına yanıt</Text>}
       {reply && button('Yanıtı kapat · taslağı koru', () => setReply(undefined))}
-      {(focused || text || edit || reply) ? <><ReaderField key={edit?.id || reply?.id || 'root'} autoFocus={focused} palette={c} editable={!busy && draftReady} label={edit ? 'Yorumunu düzenle' : block ? 'Bu paragraf hakkında düşüncelerini yaz…' : 'Bu bölüm hakkında düşüncelerini yaz…'} value={text} onChangeText={setText} onFocus={() => setFocused(true)}/>
+      {(focused || text || edit || reply) ? <><ReaderField key={edit?.id || reply?.id || 'root'} compact={!!block} autoFocus={focused} palette={c} editable={!busy && draftReady} label={edit ? 'Yorumunu düzenle' : block ? 'Bu paragraf hakkında düşüncelerini yaz…' : 'Bu bölüm hakkında düşüncelerini yaz…'} value={text} onChangeText={setText} onFocus={() => setFocused(true)}/>
         {text.length >= limit - 200 && <Text accessibilityLiveRegion="polite" style={{ color: c.ink }}>{text.length} / {limit}{text.length > limit ? ` · En fazla ${limit} karakter yazabilirsin.` : ''}</Text>}
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>{button('Vazgeç', cancel)}<ReaderButton primary palette={c} title={busy ? 'Gönderiliyor…' : edit ? 'Değişikliği kaydet' : 'Gönder'} disabled={busy || loading || !draftReady || !text.trim() || text.length > limit || (!!edit && text.trim() === edit.original.trim())} onPress={send}/></View>
       </> : button(block ? 'Bu paragrafa yorum yaz…' : 'Bu bölüm hakkında düşüncelerini yaz…', () => setFocused(true))}
     </>}
   </View>;
-  return <View style={{ flex: 1, gap: 10 }}>
-    <Text style={{ color: c.ink }}>{workTitle} · {chapterTitle}</Text>
-    <Text style={{ color: c.muted }}>{total === undefined ? 'Yorum sayısı yükleniyor…' : `${total} ${inline ? 'yorum' : 'ana yorum'}`}</Text>
-    {block && <Text numberOfLines={3} selectable style={{ color: c.muted }}>“{block.text.slice(0, 240)}”</Text>}
+  const paragraphContext = block && <View style={{ gap: 7, paddingBottom: 7 }}>
+    <View style={{ backgroundColor: c.soft, borderLeftWidth: 3, borderColor: c.accent, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 }}>
+      <Text numberOfLines={2} selectable style={{ color: c.ink, lineHeight: 20 }}>“{block.text.length > 160 ? `${block.text.slice(0, 160)}…` : block.text}”</Text>
+    </View>
+    {total !== undefined && <Text style={{ color: c.muted }}>{total} yorum</Text>}
+  </View>;
+  return <View style={{ flex: 1, gap: block ? 7 : 10 }}>
+    {!block && <>
+      <Text style={{ color: c.ink }}>{workTitle} · {chapterTitle}</Text>
+      <Text style={{ color: c.muted }}>{total === undefined ? 'Yorum sayısı yükleniyor…' : `${total} ${inline ? 'yorum' : 'ana yorum'}`}</Text>
+    </>}
     {detached && <Text style={{ color: c.muted }}>Önceki sürümdeki paragraf yorumları. Eşleşmesi doğrulanamayan yorumlar güncel metne taşınmaz.</Text>}
     {!!notice && <Text accessibilityLiveRegion="polite" style={{ color: c.ink }}>{notice}</Text>}
     {!!error && <><Text accessibilityRole="alert" style={{ color: c.ink }}>{error}</Text>{authError && button('Yeniden giriş yap', onLogin)}</>}
     <FlatList data={rows} keyExtractor={row => row.item._id} removeClippedSubviews={false} keyboardShouldPersistTaps="handled" refreshing={loading} onRefresh={() => void load()} contentContainerStyle={{ paddingBottom: 12 }}
+      ListHeaderComponent={paragraphContext}
       ListEmptyComponent={!loading && !loadError ? <Text style={{ color: c.muted }}>Henüz yorum yok. İlk yorumu sen yaz.</Text> : null}
       ListFooterComponent={<>{loading && <Text style={{ color: c.muted }}>Yorumlar yükleniyor…</Text>}{!!loadError && <><Text accessibilityRole="alert" style={{ color: c.ink }}>Yorumlar yüklenemedi. {loadError}</Text>{button('Tekrar dene', () => void load(page || 1, page > 1))}</>}{page < pages && !loadError && button('Daha fazla yorum', () => void load(page + 1, true))}</>}
       renderItem={({ item: { item, root, nested } }) => <View style={{ gap: 8, paddingVertical: 12, marginLeft: nested ? 18 : 0, borderTopWidth: 1, borderColor: c.line }}>
@@ -167,8 +177,14 @@ export function ReaderComments({ chapterId, workId, userId, block, detached, ver
           </Pressable>
           {!item.isDeleted && <ReaderButton palette={c} title="⋯" accessibilityLabel="Yorum menüsü" disabled={busy || loading} onPress={() => { if (!userId) onLogin(); else if (edit) setNotice('Önce açık düzenlemeyi kaydet veya iptal et.'); else setMenu(item); }}/ >}
         </View>
-        {detached && <Text style={{ color: c.muted, fontStyle: 'italic' }}>{item.paragraphText || 'Bu eski yorumun paragrafı doğrulanamıyor.'}</Text>}
+        {detached && <Text selectable style={{ color: c.muted, fontStyle: 'italic' }}>{item.paragraphText || 'Bu eski yorumun paragrafı doğrulanamıyor.'}</Text>}
         <Text selectable accessibilityLabel={item.isDeleted ? 'Bu yorum kaldırıldı' : undefined} style={{ color: c.ink, fontSize: 17, lineHeight: 27, flexShrink: 1 }}>{item.isDeleted ? '[Bu yorum kaldırıldı]' : item.content}</Text>
+        {item.previousPassage && <>
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: !!expandedPassages[item._id] }} onPress={() => setExpandedPassages(values => ({ ...values, [item._id]: !values[item._id] }))} style={{ alignSelf: 'flex-start', paddingVertical: 8 }}>
+            <Text style={{ color: c.accent }}>Önceki sürüme yazıldı</Text>
+          </Pressable>
+          {expandedPassages[item._id] && <Text selectable style={{ color: c.muted, fontStyle: 'italic' }}>{item.paragraphText}</Text>}
+        </>}
         {!inline && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {!item.isDeleted && <><ReaderButton palette={c} title={`${item.isLiked ? '♥ Beğenildi' : '♡ Beğen'}${item.likeCount ? ` · ${item.likeCount}` : ''}`} accessibilityLabel={item.isLiked ? 'Yorum beğenisini geri al' : 'Yorumu beğen'} selected={item.isLiked} disabled={busy || loading} onPress={() => toggleLike(item)}/>{!root.isDeleted && button('Yanıtla', () => { if (!userId) { onLogin(); return; } if (edit) { setNotice('Önce açık düzenlemeyi kaydet veya iptal et.'); return; } setReply({ id: root._id, name: item.author?.kullaniciAdi || 'Okuyucu' }); setFocused(true); })}</>}
           {!nested && !!item.replies?.length && button(expanded[item._id] ? 'Yanıtları gizle' : `${item.replies.length} yanıtı göster`, () => setExpanded(v => ({ ...v, [item._id]: !v[item._id] })))}

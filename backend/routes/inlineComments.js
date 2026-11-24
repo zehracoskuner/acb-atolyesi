@@ -9,7 +9,7 @@ import Work          from "../models/Work.js";
 import User          from "../models/User.js";
 import ensureAuth    from "../middlewares/ensureAuth.js";
 import { publishedDiscussion } from '../services/discussionAccess.js';
-import { readerPayload, resolveInlineComment } from '../services/readerContent.js';
+import { inlineCommentAnchors, readerPayload } from '../services/readerContent.js';
 import { notifyComment } from '../services/notificationService.js';
 
 const router = express.Router();
@@ -32,34 +32,39 @@ router.get("/", async (req, res) => {
     const { blocks, contentVersion } = readerPayload(chapter);
     if (req.query.contentVersion && req.query.contentVersion !== contentVersion)
       return res.status(409).json({ message: 'Yayınlanan metin değişti. Menüden yeni sürümü kontrol edebilirsin.' });
-    const unique = blocks.filter(block => block.text && blocks.filter(other => other.id === block.id).length === 1);
-    const attachmentFilters = blocks.filter(b => b.text).map(b => unique.includes(b) ? { blockId: b.id } : { blockId: b.id, contentVersion, paragraphIndex: b.index });
+    const anchors = inlineCommentAnchors(blocks, contentVersion);
     const filter = { chapterId, status: 'published' };
     if (req.query.summary === '1') {
       const groups = await InlineComment.aggregate([
-        { $match: { ...filter, chapterId: chapter._id } }, { $group: { _id: { blockId: '$blockId', contentVersion: '$contentVersion', paragraphIndex: '$paragraphIndex' }, count: { $sum: 1 } } },
+        { $match: { ...filter, chapterId: chapter._id } }, { $group: { _id: { paragraphId: '$paragraphId', blockId: '$blockId', contentVersion: '$contentVersion', paragraphIndex: '$paragraphIndex' }, count: { $sum: 1 } } },
       ]);
       const counts = {}; let detachedCount = 0;
       for (const group of groups) {
-        const resolved = resolveInlineComment(group._id, blocks, contentVersion);
+        const resolved = anchors.resolve(group._id);
         if (resolved.attached) counts[resolved.paragraphIndex] = (counts[resolved.paragraphIndex] || 0) + group.count;
         else detachedCount += group.count;
       }
       return res.json({ counts, detachedCount, contentVersion });
     }
     if (req.query.paragraphIndex !== undefined) {
-      const index = Number(req.query.paragraphIndex), block = blocks.find(b => b.text && b.index === index);
+      const index = Number(req.query.paragraphIndex), block = anchors.byIndex.get(index);
       if (!Number.isInteger(index) || index < -1) return res.status(400).json({ message: 'Geçersiz paragraf indeksi.' });
       if (index !== -1 && !block) return res.json({ items: [], total: 0, page: 1, pages: 0, contentVersion });
-      if (index === -1) { if (attachmentFilters.length) filter.$nor = attachmentFilters; }
-      else Object.assign(filter, unique.includes(block) ? { blockId: block.id } : { blockId: block.id, contentVersion, paragraphIndex: index });
+      if (index === -1) {
+        const attachmentFilters = anchors.passages.flatMap(anchors.filters);
+        if (attachmentFilters.length) filter.$nor = attachmentFilters;
+      } else {
+        const attachmentFilters = anchors.filters(block);
+        if (!attachmentFilters.length) return res.json({ items: [], total: 0, page: 1, pages: 0, contentVersion });
+        filter.$or = attachmentFilters;
+      }
     }
     const page = Math.max(1, Math.floor(Number(req.query.page) || 1)), limit = 20;
     const query = InlineComment.find(filter).populate('author', 'kullaniciAdi username avatarUrl').sort({ createdAt: 1, _id: 1 });
     if (req.query.page) query.skip((page - 1) * limit).limit(limit);
     const [items, total] = await Promise.all([query.lean(), InlineComment.countDocuments(filter)]);
     // Unpaged response retained for existing web callers.
-    res.json({ items: items.map(item => resolveInlineComment(item, blocks, contentVersion)), total, page, pages: Math.ceil(total / limit), contentVersion });
+    res.json({ items: items.map(anchors.resolve), total, page, pages: Math.ceil(total / limit), contentVersion });
   } catch (e) {
     if (e.status) return res.status(e.status).json({ message: e.message });
     res.status(500).json({ error: "İşlem tamamlanamadı." });
@@ -96,7 +101,7 @@ router.post("/", ensureAuth, async (req, res) => {
       chapterId,
       paragraphIndex: Number(paragraphIndex),
       // Old clients cannot prove which publication their index refers to.
-      ...(req.body.blockId && req.body.contentVersion ? { blockId: block.id, paragraphText: block.text, contentVersion } : {}),
+      ...(req.body.blockId && req.body.contentVersion ? { blockId: block.id, paragraphId: block.paragraphId, paragraphText: block.text, contentVersion } : {}),
       content: content.trim(),
       author: req.user.id,
     });

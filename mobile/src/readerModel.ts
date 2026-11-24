@@ -7,7 +7,7 @@ export const readerPalettes = {
   dark: { paper: '#18201D', ink: '#E5E9DF', muted: '#AFBBAF', accent: '#A5D4BB', line: '#39493F', soft: '#26372D', onAccent: '#15281D' },
 };
 export type ReaderPalette = typeof readerPalettes.light;
-export type ReaderBlock = { id: string; index: number; html: string; text: string; anchorScale?: number };
+export type ReaderBlock = { id: string; index: number; html: string; text: string; paragraphId?: string; anchorScale?: number };
 export type ReaderLocation = { scrollPosition: number; anchor?: { id: string; fraction: number } };
 export function parseReaderPrefs(value: string | null): ReaderPrefs {
   try { const p = JSON.parse(value || '{}'); return {

@@ -1,3 +1,6 @@
+import { paragraphTrackerScript } from '../../shared/chapterParagraphEditor.js';
+import { paragraphAttribute, paragraphIdPattern, paragraphTags } from '../../shared/chapterParagraphs.js';
+
 // The isolated editor uses the same tag/style whitelist as backend/utils/sanitizeHtml.js.
 export function editorDocument(initial: string, scale = 1, title?: string, position?: { scroll: number; start?: number; end?: number }) {
   const serialized = JSON.stringify(initial).replace(/</g, '\\u003c');
@@ -6,15 +9,17 @@ export function editorDocument(initial: string, scale = 1, title?: string, posit
   <style>body{margin:0;background:#fffdf8;color:#281f18;font-family:Georgia,serif;font-size:${19 * scale}px;line-height:1.85}#editor{outline:none;min-height:65vh;padding:12px 22px 100px;overflow-wrap:anywhere}#title{outline:none;font-size:1.5em;line-height:1.35;margin:0;padding:26px 22px 12px;overflow-wrap:anywhere}#title,#editor{max-width:720px;margin-inline:auto;box-sizing:border-box}p{margin:0 0 1em}h1,h2,h3{font-weight:500;line-height:1.35}blockquote{border-left:2px solid var(--accent,#236455);padding-left:18px;color:var(--muted,#64716b)}#editor:empty:before{content:'İlk cümlene yer aç…';color:var(--muted,#64716b);pointer-events:none}</style></head>
   <body>${title === undefined ? '' : '<header id="title" contenteditable="plaintext-only" role="textbox" aria-label="Bölüm başlığı" spellcheck="true"></header>'}<main id="editor" contenteditable="true" role="textbox" aria-label="Bölüm metni" aria-multiline="true" spellcheck="true"></main><script>
   const post=data=>window.ReactNativeWebView.postMessage(JSON.stringify(data));
-  function cleanHtml(html){const template=document.createElement('template');template.innerHTML=html;const root=template.content;
+  const paragraphs=${title === undefined ? 'null' : paragraphTrackerScript};
+  const paragraphAttribute=${JSON.stringify(paragraphAttribute)}, paragraphIdPattern=${paragraphIdPattern}, paragraphTags=new Set(${JSON.stringify(paragraphTags)});
+  function cleanHtml(html,keepParagraphIds=!!paragraphs){const template=document.createElement('template');template.innerHTML=html;const root=template.content;
     root.querySelectorAll('script,style,iframe,object,embed,svg,math').forEach(n=>n.remove());
     const tags=new Set(['P','DIV','BR','SPAN','B','STRONG','I','EM','U','S','STRIKE','DEL','H1','H2','H3','UL','OL','LI','BLOCKQUOTE']);
-    root.querySelectorAll('*').forEach(n=>{if(!tags.has(n.tagName)){n.replaceWith(...n.childNodes);return}const align=n.style.textAlign,decor=n.style.textDecoration,weight=n.style.fontWeight,italic=n.style.fontStyle;
-      Array.from(n.attributes).forEach(a=>n.removeAttribute(a.name));if(/^(left|right|center|justify)$/.test(align))n.style.textAlign=align;if(/^(underline|line-through|none)$/.test(decor))n.style.textDecoration=decor;if(/^(normal|bold|[1-9]00)$/.test(weight))n.style.fontWeight=weight;if(/^(normal|italic)$/.test(italic))n.style.fontStyle=italic;});return template.innerHTML}
+    root.querySelectorAll('*').forEach(n=>{if(!tags.has(n.tagName)){n.replaceWith(...n.childNodes);return}const align=n.style.textAlign,decor=n.style.textDecoration,weight=n.style.fontWeight,italic=n.style.fontStyle,id=n.getAttribute(paragraphAttribute);
+      Array.from(n.attributes).forEach(a=>n.removeAttribute(a.name));if(/^(left|right|center|justify)$/.test(align))n.style.textAlign=align;if(/^(underline|line-through|none)$/.test(decor))n.style.textDecoration=decor;if(/^(normal|bold|[1-9]00)$/.test(weight))n.style.fontWeight=weight;if(/^(normal|italic)$/.test(italic))n.style.fontStyle=italic;if(keepParagraphIds&&paragraphTags.has(n.localName)&&paragraphIdPattern.test(id))n.setAttribute(paragraphAttribute,id);});return template.innerHTML}
   function unsupported(html){const t=document.createElement('template');t.innerHTML=html;const safe=document.createElement('template');safe.innerHTML=cleanHtml(html);
     // Compare CSS semantically: browsers normalize whitespace, property order and semicolons.
     [t,safe].forEach(root=>root.content.querySelectorAll('[style]').forEach(n=>{const rules=Array.from(n.style).sort().map(k=>k+':'+n.style.getPropertyValue(k).trim()+(n.style.getPropertyPriority(k)?'!important':'')).join(';');if(rules)n.setAttribute('style',rules);else n.removeAttribute('style')}));return !t.content.isEqualNode(safe.content)}
-  const el=document.getElementById('editor'),heading=document.getElementById('title');const original=${serialized};el.innerHTML=cleanHtml(original);let selection=null;let organic=true,composing=false,bodyChanged=false;
+  const el=document.getElementById('editor'),heading=document.getElementById('title');const original=${serialized};el.innerHTML=cleanHtml(original);paragraphs?.reset(el);let selection=null;let organic=true,composing=false,bodyChanged=false,commandRunning=false;
   const locked=unsupported(original);if(locked){el.contentEditable='false';post({unsupported:true})}
   if(heading)heading.textContent=${JSON.stringify(title || '').replace(/</g, '\\u003c')};
   function emit(){if(composing)return;post({content:locked||!bodyChanged?original:el.innerHTML,title:heading?.textContent,organic});organic=true}
@@ -31,15 +36,23 @@ export function editorDocument(initial: string, scale = 1, title?: string, posit
     el.focus();
     if(target){const s=window.getSelection();s.removeAllRanges();s.addRange(target)}
   }
-  window.command=(name,value)=>{if(locked)return;restore();const before=el.innerHTML;document.execCommand(name,false,value||null);if(el.innerHTML!==before)bodyChanged=true;rememberSelection();emit()};
-  window.replaceContent=html=>{el.innerHTML=cleanHtml(html);selection=null};
-  el.addEventListener('beforeinput',e=>{organic=!['insertFromPaste','insertFromDrop'].includes(e.inputType)});
-  [el,heading].filter(Boolean).forEach(n=>{n.addEventListener('compositionstart',()=>composing=true);n.addEventListener('compositionend',()=>{composing=false;emit()})});
+  function bodyEdited(type){bodyChanged=true;if(!composing)paragraphs?.update(el,type);emit()}
+  function moveHistory(type){if(!paragraphs?.moveHistory(el,type))return false;rememberSelection();organic=false;bodyChanged=true;emit();return true}
+  window.command=(name,value)=>{if(locked)return;restore();if((name==='undo'||name==='redo')&&moveHistory(name==='undo'?'historyUndo':'historyRedo'))return;const before=el.innerHTML;paragraphs?.capture(el,'format');commandRunning=true;try{document.execCommand(name,false,value||null)}finally{commandRunning=false}if(el.innerHTML!==before)bodyEdited('format');rememberSelection()};
+  window.replaceContent=html=>{el.innerHTML=cleanHtml(html);paragraphs?.reset(el);selection=null};
+  el.addEventListener('beforeinput',e=>{if(!commandRunning){
+    if(e.cancelable&&['historyUndo','historyRedo'].includes(e.inputType)&&moveHistory(e.inputType)){e.preventDefault();return}
+    organic=!['insertFromPaste','insertFromDrop'].includes(e.inputType);paragraphs?.capture(el,e.inputType)}});
+  [el,heading].filter(Boolean).forEach(n=>{n.addEventListener('compositionstart',()=>composing=true);n.addEventListener('compositionend',()=>{composing=false;if(n===el&&bodyChanged)paragraphs?.update(el,'insertCompositionText');emit()})});
   if(heading){heading.addEventListener('input',emit);heading.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.focus()}})}
-  el.addEventListener('input',()=>{bodyChanged=true;emit()});el.addEventListener('blur',()=>{rememberSelection();window.ReactNativeWebView.postMessage(JSON.stringify({blur:true}))});
+  el.addEventListener('input',e=>{if(!commandRunning)bodyEdited(e.inputType)});el.addEventListener('blur',()=>{rememberSelection();window.ReactNativeWebView.postMessage(JSON.stringify({blur:true}))});
+  el.addEventListener('cut',e=>{if(!locked)paragraphs?.copyForMove(el,e)});
   el.addEventListener('paste',e=>{e.preventDefault();organic=false;const data=e.clipboardData;const html=data.getData('text/html');
-    if(!html){document.execCommand('insertText',false,data.getData('text/plain'));emit();return}
-    if(unsupported(html)){post({pasteBlocked:true});return}document.execCommand('insertHTML',false,cleanHtml(html));emit();});
+    if(paragraphs?.pasteForMove(el,data)){bodyChanged=true;emit();return}
+    if(html&&unsupported(html)){post({pasteBlocked:true});return}
+    paragraphs?.capture(el,'insertFromPaste');const before=el.innerHTML;commandRunning=true;
+    try{document.execCommand(html?'insertHTML':'insertText',false,html?cleanHtml(html,false):data.getData('text/plain'))}finally{commandRunning=false}
+    if(el.innerHTML!==before)bodyEdited('insertFromPaste');});
   el.addEventListener('drop',e=>e.preventDefault());
   function caretVisible(){if(composing||document.activeElement!==el)return;const r=currentRange();if(!r||!r.collapsed)return;const rect=r.getBoundingClientRect();const bottom=window.visualViewport?.height||innerHeight;if(rect.bottom>bottom-24)window.scrollBy(0,rect.bottom-bottom+48);else if(rect.top<0)window.scrollBy(0,rect.top-24)}
   window.visualViewport?.addEventListener('resize',()=>requestAnimationFrame(caretVisible));

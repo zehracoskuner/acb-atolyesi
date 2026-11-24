@@ -4,7 +4,7 @@ import ChapterMedia from './ChapterMedia';
 import { apiGet, apiPost } from '../lib/api';
 import './ReportCase.css';
 import { API_BASE as API } from "../lib/apiBase";
-const labels = { cover: 'Eser kapağı', avatar: 'Profil fotoğrafı', banner: 'Profil bannerı', chapter: 'Bölüm' };
+const labels = { cover: 'Eser kapağı', avatar: 'Profil fotoğrafı', banner: 'Profil bannerı', characterImage: 'Karakter portresi', chapter: 'Bölüm' };
 export default function ContentModerationPanel({ caseId, onChanged }) {
   const [items, setItems] = useState([]), [detail, setDetail] = useState(null);
   const [status, setStatus] = useState('pending'), [page, setPage] = useState(1);

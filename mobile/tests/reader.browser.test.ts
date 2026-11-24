@@ -7,7 +7,7 @@ import { defaultReaderPrefs, readerPalettes } from '../src/readerModel';
 // This is not a VoiceOver, TalkBack, iOS or Android device test.
 describe.skipIf(!process.env.MOBILE_READER_BROWSER)('reader document in Chromium', () => {
   let browser: Browser, page: Page;
-  const blocks = Array.from({ length: 70 }, (_, index) => ({ id: `block-${index}`, index, text: `Pasaj ${index}. İstanbul sessizliğe bürünürken öykü devam ediyordu. `.repeat(5), html: `<p>Pasaj ${index}. ${'İstanbul sessizliğe bürünürken öykü devam ediyordu. '.repeat(7)}</p>` }));
+  const blocks = Array.from({ length: 70 }, (_, index) => ({ id: `block-${index}`, paragraphId: `passage-${index}`, index, text: `Pasaj ${index}. İstanbul sessizliğe bürünürken öykü devam ediyordu. `.repeat(5), html: `<p>Pasaj ${index}. ${'İstanbul sessizliğe bürünürken öykü devam ediyordu. '.repeat(7)}</p>` }));
   const data = { title: 'Sessizliğin Ardından', author: 'Test yazarı', authorLink: true, number: 'BÖLÜM 2', blocks, preview: false, previous: true, next: true };
   beforeAll(async () => { browser = await chromium.launch({ executablePath: process.env.MOBILE_READER_BROWSER, headless: true }); page = await browser.newPage({ viewport: { width: 390, height: 730 } }); }, 30000);
   afterAll(async () => { await browser?.close(); });
@@ -38,7 +38,31 @@ describe.skipIf(!process.env.MOBILE_READER_BROWSER)('reader document in Chromium
     expect(await page.evaluate(() => (window as any).messages.find((m: any) => m.selection).selection)).toContain('İstanbul');
     await page.evaluate(() => { getSelection()?.removeAllRanges(); scrollTo(0, document.body.scrollHeight); }); await page.waitForTimeout(250);
     expect(await page.evaluate(() => (window as any).messages.filter((m: any) => m.position).at(-1).position.scrollPosition)).toBe(100);
-    const labels = await page.locator('footer button').allTextContents(); expect(labels.slice(0, 4)).toEqual(['Sonraki bölüm →', 'Önceki bölüm', '♡ Bölümü beğen', 'Yorumları aç']);
+    const labels = await page.locator('footer button').allTextContents();
+    expect(labels).toEqual(['Sonraki bölüm →', 'Önceki bölüm', '♡ Bölümü beğen', 'Eser bilgisi', 'Bölüm yorumları']);
+  });
+  it('places each paragraph comment marker at its lower right without adding a separate row', async () => {
+    await page.setViewportSize({ width: 320, height: 620 });
+    await load();
+    const empty = page.getByRole('button', { name: '1. paragrafa yorum yaz', exact: true });
+    expect(await empty.textContent()).toBe('+');
+    await page.evaluate(() => (window as any).readerCounts({ 0: 128 }));
+    const marker = page.getByRole('button', { name: '1. paragraf, 128 yorum', exact: true });
+    expect(await marker.textContent()).toBe('99+');
+    const { button, prose, section, overflow } = await marker.evaluate(el => ({
+      button: el.getBoundingClientRect().toJSON(),
+      prose: el.previousElementSibling!.getBoundingClientRect().toJSON(),
+      section: el.parentElement!.getBoundingClientRect().toJSON(),
+      overflow: document.documentElement.scrollWidth > innerWidth,
+    }));
+    expect(button.left).toBeGreaterThanOrEqual(prose.right);
+    expect(button.width).toBeGreaterThanOrEqual(44);
+    expect(button.height).toBeGreaterThanOrEqual(44);
+    expect(button.bottom).toBeCloseTo(prose.bottom, 0);
+    expect(section.bottom).toBeCloseTo(prose.bottom, 0);
+    expect(overflow).toBe(false);
+    await marker.click();
+    expect(await page.evaluate(() => (window as any).messages.find((m: any) => m.paragraphId))).toMatchObject({ paragraph: 0, paragraphId: 'passage-0' });
   });
   it('captures phone/tablet reading surfaces in all three themes', async () => {
     await mkdir('artifacts/reader', { recursive: true });

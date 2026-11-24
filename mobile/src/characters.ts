@@ -19,3 +19,30 @@ export function relationshipBody(workId: string, source: string, target: string,
   if (!workId || !source || !target || source === target || !type.trim() || strength < 1 || strength > 5 || !Number.isInteger(strength)) throw new Error('İlişki alanlarını kontrol et.');
   return { workId, from: direction === 'incoming' ? target : source, to: direction === 'incoming' ? source : target, type: type.trim(), directed: direction !== 'mutual', strength, label: label.trim() };
 }
+
+export type MapCharacter = Character & { x?: number; y?: number };
+
+const relationStyles: Record<string, { emoji: string; color: string }> = {
+  love: { emoji: '❤️', color: '#fb7185' },
+  conflict: { emoji: '⚡', color: '#f97316' },
+  manip: { emoji: '🧠', color: '#a78bfa' },
+  protect: { emoji: '🛡️', color: '#22c55e' },
+  trauma: { emoji: '💔', color: '#60a5fa' },
+  alliance: { emoji: '🤝', color: '#facc15' },
+  secret: { emoji: '🤫', color: '#e879f9' },
+  rivalry: { emoji: '🗡️', color: '#fb923c' },
+  unknown: { emoji: '❓', color: '#94a3b8' },
+};
+
+export function relationMeta(type: string) {
+  if (!Object.hasOwn(relationStyles, type)) return { label: type, emoji: '🧵', color: '#94a3b8' };
+  return { ...relationStyles[type]!, label: relationshipTypes[type]! };
+}
+
+export function saveCharacterPosition(workId: string, id: string, x: number, y: number) {
+  return api<{ item: MapCharacter }>('/characters/' + encodeURIComponent(id) + '/position', 'PATCH', { workId, x, y });
+}
+
+export function deleteCharacterRelation(workId: string, id: string) {
+  return api('/relationships/' + encodeURIComponent(id) + '?workId=' + encodeURIComponent(workId), 'DELETE');
+}

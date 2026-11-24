@@ -4,5 +4,5 @@ export const EXPLORE_PATH = "/keşfet";
 export function isPublicPage(pathname) {
   let path;
   try { path = decodeURI(pathname); } catch { return false; }
-  return /^\/(keşfet|kesfet|story\/[^/]+|profile\/(?!me(?:\/|$))[^/]+|landing)\/?$/.test(path);
+  return /^\/(keşfet|kesfet|story\/[^/]+(?:\/character-guide)?|profile\/(?!me(?:\/|$))[^/]+|landing)\/?$/.test(path);
 }

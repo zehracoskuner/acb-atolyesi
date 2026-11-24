@@ -54,6 +54,7 @@ export default function ReportModal({
   const [submitting,  setSubmitting]  = useState(false);
   const [error,       setError]       = useState("");
   const [submitted,   setSubmitted]   = useState(false);
+  const allowsCopyright = targetType !== "comment" && targetType !== "user";
 
   useEffect(() => {
     if (!isOpen) return;
@@ -74,14 +75,14 @@ export default function ReportModal({
   // Modal açılınca formu sıfırla
   useEffect(() => {
     if (isOpen) {
-      setReason(initialReason);
+      setReason(initialReason === "telif_ihlali" && !allowsCopyright ? "" : initialReason);
       setOriginalWork(""); setReceipt(null);
       setDescription("");
       setError("");
       setSubmitting(false);
       setSubmitted(false);
     }
-  }, [isOpen, initialReason]);
+  }, [isOpen, initialReason, allowsCopyright]);
 
   // Escape tuşu
   useEffect(() => {
@@ -162,7 +163,7 @@ export default function ReportModal({
             {/* Sebep seçimi */}
             <span className="rm-label">Sebep</span>
             <div className="rm-reasons" role="radiogroup">
-              {REASON_OPTIONS.filter(opt => targetType !== 'user' || opt.value !== 'telif_ihlali').map((opt) => (
+              {REASON_OPTIONS.filter(opt => allowsCopyright || opt.value !== "telif_ihlali").map((opt) => (
                 <button
                   key={opt.value}
                   className={`rm-reason ${reason === opt.value ? "rm-reason--selected" : ""}`}

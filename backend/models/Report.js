@@ -13,7 +13,7 @@ const reportSchema = new mongoose.Schema(
     // Ne şikayet edildi
     targetType: {
       type: String,
-      enum: ["work", "chapter", "user", "comment", "cover", "avatar", "banner"],
+      enum: ["work", "chapter", "user", "comment", "cover", "avatar", "banner", "characterImage"],
       required: true,
     },
     targetId: {

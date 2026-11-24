@@ -1569,6 +1569,16 @@
   font-family: var(--rd-font-body);
 }
 
+.rdic-passage-version {
+  margin: 6px 0 4px 34px;
+  color: var(--rd-text-muted);
+  font-size: .78rem;
+  overflow-wrap: anywhere;
+}
+
+.rdic-passage-version summary { cursor: pointer; }
+.rdic-passage-version blockquote { margin: 6px 0 0; }
+
 /* Menü */
 .rdic-menu-wrap {
   position: relative;

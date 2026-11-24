@@ -29,7 +29,10 @@ router.param('id', async (req, res, next, id) => {
 router.get('/:id', async (req, res) => {
   try {
     const report = await Report.findById(req.params.id).select('+evidenceSnapshot').lean();
-    res.json({ report: { ...report, canManage: req.user.role === 'admin' && String(report.reporter) !== req.user.id && String(report.targetOwner) !== req.user.id } });
+    const { id, role } = req.user;
+    const canManage = role === 'admin' && (report.reason === 'telif_ihlali' ||
+      (String(report.reporter) !== id && String(report.targetOwner) !== id));
+    res.json({ report: { ...report, canManage } });
   } catch { res.status(500).json({ message: 'Sunucu hatası.' }); }
 });
 router.post('/:id/workflow', async (req, res) => {

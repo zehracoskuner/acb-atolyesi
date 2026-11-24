@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DomUtils, parseDocument } from 'htmlparser2';
-import { readerBlocks, readerHtml, readerPayload, readerPreviewPayload, previewContent, resolveInlineComment } from '../services/readerContent.js';
+import { readerBlocks, readerHtml, readerPayload, readerPreviewPayload, previewContent, resolveInlineComment, chapterEditorContent } from '../services/readerContent.js';
+import { sanitizeChapterHtml } from '../utils/sanitizeHtml.js';
 describe('reader content contract', () => {
   it('keeps preview anchors on text after omitted images and scales a partial paragraph', () => {
     const chapter = { content: '<img src="https://example.test/a.jpg"><p>' + 'Öykü '.repeat(1200) + '</p>' };
@@ -49,5 +50,29 @@ describe('reader content contract', () => {
     const comment = { paragraphIndex: 1, blockId: old.blocks[1].id, contentVersion: old.contentVersion };
     expect(resolveInlineComment(comment, old.blocks)).toMatchObject({ attached: true, paragraphIndex: 1 });
     expect(resolveInlineComment(comment, readerBlocks('<p>Aynı</p><p>Yeni</p><p>Aynı</p>')).attached).toBe(false);
+  });
+  it('seeds the same identity in the editor and reader for legacy blocks and inline runs', () => {
+    const content = 'Giriş<br>ikinci satır<div style="text-align:center"><p>Tekrar</p><p>Tekrar</p></div>Son';
+    const original = readerBlocks(content);
+    const editable = sanitizeChapterHtml(chapterEditorContent(content), { paragraphIds: true });
+    const persisted = readerBlocks(editable);
+    expect(persisted.map(block => block.text)).toEqual(original.map(block => block.text));
+    expect(persisted.map(block => block.paragraphId)).toEqual(original.map(block => block.paragraphId));
+    expect(new Set(persisted.map(block => block.paragraphId)).size).toBe(4);
+    expect(persisted.every(block => block.paragraphPersisted)).toBe(true);
+    expect(chapterEditorContent(editable)).toBe(editable);
+  });
+  it('keeps the original passage available on rewrites and archives a deleted identity even if its text is copied', () => {
+    const initial = readerPayload({ content: '<p>Bir</p><p>İki</p>' });
+    const [first, second] = initial.blocks;
+    const comment = { paragraphId: first.paragraphId, blockId: first.id, paragraphIndex: 0, paragraphText: first.text };
+    const moved = `<h2 data-paragraph-id="${second.paragraphId}">İki</h2><p data-paragraph-id="${first.paragraphId}"><strong>Bir</strong></p>`;
+    expect(resolveInlineComment(comment, readerBlocks(moved))).toMatchObject({ attached: true, paragraphIndex: 1, previousPassage: false });
+    expect(resolveInlineComment(comment, readerBlocks(moved.replace('Bir', 'Başka')))).toMatchObject({
+      attached: true, paragraphIndex: 1, previousPassage: true, paragraphText: 'Bir',
+    });
+    expect(resolveInlineComment(comment, readerBlocks(moved.replace(first.paragraphId, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')))).toMatchObject({
+      attached: false, paragraphIndex: -1, paragraphText: 'Bir',
+    });
   });
 });

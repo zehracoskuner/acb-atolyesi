@@ -83,7 +83,7 @@ function isBlock(node) {
   return /^(DIV|H[1-3]|UL|OL|LI|BLOCKQUOTE)$/.test(node?.nodeName || "");
 }
 
-function plainTextHtml(text) {
+export function plainTextHtml(text) {
   const container = document.createElement("div");
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   lines.forEach((line, index) => {

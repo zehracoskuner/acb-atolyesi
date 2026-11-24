@@ -15,6 +15,7 @@ const server = await createServer({ configFile: false, root: qa,
   server: { host: '127.0.0.1', port: Number(process.env.MOBILE_QA_PORT) || 5186, strictPort: true, fs: { allow: [root] } },
   resolve: { dedupe: ['react', 'react-dom'], extensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js', '.json'], alias: [
     { find: /^react-native$/, replacement: require.resolve('react-native-web') },
+    { find: /^react-native-svg$/, replacement: require.resolve('react-native-svg/lib/module/elements.web.js') },
     { find: /^(?:.*\/)?(useResource|session|sync|studioStorage|images)$/, replacement: adapter },
     { find: /^expo-router$/, replacement: adapter },
     { find: /^@react-navigation\/native$/, replacement: adapter },

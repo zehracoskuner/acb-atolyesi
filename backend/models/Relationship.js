@@ -16,6 +16,7 @@ const RelationshipSchema = new mongoose.Schema(
       maxlength: 80,
       index:    true,
     },
+    typeName: { type: String, trim: true, maxlength: 80 },
 
     label:    { type: String,  default: "",     trim: true },
     strength: { type: Number,  default: 3,      min: 1, max: 5 },

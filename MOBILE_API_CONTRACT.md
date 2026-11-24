@@ -23,12 +23,22 @@ Tüm API uçları : <baseUrl>/api/...
 | `/api/user` | routes/user.js | Zorunlu auth (tümü) |
 | `/api/profile` | routes/profile.js | Açık |
 | `/api/works` | routes/works.js | Karma |
+| `/api/characters` | routes/characters.js | Oturum ve eser sahipliği |
+| `/api/relationships` | routes/relationships.js | Oturum ve eser sahipliği |
 | `/api/chapters` | routes/chapter.js | Zorunlu auth |
 | `/api/upload` | routes/upload.js | Açık (rate-limited) |
 | `/api/feed` | routes/feed.js | `/` = auth, `/discover` = açık |
 | `/api/search` | routes/search.js | Açık |
 | `/api/notifications` | routes/notifications.js | Zorunlu auth |
 | `/api/library` | routes/library.js | Zorunlu auth |
+
+### Karakter Evreni
+
+- Karakter listesi `GET /api/characters?workId=…` için mevcut `{ items }` zarfını ve `x`, `y` alanlarını kullanır. `imageUrl` ve `positionMode` opsiyoneldir. `positionMode` değeri `auto` veya `manual` olabilir. Eski kayıtların mevcut konumu webde sabit kabul edilir. `PATCH /api/characters/:id/position` gövdesi `{ workId, x, y, positionMode? }` kabul eder; mod verilmezse konum elle taşınmış sayılır.
+- `POST /api/characters/:id/portrait?workId=…` bir `file` alanıyla multipart yükleme kabul eder (JPEG, PNG, WebP, en çok 2 MB). `DELETE /api/characters/:id/portrait?workId=…` fotoğrafı kaldırır. Her ikisi `{ item }` döndürür. `imageUrl` mevcutsa API origin’ine göre çözülür ve görsel isteğinde geçerli Cookie veya Bearer kimliği gerekir.
+- `GET /api/relationships?workId=…` mevcut `{ items }` zarfını kullanır. Özel türlerin görünen adı için `typeName` opsiyoneldir. `POST /api/relationships` için opsiyonel `upsert: true`, aynı iki uçta ve aynı yönde normalleştirilmiş tür adı eşleşirse mevcut kaydı günceller. Yönsüz bağlarda uçların sırası eşleşmeyi etkilemez. Yalnızca gönderilen `label`, `strength` ve `color` alanları güncellenir. Yanıt yeni kayıtta `201`, güncellemede `200` ve `{ item, updated }` olur. Bu seçenek gönderilmediğinde mevcut `201` ve `REL_DUPLICATE` davranışı geçerlidir. `PATCH /api/relationships/:id` gövdesi `{ workId, type?, label?, strength?, directed? }` kabul eder ve `{ item }` döndürür.
+- `GET /api/public/works/:id` yanıtındaki opsiyonel `item.hasCharacterGuide` eserin okura açık rehberi olduğunu belirtir. Web rehberi `GET /api/public/works/:id/character-guide` üzerinden okurun kayıtlı ilerlemesine göre süzülmüş `{ item: { title, characters, relationships } }` alır. Opsiyonel `duringChapter=chapterId` veya `duringChapter=start` yalnızca görünürlüğü kısıtlar. Rehber portrelerinin göreli `imageUrl` adresleri aynı erişim kurallarını uygular.
+- Yazarın webdeki İlişki Notu ekranı `GET /api/works/:id/character-guide/relationships/:relationshipId` ile `{ draft: { writerNote, milestones, revision }, chapters }` alır. Aynı yola `PUT` işlemi `{ writerNote, milestones, revision }` kabul eder ve güncellenmiş `{ draft }` döndürür. Geçersiz veya eski `revision` için `409` döner. Yalnızca eser sahibi erişebilir. `writerNote` özel kalır. Bu ekrandan düzenlenen dönüm noktaları, okur rehberinde yeniden paylaşılması seçilene kadar özel kalır.
 
 ---
 

@@ -98,7 +98,7 @@ function WriterRoute({ id, workId }: { id: string; workId: string }) {
       { text: 'Vazgeç', style: 'cancel', onPress: () => { confirming.current = false; } }, { text: unpublish ? 'Yayından kaldır' : 'Yayınla', style: unpublish ? 'destructive' : 'default', onPress: () => { confirming.current = false; void run(async () => {
         setSheet(null); if (!online) throw new Error('Yayınlamak için internet bağlantısı gerekli.');
         await engine.persist().catch(() => engine.retryPersist());
-        await engine.publish(confirmed, async d => (await api<{ item: Chapter }>(`/chapters/${d.chapterId}/status`, 'PATCH', { status: unpublish ? 'draft' : 'published', workId: d.workId, expectedRevision: d.baseRevision })).item);
+        await engine.publish(confirmed, async d => (await api<{ item: Chapter }>(`/chapters/${d.chapterId}/status?editor=1`, 'PATCH', { status: unpublish ? 'draft' : 'published', workId: d.workId, expectedRevision: d.baseRevision })).item);
       }); } },
     ]);
   };

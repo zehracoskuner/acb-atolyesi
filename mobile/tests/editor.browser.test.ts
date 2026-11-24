@@ -95,6 +95,74 @@ describe.skipIf(!process.env.MOBILE_EDITOR_BROWSER)('local editor in a real brow
     const message = await page.evaluate(() => (window as unknown as { lastMessage: string }).lastMessage);
     expect(JSON.parse(message).content).toBe(await page.locator('#editor').innerHTML());
   });
+  it('keeps paragraph identities for rewriting and formatting, and retires ambiguous split and merge identities', async () => {
+    const first = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', second = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    await load(`<p data-paragraph-id="${first}">Bir metin</p><p data-paragraph-id="${second}">Son</p>`, 1, 'Bölüm');
+    const editor = page.locator('#editor');
+    const select = async (index: number, start: number, end = start) => {
+      await editor.evaluate((el, [index, start, end]) => {
+        (el as HTMLElement).focus();
+        const text = el.children[index!]!.firstChild!;
+        const selection = getSelection()!;
+        selection.setBaseAndExtent(text, start!, text, end!);
+      }, [index, start, end]);
+    };
+    const ids = () => editor.locator(':scope > *').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-paragraph-id')));
+    await select(0, 0, 9);
+    await page.keyboard.insertText('Yeni metin');
+    expect(await ids()).toEqual([first, second]);
+    await select(0, 4);
+    await page.evaluate(() => (window as unknown as { command: (name: string, value: string) => void }).command('formatBlock', 'h2'));
+    expect(await editor.locator('h2').getAttribute('data-paragraph-id')).toBe(first);
+    await select(0, 4);
+    await page.keyboard.press('Enter');
+    const split = await ids();
+    expect(split).toHaveLength(3);
+    expect(split.slice(0, 2)).not.toContain(first);
+    expect(split[2]).toBe(second);
+    await select(1, 0);
+    await page.keyboard.press('Backspace');
+    const joined = await ids();
+    expect(joined).toHaveLength(2);
+    expect(split).not.toContain(joined[0]);
+    expect(joined[1]).toBe(second);
+  });
+  it('keeps the next paragraph identity when deleting a full paragraph and its boundary', async () => {
+    const first = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', second = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    await load(`<p data-paragraph-id="${first}">Bir</p><p data-paragraph-id="${second}">İki</p>`, 1, 'Bölüm');
+    const editor = page.locator('#editor');
+    await editor.evaluate(el => {
+      (el as HTMLElement).focus();
+      getSelection()!.setBaseAndExtent(el.children[0]!.firstChild!, 0, el.children[1]!.firstChild!, 0);
+    });
+    await page.keyboard.press('Backspace');
+    expect(await editor.innerText()).toBe('İki');
+    expect(await editor.locator('[data-paragraph-id]').getAttribute('data-paragraph-id')).toBe(second);
+  });
+  it('carries a whole cut paragraph to its new position in the same editor', async () => {
+    const first = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', second = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    await load(`<p data-paragraph-id="${first}">Bir</p><p data-paragraph-id="${second}">İki</p>`, 1, 'Bölüm');
+    const passages = await page.locator('#editor').evaluate(editor => {
+      (editor as HTMLElement).focus();
+      const selection = getSelection()!;
+      const range = document.createRange();
+      range.selectNodeContents(editor.children[0]!);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      const clipboardData = new DataTransfer();
+      editor.dispatchEvent(new ClipboardEvent('cut', { clipboardData, bubbles: true, cancelable: true }));
+      const target = Array.from(editor.children).find(node => node.textContent === 'İki')!;
+      selection.collapse(target.firstChild, 3);
+      editor.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
+      return Array.from(editor.children).filter(node => node.textContent?.trim())
+        .map(node => [node.textContent, node.getAttribute('data-paragraph-id')]);
+    });
+    expect(passages).toEqual([['İki', second], ['Bir', first]]);
+    await page.evaluate(() => (window as unknown as { command: (name: string) => void }).command('undo'));
+    expect(await page.locator('#editor p').allTextContents()).toEqual(['Bir', 'İki']);
+    await page.evaluate(() => (window as unknown as { command: (name: string) => void }).command('redo'));
+    expect(await page.locator('#editor p').allTextContents()).toEqual(['İki', 'Bir']);
+  });
   it('handles long text on a 320px screen with enlarged system typography without horizontal overflow', async () => {
     await load('<p>Türkçe: ğ ü ş ı ö ç İ. ' + 'Bir yazar kendi sesini arıyor. '.repeat(2000) + '</p><p>' + 'uzun'.repeat(300) + '</p>', 1.6);
     const dimensions = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }));

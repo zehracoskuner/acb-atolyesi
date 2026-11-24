@@ -3,13 +3,14 @@ import {
   useEffect, useState, useCallback, useMemo,
   useRef, useReducer,
 } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete, isChapterSaveReceipt } from "../lib/api";
 import DevelopmentCoachDialog from "../components/DevelopmentCoachDialog";
 import DevelopmentCoachPreference from "../components/DevelopmentCoachPreference";
 import DevelopmentCoachArchive from "../components/DevelopmentCoachArchive";
 import { DEVELOPMENT_COACH_LAUNCH_ENABLED } from "../../../shared/features.js";
 import { CHAPTER_HISTORY_ENABLED } from "../../../shared/features.js";
+import { createParagraphTracker } from "../../../shared/chapterParagraphEditor.js";
 import BookDownload from "../components/BookDownload";
 import { saveBeforeBookDownload } from "../lib/bookDownload";
 import "../styles/ChaptersPage.css";
@@ -159,7 +160,7 @@ function chaptersReducer(state, action) {
 // Bunun yerine doğrudan style.textAlign ataması yapılır.
 const ALIGN_VALS = { justifyLeft: "left", justifyCenter: "center", justifyRight: "right" };
 
-function BubbleToolbar({ editorRef }) {
+function BubbleToolbar({ editorRef, onFormat }) {
   const [pos,     setPos]     = useState(null); // { top, left }
   const [formats, setFormats] = useState({ bold:false, italic:false, underline:false, strike:false });
   const toolbarRef = useRef(null);
@@ -196,7 +197,10 @@ function BubbleToolbar({ editorRef }) {
   function exec(cmd, val) {
     if (!editorRef.current) return;
     editorRef.current.focus();
+    onFormat(() => applyFormat(cmd, val));
+  }
 
+  function applyFormat(cmd, val) {
     if (cmd in ALIGN_VALS) {
       // Hizalama komutlarını execCommand yerine doğrudan DOM'a yaz.
       // execCommand("justify*") bazı Chrome sürümlerinde <center> veya
@@ -275,6 +279,14 @@ function RichEditor({ value, onChange, placeholder, className, readOnly = false 
   const editorRef    = useRef(null);
   const isComposing  = useRef(false);
   const isPasting    = useRef(false);
+  const paragraphs  = useMemo(createParagraphTracker, []);
+
+  useEffect(() => {
+    const el = editorRef.current;
+    const capture = event => { if (!isPasting.current) paragraphs.capture(el, event.inputType); };
+    el.addEventListener("beforeinput", capture);
+    return () => el.removeEventListener("beforeinput", capture);
+  }, [paragraphs]);
 
   // Dış değer değişirse (undo vs.) güncelle
   useEffect(() => {
@@ -282,23 +294,37 @@ function RichEditor({ value, onChange, placeholder, className, readOnly = false 
     if (!el || el.innerHTML === (value || "")) return;
     const hadFocus = document.activeElement === el;
     el.innerHTML = value || "";
+    paragraphs.reset(el);
     if (hadFocus) {
       const sel = window.getSelection();
       const r   = document.createRange();
       r.selectNodeContents(el); r.collapse(false);
       sel.removeAllRanges(); sel.addRange(r);
     }
-  }, [value]);
+  }, [value, paragraphs]);
 
   function triggerChange(event, composition = false) {
     if (isComposing.current || isPasting.current) return;
     const eligible = composition || ["insertText", "insertFromPaste", "insertFromDrop", "insertCompositionText", "insertParagraph", "insertLineBreak"].includes(event?.nativeEvent?.inputType);
-    if (onChange && editorRef.current) onChange(editorRef.current.innerHTML, eligible);
+    if (onChange && editorRef.current) {
+      paragraphs.update(editorRef.current, event?.nativeEvent?.inputType);
+      onChange(editorRef.current.innerHTML, eligible);
+    }
+  }
+
+  function format(apply) {
+    const el = editorRef.current;
+    const before = el.innerHTML;
+    paragraphs.capture(el, "format");
+    isPasting.current = true;
+    try { apply(); }
+    finally { isPasting.current = false; }
+    if (el.innerHTML !== before) triggerChange();
   }
 
   return (
     <div className={`rich-editor-wrap ${className || ""}`} style={{ position:"relative" }}>
-      <BubbleToolbar editorRef={editorRef} />
+      <BubbleToolbar editorRef={editorRef} onFormat={format} />
       <div
         ref={editorRef}
         className="rich-content"
@@ -306,10 +332,17 @@ function RichEditor({ value, onChange, placeholder, className, readOnly = false 
         suppressContentEditableWarning
         data-placeholder={placeholder || "Yaz…"}
         onInput={triggerChange}
+        onCut={event => { if (!readOnly) paragraphs.copyForMove(editorRef.current, event); }}
         onPaste={(event) => {
           event.preventDefault();
           if (readOnly) return;
+          const el = editorRef.current;
+          if (paragraphs.pasteForMove(el, event.clipboardData)) {
+            onChange?.(el.innerHTML, false);
+            return;
+          }
           const html = chapterClipboardHtml(event.clipboardData);
+          paragraphs.capture(editorRef.current, "insertFromPaste");
           isPasting.current = true;
           try { insertChapterHtml(editorRef.current, html); }
           finally { isPasting.current = false; }
@@ -492,6 +525,8 @@ export default function ChaptersPage() {
 function ChapterEditor({ userId }) {
   const { workId } = useParams();
   const navigate   = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedChapterId = searchParams.get("chapter");
 
   const [chapters, rawDispatch] = useReducer(chaptersReducer, []);
   const creatingRef = useRef(false);
@@ -632,7 +667,7 @@ function ChapterEditor({ userId }) {
     try {
       const res = await apiGet(`/chapters?workId=${workId}`);
       const metadata = res.items || res || [];
-      const raw = await Promise.all(metadata.map(async ch => (await apiGet(`/chapters/${ch._id}`)).item));
+      const raw = await Promise.all(metadata.map(async ch => (await apiGet(`/chapters/${ch._id}?editor=1`)).item));
       const sorted = [...raw].sort((a,b) => {
         const ao=a.order??9999, bo=b.order??9999;
         return ao!==bo ? ao-bo : new Date(a.createdAt||0)-new Date(b.createdAt||0);
@@ -647,10 +682,10 @@ function ChapterEditor({ userId }) {
       });
       dispatch({ type:"SET", chapters:items });
       items.forEach(ch => pushUndoSnapshot(ch._id, ch.content, undoStacksRef));
-      if (items.length > 0) { setActiveChapterId(items[0]._id); }
+      if (items.length > 0) { setActiveChapterId(items.find(item => item._id === requestedChapterId)?._id ?? items[0]._id); }
     } catch(err) { if (mounted.current && generation === fetchGeneration.current) setError(err.message||"Bölümler yüklenemedi."); }
     finally { if (mounted.current && generation === fetchGeneration.current) setLoading(false); }
-  }, [workId, userId, dispatch]);
+  }, [workId, userId, dispatch, requestedChapterId]);
 
   useEffect(() => { fetchChapters(); }, [fetchChapters]);
 
@@ -683,7 +718,7 @@ useEffect(() => {
     dispatch({ type: "SAVE_START", id: chapterId, request: requestId });
     const request = (async () => {
       try {
-        const result = await apiPut(`/chapters/${chapterId}`, {
+        const result = await apiPut(`/chapters/${chapterId}?editor=1`, {
           ...(ch.title !== ch._baseTitle ? { title: ch.title } : {}),
           ...(ch.content !== ch._baseContent ? { content: ch.content } : {}),
           ...(JSON.stringify(ch.media) !== JSON.stringify(ch._baseMedia) ? { media: ch.media } : {}), expectedRevision: ch.revision ?? 0,
@@ -780,7 +815,7 @@ useEffect(() => {
       clearTimeout(autoSaveTimers.current[ch._id]);
       let result;
       try {
-        result = await apiPatch(`/chapters/${ch._id}/status`, { workId, expectedRevision: chaptersRef.current.find(c => c._id === ch._id)?.revision ?? 0, status: toDraft ? "draft" : "published" });
+        result = await apiPatch(`/chapters/${ch._id}/status?editor=1`, { workId, expectedRevision: chaptersRef.current.find(c => c._id === ch._id)?.revision ?? 0, status: toDraft ? "draft" : "published" });
       } catch (err) {
         if (err.status !== 422 || err.data?.item?._id !== ch._id || err.data.item.status !== "rejected") throw err;
         result = err.data;
@@ -810,7 +845,7 @@ useEffect(() => {
     publishingIds.current.add(ch._id);
     clearTimeout(autoSaveTimers.current[ch._id]);
     try {
-      const result = await apiPost(`/chapters/${ch._id}/versions/${selected.revision}/restore`, { expectedRevision: current.revision });
+      const result = await apiPost(`/chapters/${ch._id}/versions/${selected.revision}/restore?editor=1`, { expectedRevision: current.revision });
       if (!isChapterSaveReceipt(result, ch._id, current.revision)) throw new Error("Geri yükleme yanıtı doğrulanamadı.");
       dispatch({ type: "RESTORED", id: ch._id, edit: current._edit, chapter: normalizeChapter(result.item) });
       setRestoreMessage("Seçtiğin metinden devam ediyorsun. Önceki taslağın Geçmiş'te saklandı.");
@@ -828,7 +863,7 @@ useEffect(() => {
     const current = chaptersRef.current.find(c => c._id === ch._id);
     if (!current || current._dirty || current._edit !== ch._edit) throw new Error("Kayıt sırasında metin değişti. Tekrar deneyin.");
     try {
-      const result = await apiPost(`/chapters/${ch._id}/checkpoint`, { expectedRevision: current.revision, label });
+      const result = await apiPost(`/chapters/${ch._id}/checkpoint?editor=1`, { expectedRevision: current.revision, label });
       if (!result.item || result.item.revision !== current.revision || !result.item.isCheckpoint) throw new Error("Kaydın saklandığı doğrulanamadı.");
       return result.item;
     } catch (err) {
@@ -839,7 +874,7 @@ useEffect(() => {
 
   const resolveLocal = async (chapter, draft) => {
     try {
-      const { item } = await apiGet(`/chapters/${chapter._id}`);
+      const { item } = await apiGet(`/chapters/${chapter._id}?editor=1`);
       if (!mounted.current) return;
       if ((item.revision ?? 0) !== (chapter._conflict?.revision ?? chapter.revision)) {
         dispatch({ type: "CONFLICT_REFRESH", id: chapter._id, current: item });

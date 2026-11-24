@@ -114,7 +114,7 @@ describe('independent background synchronization records', () => {
   it('continues after one request loses its response while the device remains connected', async () => {
     const { syncAccount, draftKey, readingKey } = await setup();
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options) => {
-      if (String(url).endsWith('/chapters/bad')) throw new TypeError('response lost');
+      if (new URL(String(url)).pathname.endsWith('/chapters/bad')) throw new TypeError('response lost');
       return String(url).endsWith('/reading-progress') ? response(200, { ok: true })
         : response(200, { item: { ...chapter, ...JSON.parse(String(options?.body)), revision: 4 } });
     });

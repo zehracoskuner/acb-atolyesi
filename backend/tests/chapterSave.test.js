@@ -262,7 +262,7 @@ describe("chapter save flow", () => {
     h.request.mockResolvedValue({ ...result("a"), item: { ...result("a").item, status: "published", hasUnpublishedChanges: true } });
     h.patch.mockResolvedValue({ item: { _id: "a", status: "published", hasUnpublishedChanges: false } });
     await h.publish();
-    expect(h.patch).toHaveBeenCalledWith("/chapters/a/status", { workId: "work", expectedRevision: 1, status: "published" });
+    expect(h.patch).toHaveBeenCalledWith("/chapters/a/status?editor=1", { workId: "work", expectedRevision: 1, status: "published" });
     expect(h.chaptersRef.current[0]).toMatchObject({ content: "private edit", status: "published", hasUnpublishedChanges: false });
     expect(h.announce).not.toHaveBeenCalled();
   });

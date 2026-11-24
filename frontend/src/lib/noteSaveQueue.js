@@ -1,8 +1,8 @@
 // Serialize writes and acknowledge only the revision actually saved by the server.
 export function createNoteSaveQueue(write, onStatus = () => {}, onSaved = () => {}) {
-  let draft = null, revision = 0, savedRevision = 0, pending = null;
+  let draft = null, savedDraft = null, revision = 0, savedRevision = 0, pending = null;
   return {
-    reset(value) { draft = value; revision = 0; savedRevision = 0; onStatus("idle"); },
+    reset(value) { draft = value; savedDraft = value; revision = 0; savedRevision = 0; onStatus("idle"); },
     change(value) { draft = value; revision++; onStatus("dirty"); },
     isDirty() { return revision !== savedRevision; },
     flush() {
@@ -11,7 +11,12 @@ export function createNoteSaveQueue(write, onStatus = () => {}, onSaved = () => 
         while (revision !== savedRevision) {
           const version = revision, snapshot = draft;
           onStatus("saving");
-          try { const item = await write(snapshot); savedRevision = version; onSaved(item); }
+          try {
+            const item = await write(snapshot, savedDraft);
+            savedDraft = snapshot;
+            savedRevision = version;
+            onSaved(item);
+          }
           catch { onStatus("error"); return false; }
         }
         onStatus(savedRevision ? "saved" : "idle");

@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 const id = mongoose.Schema.Types.ObjectId;
 const schema = new mongoose.Schema({
   key: { type: String, unique: true, required: true },
-  kind: { type: String, enum: ['cover', 'avatar', 'banner', 'chapter'], required: true },
+  kind: { type: String, enum: ['cover', 'avatar', 'banner', 'characterImage', 'chapter'], required: true },
   target: { type: id, required: true }, owner: { type: id, required: true },
   asset: { type: id, ref: 'ImageAsset' }, version: String,
   snapshot: { type: mongoose.Schema.Types.Mixed, select: false },

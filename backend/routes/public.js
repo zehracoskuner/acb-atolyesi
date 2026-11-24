@@ -2,6 +2,8 @@ import readerAccess from "../middlewares/readerAccess.js";
 import express from "express";
 import mongoose from "mongoose";
 import Work from "../models/Work.js";
+import CharacterGuide from "../models/CharacterGuide.js";
+import { publicCharacterGuide } from "./characterGuide.js";
 import Chapter from "../models/Chapter.js";
 import User from "../models/User.js";
 import Log from "../models/Log.js";
@@ -9,10 +11,11 @@ import { notifyFollow } from "../services/notificationService.js";
 import { getPublishedChapterIdsByWork } from "../services/publishedChapters.js";
 import { PUBLIC_WORK_FIELDS, serializePublicWork, serializePublicWorkCard } from "../services/publicWork.js";
 import ensureAuth, { optionalAuth } from "../middlewares/ensureAuth.js";
-import { readerPayload, readerPreviewPayload, previewLimit } from '../services/readerContent.js';
+import { readerPayload, readerPreviewPayload, previewLimit, stripChapterParagraphIds } from '../services/readerContent.js';
 
 const router = express.Router();
 router.use(readerAccess);
+router.use("/works/:id/character-guide", publicCharacterGuide);
 
 // The viewer identity comes from authentication, never from the request body.
 router.post("/works/:id/mature-acknowledgement", ensureAuth, async (req, res, next) => {
@@ -82,6 +85,7 @@ router.get("/works/:id", async (req, res) => {
     const publishedIdsByWork = await getPublishedChapterIdsByWork([work]);
     return res.json({ item: {
       ...serializePublicWork(work, publishedIdsByWork.get(String(work._id))),
+      ...((await CharacterGuide.exists({ _id: work._id, enabled: true })) ? { hasCharacterGuide: true } : {}),
       isOwner: !!req.user && String(work.user?._id || work.user) === String(req.user.id),
     } });
   } catch (err) {
@@ -137,7 +141,7 @@ router.get("/works/:id/chapters/:chapterId", ensureAuth, async (req, res) => {
     const chapter = await Chapter.findOne({ _id: chapterId, work: work._id, status: "published" })
       .select("_id title order content media");
     if (!chapter) return res.status(404).json({ message: "Bölüm bulunamadı." });
-    return res.json({ item: { _id: chapter._id, title: chapter.title, order: chapter.order, content: chapter.content, media: chapter.media || [], ...readerPayload(chapter) } });
+    return res.json({ item: { _id: chapter._id, title: chapter.title, order: chapter.order, content: stripChapterParagraphIds(chapter.content), media: chapter.media || [], ...readerPayload(chapter) } });
   } catch {
     return res.status(500).json({ message: "Bölüm yüklenemedi." });
   }

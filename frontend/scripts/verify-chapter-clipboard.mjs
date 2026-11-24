@@ -55,7 +55,7 @@ try {
         }
         const body = request.postDataJSON();
         assert.equal(body.expectedRevision, chapter.revision);
-        chapter = { ...chapter, ...body, content: sanitizeChapterHtml(body.content),
+        chapter = { ...chapter, ...body, content: sanitizeChapterHtml(body.content, { paragraphIds: true }),
           revision: chapter.revision + 1, hasUnpublishedChanges: body.content !== liveContent, savedAt: new Date().toISOString() };
         saves++;
       }
@@ -121,7 +121,8 @@ try {
   await editor.fill('AB');
   await editor.evaluate(el => {
     const range = document.createRange();
-    range.setStart(el.firstChild.firstChild || el.firstChild, 1);
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    range.setStart(walker.nextNode(), 1);
     range.collapse(true);
     getSelection().removeAllRanges(); getSelection().addRange(range);
   });
@@ -150,7 +151,7 @@ try {
   assert(!/margin|line-height|color|font-size|onerror|<img|<script/.test(formatted));
   assert(formatted.includes("<b>kalın</b>"));
   assert.equal(await editor.getByText("italik", { exact: true }).evaluate(el => getComputedStyle(el).fontStyle), "italic");
-  assert(formatted.includes("<div><br></div>"));
+  assert(await editor.locator("div:has(> br:only-child)").count() > 0);
   assert(formatted.includes("text-align: center") || formatted.includes("text-align:center"));
   assert.equal(await editor.locator("li").textContent(), "Madde");
   await page.waitForFunction(() => document.querySelector(".cp-save-details summary")?.textContent === "Kaydedildi");
@@ -208,8 +209,28 @@ try {
   await page.waitForFunction(() => document.querySelector(".focus-rich .rich-content").textContent === "Odak metni");
   assert(!/font-size|color/.test(await focus.innerHTML()));
   assert.equal(await focus.locator("em").textContent(), "metni");
+  const firstId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const secondId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  await focus.evaluate((el, [first, second]) => {
+    el.innerHTML = `<p data-paragraph-id="${first}">Bir</p><p data-paragraph-id="${second}">İki</p>`;
+    el.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const range = document.createRange();
+    range.selectNodeContents(el.children[0]);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+  }, [firstId, secondId]);
+  await page.keyboard.press("Control+x");
+  await focus.evaluate(el => {
+    const target = [...el.children].find(node => node.textContent === "İki");
+    getSelection().collapse(target.firstChild, 3);
+  });
+  await page.keyboard.press("Control+v");
+  const moved = await focus.locator("[data-paragraph-id]").evaluateAll(nodes => nodes.map(node => [node.textContent, node.dataset.paragraphId]));
+  assert.deepEqual(moved, [["İki", secondId], ["Bir", firstId]]);
+  await page.waitForFunction(() => document.querySelector(".focus-save")?.textContent === "Kaydedildi");
+  assert.deepEqual([...chapter.content.matchAll(/data-paragraph-id="([a-f0-9]{32})"/g)].map(match => match[1]), [secondId, firstId]);
   assert.deepEqual(errors, []);
-  console.log("PASS: Word bold/italic, rich/plain clipboard, caret/undo, save/reload, DOCX/TXT downloads, failed-save guard, publication update, focus mode");
+  console.log("PASS: Word bold/italic, rich/plain clipboard, caret/undo, save/reload, DOCX/TXT downloads, failed-save guard, publication update, focus mode, paragraph move");
 } finally {
   await browser?.close();
   await vite.close();

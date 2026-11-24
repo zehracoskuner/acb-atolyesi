@@ -16,9 +16,12 @@ import { runDevelopmentCoach, readLatestDevelopment, listDevelopmentAnalyses } f
 import { aiLimiter } from "../middlewares/rateLimiter.js";
 import { deleteLikedChapter } from "../services/likes.js";
 import { ownerChapter, publishChapterVersion } from "../services/chapterPublication.js";
+import { chapterEditorContent, stripChapterParagraphIds } from "../services/readerContent.js";
 import { CHAPTER_HISTORY_ENABLED, DEVELOPMENT_COACH_LAUNCH_ENABLED } from "../../shared/features.js";
 
 const router = express.Router();
+const editorView = (item, req) => ({ ...item, content: req.query.editor === '1'
+  ? chapterEditorContent(item.content) : stripChapterParagraphIds(item.content) });
 router.use(readerAccess);
 router.use(/^\/development(?=\/|$)/, ensureAuth, (_req, res, next) => {
   if (!DEVELOPMENT_COACH_LAUNCH_ENABLED) return res.status(503).json({ code: "DEVELOPMENT_COMING_SOON", message: "Gelişim Koçu beta aşamasında. Çok yakında." });
@@ -105,7 +108,7 @@ router.get("/:id", ensureAuth, async (req, res) => {
     const chapter = await Chapter.findById(req.params.id).select("+draftContent");
     if (!chapter) return res.status(404).json({ message: "Bölüm bulunamadı." });
     await assertWorkOwner(chapter.work, userId);
-    res.json({ item: ownerChapter(chapter) });
+    res.json({ item: editorView(ownerChapter(chapter), req) });
   } catch (err) {
     res.status(err.status || 500).json({ message: err.status && err.status < 500 ? err.message : "Bölüm yüklenemedi." });
   }
@@ -130,7 +133,8 @@ router.post("/", ensureAuth, async (req, res) => {
 // 4. BÖLÜM GÜNCELLE — PUT /api/chapters/:id
 // ════════════════════════════════════════════
 function historyError(res, err) {
-  return res.status(err.status || 503).json({ message: err.status ? err.message : "Kayıt tamamlanamadı. Metniniz korunuyor; tekrar deneyin.", code: err.status ? err.code : undefined, current: err.current });
+  return res.status(err.status || 503).json({ message: err.status ? err.message : "Kayıt tamamlanamadı. Metniniz korunuyor; tekrar deneyin.", code: err.status ? err.code : undefined,
+    current: err.current && editorView(err.current, res.req) });
 }
 router.put("/:id", ensureAuth, async (req, res) => {
   try {
@@ -140,8 +144,10 @@ router.put("/:id", ensureAuth, async (req, res) => {
       return res.json(await updateChapterOrder({ id: req.params.id,
         userId: req.user?.id || req.userId, order: req.body.order }));
     }
-    res.json(await saveChapterVersion({ id: req.params.id, userId: req.user?.id || req.userId,
-      expectedRevision: req.body.expectedRevision, title: req.body.title, content: req.body.content, media: req.body.media, eligibleWordDelta: req.body.eligibleWordDelta }));
+    const result = await saveChapterVersion({ id: req.params.id, userId: req.user?.id || req.userId,
+      expectedRevision: req.body.expectedRevision, title: req.body.title, content: req.body.content, media: req.body.media, eligibleWordDelta: req.body.eligibleWordDelta,
+      paragraphEditing: req.query.editor === '1' });
+    res.json({ ...result, item: editorView(result.item, req) });
   } catch (err) { historyError(res, err); }
 });
 router.post("/:id/checkpoint", ensureAuth, async (req, res) => {
@@ -170,8 +176,9 @@ router.get("/:id/versions/:revision", ensureAuth, async (req, res) => {
 });
 router.post("/:id/versions/:revision/restore", ensureAuth, async (req, res) => {
   try {
-    res.json(await saveChapterVersion({ id: req.params.id, userId: req.user?.id || req.userId,
-      expectedRevision: req.body.expectedRevision, restoreRevision: Number(req.params.revision) }));
+    const result = await saveChapterVersion({ id: req.params.id, userId: req.user?.id || req.userId,
+      expectedRevision: req.body.expectedRevision, restoreRevision: Number(req.params.revision) });
+    res.json({ ...result, item: editorView(result.item, req) });
   } catch (err) { historyError(res, err); }
 });
 
@@ -189,7 +196,7 @@ router.patch("/:id/status", ensureAuth, async (req, res) => {
       try { await sendStaffMail({ subject: 'Bölüm inceleme başvurusu', urgency: 'medium', html: '<p>Yeni bölüm başvurusu moderatör panelinde inceleme bekliyor.</p>' }); }
       catch (error) { console.error('Staff mail gönderilemedi:', error.message); }
     }
-    res.status(result.pending ? 202 : 200).json(result);
+    res.status(result.pending ? 202 : 200).json({ ...result, item: editorView(result.item, req) });
   } catch (error) { historyError(res, error); }
 });
 

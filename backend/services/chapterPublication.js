@@ -3,6 +3,7 @@ import Chapter from '../models/Chapter.js';
 import Work from '../models/Work.js';
 import User from '../models/User.js';
 import { txOptions } from './imageAssets.js';
+import { pinPublishedInlineComments } from './inlineCommentPublication.js';
 
 // Only owner/editor/export paths opt into the private draft field.
 export function ownerChapter(chapter) {
@@ -52,6 +53,7 @@ export async function publishChapterVersion({ id, userId, expectedRevision, stat
     const wasPublished = chapter.status === 'published';
     let pending = false;
     if (status === 'draft') {
+      if (wasPublished) await pinPublishedInlineComments(chapter, session);
       if (['pending_review', 'rejected'].includes(chapter.status) || chapter.reviewStatus) chapter.moderationHold = true;
       applyChapterDraft(chapter);
       chapter.status = 'draft'; chapter.publishedRevision = undefined;
@@ -67,6 +69,7 @@ export async function publishChapterVersion({ id, userId, expectedRevision, stat
         chapter.reviewNote = 'Moderatör onayı bekleniyor.';
         pending = true;
       } else {
+        if (wasPublished && working.content !== chapter.content) await pinPublishedInlineComments(chapter, session);
         applyChapterDraft(chapter);
         chapter.publishedRevision = chapter.revision ?? 0;
         chapter.status = 'published'; chapter.reviewNote = '';

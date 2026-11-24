@@ -1,9 +1,74 @@
 import express from "express";
+import mongoose from "mongoose";
 import ensureAuth from "../middlewares/ensureAuth.js";
 import Character from "../models/Character.js";
+import ImageAsset from "../models/ImageAsset.js";
 import Work from "../models/Work.js";
+import uploadOrigin from "../middlewares/uploadOrigin.js";
+import { imageUpload } from "../middlewares/imageUpload.js";
+import { uploadLimiter, uploadUserLimiter } from "../middlewares/rateLimiter.js";
+import { assertImageAllowed, imagePermission, txOptions } from "../services/imageAssets.js";
 
 const router = express.Router();
+const readPortrait = imageUpload("file", ["jpeg", "png", "webp"], { maxBytes: 2 * 1024 * 1024, portrait: true });
+
+async function ownedPortraitCharacter(req, res, next) {
+  const { id } = req.params;
+  const { workId } = req.query;
+  if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(workId)) {
+    return res.status(400).json({ message: "Geçersiz karakter veya çalışma." });
+  }
+  try {
+    const user = req.user.id;
+    const scope = { _id: id, user, work: workId };
+    if (!await Work.exists({ _id: workId, user }) || !await Character.exists(scope)) {
+      return res.status(404).json({ message: "Karakter bulunamadı." });
+    }
+    req.characterScope = scope;
+    return next();
+  } catch (err) { return next(err); }
+}
+
+router.get("/:id/portrait/:assetId", ensureAuth, async (req, res, next) => {
+  const { id, assetId } = req.params;
+  if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(assetId)) return res.sendStatus(404);
+  try {
+    const user = req.user.id;
+    const url = `/api/characters/${id}/portrait/${assetId}`;
+    const character = await Character.findOne({ _id: id, user, imageUrl: url }).select("work").lean();
+    if (!character || !await Work.exists({ _id: character.work, user })) return res.sendStatus(404);
+    const asset = await ImageAsset.findOne({ _id: assetId, owner: user, url, privatePortrait: true, state: "active" }).select("+bytes");
+    if (!asset?.bytes) return res.sendStatus(404);
+    return res.set("X-Content-Type-Options", "nosniff").type("image/webp").send(asset.bytes);
+  } catch (err) { return next(err); }
+});
+
+router.post("/:id/portrait", uploadLimiter, uploadOrigin, ensureAuth, uploadUserLimiter, ownedPortraitCharacter, imagePermission, readPortrait, async (req, res, next) => {
+  const scope = req.characterScope;
+  try {
+    const item = await mongoose.connection.transaction(async session => {
+      await assertImageAllowed(req.user.id, session);
+      const assetId = new mongoose.Types.ObjectId();
+      const url = `/api/characters/${scope._id}/portrait/${assetId}`;
+      const character = await Character.findOneAndUpdate(scope, { $set: { imageUrl: url }, $unset: { removedImageCase: 1 } }, { new: true, session });
+      if (!character) return null;
+      await ImageAsset.create([{ _id: assetId, owner: req.user.id, url, privatePortrait: true, bytes: req.file.buffer, mime: req.file.mimetype }], { session });
+      return character;
+    }, txOptions);
+    if (!item) return res.status(404).json({ message: "Karakter bulunamadı." });
+    return res.status(201).json({ item });
+  } catch (err) {
+    if (!err.status) return next(err);
+    return res.status(err.status).json({ message: err.message, code: err.code, until: err.until });
+  }
+});
+
+router.delete("/:id/portrait", uploadOrigin, ensureAuth, ownedPortraitCharacter, async (req, res, next) => {
+  try {
+    const item = await Character.findOneAndUpdate(req.characterScope, { $unset: { imageUrl: 1, removedImageCase: 1 } }, { new: true });
+    return item ? res.json({ item }) : res.status(404).json({ message: "Karakter bulunamadı." });
+  } catch (err) { return next(err); }
+});
 
 // DEBUG
 router.get("/ping", (req, res) => {
@@ -79,17 +144,20 @@ router.patch("/:id/position", ensureAuth, async (req, res) => {
   try {
     const userId = req.user?.id;
     const { id } = req.params;
-    const { workId, x, y } = req.body;
+    const { workId, x, y, positionMode } = req.body;
 
     if (!userId) return res.status(401).json({ message: "Giriş yapılmamış." });
     if (!workId) return res.status(400).json({ message: "workId gerekli." });
+    if (!Number.isFinite(x) || !Number.isFinite(y) || (positionMode !== undefined && !["manual", "auto"].includes(positionMode))) {
+      return res.status(400).json({ message: "Geçersiz harita konumu." });
+    }
 
     const work = await Work.findOne({ _id: workId, user: userId });
     if (!work) return res.status(403).json({ message: "Bu çalışmaya erişim yok." });
 
     const item = await Character.findOneAndUpdate(
       { _id: id, user: userId, work: workId },
-      { $set: { x, y } },
+      { $set: { x, y, positionMode: positionMode ?? "manual" } },
       { new: true }
     );
 
@@ -115,7 +183,7 @@ router.post("/", ensureAuth, async (req, res) => {
     const work = await Work.findOne({ _id: workId, user: userId });
     if (!work) return res.status(403).json({ message: "Bu çalışmaya erişim yok." });
 
-    const allowed = ["name", "role", "notes", "tagline", "x", "y", "color", "faction", "location"];
+    const allowed = ["name", "role", "notes", "tagline", "x", "y", "color", "faction", "location", "positionMode"];
     const patch = {};
     for (const k of allowed) {
       if (req.body?.[k] !== undefined) patch[k] = req.body[k];
@@ -128,6 +196,7 @@ router.post("/", ensureAuth, async (req, res) => {
       role:     patch.role    || "",
       x:        typeof patch.x === "number" ? patch.x : 240,
       y:        typeof patch.y === "number" ? patch.y : 200,
+      positionMode: patch.positionMode === "auto" ? "auto" : undefined,
       color:    patch.color   || "#7dd3fc",
       tagline:  patch.tagline || "",
       notes:    patch.notes   || "",

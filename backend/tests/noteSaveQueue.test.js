@@ -25,6 +25,7 @@ describe("note autosave and navigation gate", () => {
     release({ _id: "a", content: "first" });
     expect(await navigation).toBe(true);
     expect(write.mock.calls.map(([x]) => x.content)).toEqual(["first", "latest"]);
+    expect(write.mock.calls.map(([, previous]) => previous.content)).toEqual(["old", "first"]);
     expect(saved.at(-1).content).toBe("latest");
     expect(queue.isDirty()).toBe(false);
     queue.reset({ _id: "b", content: "second note" });
@@ -50,6 +51,6 @@ describe("note autosave and navigation gate", () => {
     queue.reset({ _id: "a", content: "text", workId: "work" });
     queue.change({ _id: "a", content: "", workId: null });
     await queue.flush();
-    expect(write).toHaveBeenCalledWith({ _id: "a", content: "", workId: null });
+    expect(write).toHaveBeenCalledWith({ _id: "a", content: "", workId: null }, { _id: "a", content: "text", workId: "work" });
   });
 });

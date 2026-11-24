@@ -13,6 +13,9 @@ const CharacterSchema = new mongoose.Schema(
     role: { type: String, default: "" },
     x: { type: Number, default: 240 },
     y: { type: Number, default: 200 },
+    positionMode: { type: String, enum: ["manual", "auto"] },
+    imageUrl: { type: String },
+    removedImageCase: { type: String, select: false },
     faction: { type: String, default: "" },   // birazdan kullanacağız
     location: { type: String, default: "" },  // birazdan kullanacağız
     traits: { type: [String], default: [] },

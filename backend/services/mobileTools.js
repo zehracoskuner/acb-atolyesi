@@ -7,6 +7,7 @@ import Plot from '../models/Plot.js';
 import World from '../models/World.js';
 import Work from '../models/Work.js';
 import { sanitizeChapterHtml } from '../utils/sanitizeHtml.js';
+import { notePlainText } from '../utils/richNote.js';
 import { parseDocument } from 'htmlparser2';
 
 const definitions = {
@@ -30,7 +31,7 @@ function htmlText(html) {
 function storageValues(ctx, data) {
   const field = ctx.kind === 'personal' ? 'content' : ctx.kind === 'notes' ? 'body' : null;
   if (!field) return data;
-  const plain = htmlText(data[field]);
+  const plain = ctx.kind === 'notes' ? notePlainText(data[field]) : htmlText(data[field]);
   return { ...data, [field]: plain, [field === 'content' ? 'mobileRichContent' : 'mobileRichBody']: { html: data[field], plain } };
 }
 
@@ -49,8 +50,7 @@ function values(ctx, item) {
     if (key === 'characters') return [key, (item[key] || []).map(String)];
     if (key === 'content' || key === 'body') {
       const rich = item[key === 'content' ? 'mobileRichContent' : 'mobileRichBody'];
-      // Web edits update the plain field. Reuse mobile formatting only while
-      // its source still matches, otherwise preserve the new web text exactly.
+      // Legacy edits can update the plain field on its own. Ignore old formatting after those edits.
       return [key, rich?.plain === item[key] ? rich.html : plainHtml(item[key] || '')];
     }
     return [key, item[key] || ''];

@@ -986,6 +986,7 @@ export default function StoryDetailsPage() {
                 </button>
               )}
 
+              {work.hasCharacterGuide && <Link className="sh-btn-ghost-sm" to={`/story/${workId}/character-guide`}>Karakter Rehberi</Link>}
               {!isOwner && (
                 <div className="sh-secondary-actions">
                   <button

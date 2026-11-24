@@ -24,6 +24,7 @@ import quotes from '../routes/quotes.js';
 import library from '../routes/library.js';
 import readerAccess from '../middlewares/readerAccess.js';
 import User from '../models/User.js';
+import Relationship from '../models/Relationship.js';
 import ChapterVersion from '../models/ChapterVersion.js';
 import PushDevice from '../models/PushDevice.js';
 import PushDelivery from '../models/PushDelivery.js';
@@ -38,7 +39,7 @@ describe('native login → feed → writing → reopen → publication → readi
     vi.stubEnv('JWT_SECRET', randomUUID() + randomUUID());
     repl = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
     await mongoose.connect(repl.getUri(), { dbName: `acb_mobile_test_${randomUUID().replaceAll('-', '')}` });
-    await Promise.all([User.init(), ChapterVersion.init(), PushDevice.init(), PushDelivery.init()]);
+    await Promise.all([User.init(), Relationship.init(), ChapterVersion.init(), PushDevice.init(), PushDelivery.init()]);
     await User.create({ email: 'mobile@example.test', kullaniciAdi: 'gezgin_yazar', sifreHash: await bcrypt.hash('a-real-test-password', 4), emailVerified: true, profileComplete: true, birthYear: 1990, ...newTermsAcceptance() });
     const app = express(); app.use(express.json()); app.use(cookieParser()); app.use('/api', (req, res, next) => req.path.startsWith('/auth/') ? next() : readerAccess(req, res, next));
     for (const [path, router] of Object.entries({ auth, works, chapters, public: publicRoutes, feed, logs, 'reading-progress': progress, mobile, plots, characters, relationships, user: userRoutes, 'reading-lists': readingLists, quotes, library })) app.use(`/api/${path}`, router);
@@ -66,6 +67,10 @@ describe('native login → feed → writing → reopen → publication → readi
     expect((await request('/relationships', 'POST', { workId: a, from: one._id, to: one._id, type: 'love' })).status).toBe(400);
     const relation = await request('/relationships', 'POST', { workId: a, from: two._id, to: one._id, type: 'custom_web_key', directed: true, strength: 5, label: 'Gizli anlaşma' });
     expect(relation.status).toBe(201); expect(relation.data.item).toMatchObject({ type: 'custom_web_key', directed: true, strength: 5, label: 'Gizli anlaşma' });
+    const changed = await request(`/relationships/${relation.data.item._id}`, 'PATCH', { workId: a, label: 'Yeni not', directed: false, strength: 4 });
+    expect(changed.status).toBe(200);
+    expect(changed.data.item).toMatchObject({ from: two._id, to: one._id, type: 'custom_web_key', label: 'Yeni not', directed: false, strength: 4 });
+    expect((await request(`/characters/${one._id}/position`, 'PATCH', { workId: a, x: 430, y: 140 })).data.item).toMatchObject({ x: 430, y: 140, positionMode: 'manual' });
     expect((await request(`/relationships?workId=${b}`)).data.items).toEqual([]);
     expect((await request(`/relationships/${relation.data.item._id}?workId=${b}`, 'DELETE')).status).toBe(404);
     expect((await request(`/relationships/${relation.data.item._id}?workId=${a}`, 'DELETE')).status).toBe(200);
@@ -73,6 +78,38 @@ describe('native login → feed → writing → reopen → publication → readi
     expect((await request(`/characters/${one._id}?workId=${b}`, 'DELETE')).status).toBe(404);
     expect((await request(`/characters/${one._id}?workId=${a}`, 'DELETE')).status).toBe(200);
     expect((await request(`/characters?workId=${a}`)).data.items.map(c => c._id)).toEqual([two._id]);
+  });
+  it('updates a named bond when requested and keeps directions and existing fields intact', async () => {
+    token = (await request('/auth/login', 'POST', { email: 'mobile@example.test', sifre: 'a-real-test-password', client: 'native' })).data.token;
+    const { data: { item: work } } = await request('/works', 'POST', { title: 'Adıyla eşleşen bağlar' });
+    const workId = work._id;
+    const { data: { item: one } } = await request('/characters', 'POST', { workId, name: 'Ada' });
+    const { data: { item: two } } = await request('/characters', 'POST', { workId, name: 'İpek' });
+    const from = one._id;
+    const to = two._id;
+    const create = fields => request('/relationships', 'POST', { workId, from, to, ...fields });
+
+    const old = await create({ type: 'AİLE', label: 'Aile notu', strength: 5, color: '#abc' });
+    expect(old.status).toBe(201);
+    const updated = await create({ type: 'family', label: 'Yeni aile notu', upsert: true });
+    expect(updated.status).toBe(200);
+    expect(updated.data).toMatchObject({ updated: true, item: { _id: old.data.item._id, type: 'AİLE', label: 'Yeni aile notu', strength: 5, color: '#abc' } });
+    expect((await create({ type: 'AİLE' })).status).toBe(409);
+
+    const competing = await Promise.all([
+      create({ type: 'Sırdaş', upsert: true }),
+      create({ type: ' SIRDAŞ ', upsert: true }),
+    ]);
+    expect(competing.map(result => result.status).sort()).toEqual([200, 201]);
+    expect(competing[0].data.item._id).toBe(competing[1].data.item._id);
+    expect(competing[0].data.item.type).toBe('sırdaş');
+    expect((await create({ from: to, to: from, type: 'sırdaş', upsert: true })).status).toBe(201);
+
+    const mutual = await create({ type: 'custom_karma_1234567890', directed: false });
+    const mutualUpdate = await create({ from: to, to: from, type: 'Karma', directed: false, upsert: true, strength: 4 });
+    expect(mutualUpdate.status).toBe(200);
+    expect(mutualUpdate.data.item).toMatchObject({ _id: mutual.data.item._id, from, to, directed: false, strength: 4 });
+    expect((await request(`/relationships?workId=${workId}`)).data.items).toHaveLength(4);
   });
   it('uses real native sessions and preserves rich text through versioned saves and reopen', async () => {
     const login = await request('/auth/login', 'POST', { email: 'mobile@example.test', sifre: 'a-real-test-password', client: 'native' });

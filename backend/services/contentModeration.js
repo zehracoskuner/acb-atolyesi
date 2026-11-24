@@ -7,13 +7,14 @@ import VisualAccount from '../models/VisualAccount.js';
 import Work from '../models/Work.js';
 import User from '../models/User.js';
 import Chapter from '../models/Chapter.js';
+import Character from '../models/Character.js';
 import Notification from '../models/Notification.js';
 import { fail, textField, captureEvidence } from './reportWorkflow.js';
 import { legacyImage, accountForWrite, txOptions, publishImage, purgeImage } from './imageAssets.js';
 
 const DAY = 86400000;
 const same = (a, b) => String(a) === String(b);
-export const imageKinds = ['cover', 'avatar', 'banner'];
+export const imageKinds = ['cover', 'avatar', 'banner', 'characterImage'];
 export const chapterVersion = c => `${c.publishedRevision ?? c.revision ?? 0}:${createHash('sha256').update(JSON.stringify(c.media?.length ? [c.title, c.content, c.media] : [c.title, c.content])).digest('hex')}`;
 const notify = (recipient, text, session, contentCase) => Notification.create([{ recipient, sender: null, type: 'warning', text, contentCase }], { session });
 export function staff(actor) { if (!['admin', 'moderator'].includes(actor?.role)) fail(403, 'Yetkili incelemesi gerekir.'); }
@@ -28,14 +29,17 @@ export async function fileContentReport(actor, body) {
     const evidence = await captureEvidence('chapter', target);
     owner = evidence.targetOwner; snapshot = evidence.evidenceSnapshot.target; version = chapterVersion(snapshot);
   } else {
-    const model = kind === 'cover' ? Work : User;
-    const field = { cover: 'coverImage', avatar: 'avatarUrl', banner: 'bannerImage' }[kind];
+    if (kind === 'characterImage') staff(actor);
+    const model = { cover: Work, characterImage: Character }[kind] || User;
+    const field = { cover: 'coverImage', avatar: 'avatarUrl', banner: 'bannerImage', characterImage: 'imageUrl' }[kind];
     const current = await model.findById(target).select(`${field} user status`).lean();
     if (!current?.[field] || (kind === 'cover' && current.status !== 'published')) fail(404, 'Görsel bulunamadı.');
     if (body.expectedUrl && body.expectedUrl !== current[field]) fail(409, 'Görsel değişti; sayfayı yenileyin.');
-    owner = kind === 'cover' ? current.user : current._id;
-    asset = await legacyImage(current[field], owner);
-    if (asset.state !== 'active') fail(409, 'Bu görsel zaten kaldırıldı.');
+    owner = model === User ? current._id : current.user;
+    asset = kind === 'characterImage'
+      ? await ImageAsset.findOne({ url: current[field], owner, privatePortrait: true })
+      : await legacyImage(current[field], owner);
+    if (asset?.state !== 'active') fail(409, 'Bu görsel zaten kaldırıldı.');
     version = String(asset._id); snapshot = { url: current[field] };
   }
   if (same(owner, actor.id)) fail(400, 'Kendi içeriğinizi şikâyet edemezsiniz.');
@@ -88,6 +92,11 @@ async function syncWork(workId, session) {
   await work.save({ session });
 }
 async function removeImageReferences(asset, entry, session) {
+  if (asset.privatePortrait) {
+    await Character.updateOne({ _id: entry.target, user: entry.owner, imageUrl: asset.url },
+      { $unset: { imageUrl: 1 }, $set: { removedImageCase: String(entry._id) } }, { session });
+    return;
+  }
   await Work.updateMany({ coverImage: asset.url }, { $set: { coverImage: '', removedCoverCase: String(entry._id) }, $inc: { __v: 1 } }, { session });
   for (const [field, marker] of [['avatarUrl', 'removedAvatarCase'], ['bannerImage', 'removedBannerCase']]) {
     await User.updateMany({ [field]: asset.url }, { $set: { [field]: '', [marker]: String(entry._id) }, $inc: { __v: 1 } }, { session });
@@ -114,7 +123,8 @@ export async function decideContent(id, actor, body) {
   let restored;
   if (action === 'reverse' && entry.asset) {
     const asset = await ImageAsset.findById(entry.asset).select('+bytes');
-    if (asset.bytes) restored = await publishImage(asset.bytes);
+    if (asset.privatePortrait && asset.bytes) restored = { secure_url: asset.url };
+    else if (asset.bytes) restored = await publishImage(asset.bytes);
     else if (asset.delivery === 'external') restored = { secure_url: asset.url };
     else fail(409, 'Özel kanıt yok; sağlayıcı yedeğinden geri yükleme gerekir.');
   }
@@ -147,19 +157,28 @@ export async function decideContent(id, actor, body) {
         const asset = await ImageAsset.findById(current.asset).select('+bytes').session(session);
         if (action === 'remove') {
           if (current.status !== 'pending') fail(409, 'Karar verilmiş.');
-          asset.state = 'removed'; asset.delivery = asset.publicId ? 'purge_pending' : 'external';
+          asset.state = 'removed'; asset.delivery = asset.privatePortrait ? 'purged' : asset.publicId ? 'purge_pending' : 'external';
           await asset.save({ session });
           await removeImageReferences(asset, current, session);
           current.status = 'removed';
         } else {
           if (current.status !== 'removed') fail(409, 'Kaldırma kararı yok.');
-          if (restored.secure_url === asset.url) { asset.state = 'active'; await asset.save({ session }); }
+          if (restored.secure_url === asset.url) {
+            asset.state = 'active';
+            if (asset.privatePortrait) asset.delivery = 'available';
+            await asset.save({ session });
+          }
           else await ImageAsset.create([{ owner: asset.owner, url: restored.secure_url, publicId: restored.public_id,
             bytes: asset.bytes, mime: asset.mime, providerVersion: String(restored.version || '') }], { session });
           // Only untouched placeholders created by this exact decision may be restored.
-          await Work.updateMany({ removedCoverCase: String(id), coverImage: '' }, { $set: { coverImage: restored.secure_url, removedCoverCase: '' }, $inc: { __v: 1 } }, { session });
-          for (const [field, marker] of [['avatarUrl', 'removedAvatarCase'], ['bannerImage', 'removedBannerCase']]) {
-            await User.updateMany({ [marker]: String(id), [field]: '' }, { $set: { [field]: restored.secure_url, [marker]: '' }, $inc: { __v: 1 } }, { session });
+          if (asset.privatePortrait) {
+            await Character.updateOne({ _id: current.target, user: current.owner, removedImageCase: String(id), imageUrl: { $exists: false } },
+              { $set: { imageUrl: asset.url }, $unset: { removedImageCase: 1 } }, { session });
+          } else {
+            await Work.updateMany({ removedCoverCase: String(id), coverImage: '' }, { $set: { coverImage: restored.secure_url, removedCoverCase: '' }, $inc: { __v: 1 } }, { session });
+            for (const [field, marker] of [['avatarUrl', 'removedAvatarCase'], ['bannerImage', 'removedBannerCase']]) {
+              await User.updateMany({ [marker]: String(id), [field]: '' }, { $set: { [field]: restored.secure_url, [marker]: '' }, $inc: { __v: 1 } }, { session });
+            }
           }
           current.status = 'reversed';
         }

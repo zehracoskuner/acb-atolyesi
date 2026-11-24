@@ -11,7 +11,9 @@ import mongoose from "mongoose";
 import Fingerprint from "../models/DevelopmentFingerprint.js";
 import Sample from "../models/DevelopmentSample.js";
 import ChapterVersion from "../models/ChapterVersion.js";
+import InlineComment from "../models/InlineComment.js";
 import Work from "../models/Work.js";
+import CharacterGuide from "../models/CharacterGuide.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import chapterRouter from "../routes/chapter.js";
@@ -188,6 +190,7 @@ beforeEach(() => {
     return rows;
   });
   mockStorage(Work, "works");
+  vi.spyOn(CharacterGuide, "exists").mockResolvedValue(null);
   // This suite substitutes storage only. The real lookup/facet pipeline and
   // its pagination are exercised in discovery.integration.test.js.
   vi.spyOn(Work, "aggregate").mockImplementation(async pipeline => {
@@ -214,6 +217,7 @@ beforeEach(() => {
     return query(Work.hydrate(structuredClone(row)));
   });
   mockStorage(Chapter, "chapters");
+  vi.spyOn(InlineComment, "distinct").mockImplementation(() => query([]));
   vi.spyOn(Work, "findByIdAndUpdate").mockImplementation(async (key, update) => {
     writes.push(["works", "update", String(key)]);
     const work = db.works[String(key)];

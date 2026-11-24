@@ -7,6 +7,7 @@ import User from "../models/User.js";
 import Work from "../models/Work.js";
 import Chapter from "../models/Chapter.js";
 import ChapterVersion from "../models/ChapterVersion.js";
+import InlineComment from "../models/InlineComment.js";
 import AuthSession from "../models/AuthSession.js";
 import Fingerprint from "../models/DevelopmentFingerprint.js";
 import Sample from "../models/DevelopmentSample.js";
@@ -18,6 +19,7 @@ import { chapterVersion } from "../services/contentModeration.js";
 import { captureEvidence } from "../services/reportWorkflow.js";
 import chapterRouter from "../routes/chapter.js";
 import publicRouter from "../routes/public.js";
+import inlineCommentsRouter from "../routes/inlineComments.js";
 import { reviewChapter } from '../services/chapterPublication.js';
 vi.mock("../services/emailService.js", () => ({ sendMail: vi.fn(), sendStaffMail: vi.fn(), SITE_URL: "https://example.test" }));
 const uri = process.env.CHAPTER_TEST_MONGO_URI;
@@ -28,9 +30,9 @@ describe.skipIf(!uri)("private edits to published chapters", () => {
     if (!/^mongodb:\/\/(localhost|127\.0\.0\.1):\d+\/?(?:\?.*)?$/.test(uri)) throw new Error("Loopback only");
     vi.stubEnv("JWT_SECRET", randomBytes(48).toString("hex"));
     await mongoose.connect(uri, { dbName: database });
-    await Promise.all([User, Work, Chapter, ChapterVersion, AuthSession, Fingerprint, Sample].map(model => model.init()));
+    await Promise.all([User, Work, Chapter, ChapterVersion, InlineComment, AuthSession, Fingerprint, Sample].map(model => model.init()));
     const app = express(); app.use(express.json());
-    app.use("/chapters", chapterRouter); app.use("/public", publicRouter);
+    app.use("/chapters", chapterRouter); app.use("/public", publicRouter); app.use("/inline-comments", inlineCommentsRouter);
     server = app.listen(0, "127.0.0.1"); await once(server, "listening");
     base = `http://127.0.0.1:${server.address().port}`;
   });
@@ -97,6 +99,43 @@ describe.skipIf(!uri)("private edits to published chapters", () => {
     const result = await save("<p>Live text</p>", 1);
     expect(result.item.hasUnpublishedChanges).toBe(false);
     expect(result.item.status).toBe("published");
+  });
+  it('keeps both existing and new paragraph comments through draft, publish, move and deletion', async () => {
+    const editor = `/chapters/${chapter._id}?editor=1`;
+    const listing = `/inline-comments?chapterId=${chapter._id}`;
+    const live = (await read()).body.item;
+    const [block] = live.blocks;
+    const existing = await InlineComment.create({
+      workId: work._id, chapterId: chapter._id, author: owner._id, content: 'Existing',
+      paragraphIndex: 0, blockId: block.id, paragraphText: block.text, contentVersion: live.contentVersion,
+    });
+    const posted = await request('/inline-comments', 'POST', {
+      workId: String(work._id), chapterId: String(chapter._id), content: 'New',
+      paragraphIndex: 0, blockId: block.id, contentVersion: live.contentVersion,
+    });
+    expect(posted.status).toBe(201);
+    const content = (await request(editor)).body.item.content;
+    const rewritten = `<p data-paragraph-id="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">Intro</p>${content.replace('Live text', 'Updated text')}`;
+    expect((await request(editor, 'PUT', { content: rewritten, expectedRevision: 0 })).status).toBe(200);
+    expect((await request(listing + '&summary=1')).body).toMatchObject({ counts: { 0: 2 }, detachedCount: 0 });
+    expect((await publish(1)).status).toBe(200);
+    expect((await InlineComment.findById(existing._id)).paragraphId).toBe(block.paragraphId);
+    expect((await request(listing + '&summary=1')).body).toMatchObject({ counts: { 1: 2 }, detachedCount: 0 });
+    expect((await request(listing + '&paragraphIndex=1&page=1')).body).toMatchObject({
+      total: 2, items: [
+        { content: 'Existing', previousPassage: true, paragraphText: 'Live text', attached: true },
+        { content: 'New', previousPassage: true, paragraphText: 'Live text', attached: true },
+      ],
+    });
+    expect((await read()).body.item.content).toBe('<p>Intro</p><p>Updated text</p>');
+    expect((await request(editor, 'PUT', {
+      content: '<p data-paragraph-id="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">Intro</p><p data-paragraph-id="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb">Live text</p>', expectedRevision: 1,
+    })).status).toBe(200);
+    expect((await publish(2)).status).toBe(200);
+    expect((await request(listing + '&summary=1')).body).toMatchObject({ counts: {}, detachedCount: 2 });
+    expect((await request(listing + '&paragraphIndex=-1&page=1')).body).toMatchObject({
+      total: 2, items: [{ attached: false, paragraphText: 'Live text' }, { attached: false, paragraphText: 'Live text' }],
+    });
   });
   it("publication restrictions still send the edited version to human review", async () => {
     await save("<p>Restricted edit</p>");

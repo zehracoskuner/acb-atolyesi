@@ -25,8 +25,8 @@ async function request(path, { user = claimant, role = 'user', method = 'GET', b
 async function create(reason = 'telif_ihlali') {
   return request('/reports', { method: 'POST', body: { targetType: 'chapter', targetId: chapter._id, reason, originalWork: 'https://example.com/original (özel kanıt)', description: 'İzinsiz kopya' } });
 }
-async function staff(id, revision, operation, extra = {}) {
-  return request(`/admin/reports/${id}/workflow`, { user: admin, role: 'admin', method: 'POST', body: { revision, operation, ...extra } });
+async function staff(id, revision, operation, extra = {}, user = admin) {
+  return request(`/admin/reports/${id}/workflow`, { user, role: 'admin', method: 'POST', body: { revision, operation, ...extra } });
 }
 describe('Report HTTP workflow with isolated MongoDB', () => {
   beforeAll(async () => {
@@ -77,7 +77,7 @@ describe('Report HTTP workflow with isolated MongoDB', () => {
       expect((await request(`/admin/reports/${id}/${op}`, { user: admin, role: 'admin', method })).status).toBe(409);
     }
     expect((await request(`/reports/${id}/decision`, { method: 'POST', body: {} })).status).toBe(400);
-    expect((await request(`/admin/reports/${id}/workflow`, { user: claimant, role: 'admin', method: 'POST', body: { revision: 0, operation: 'review' } })).status).toBe(403);
+    expect((await request(`/admin/reports/${id}/workflow`, { user: claimant, method: 'POST', body: { revision: 0, operation: 'review' } })).status).toBe(403);
   });
   it('snapshot survives edits, conflicting decisions cannot both commit, notification failure does not roll back', async () => {
     const id = (await create()).data.sikayet.id;
@@ -135,18 +135,37 @@ describe('Report HTTP workflow with isolated MongoDB', () => {
     }
     expect(await Report.countDocuments()).toBe(0);
   });
-  it('allows involved staff to inspect while preserving decision restrictions', async () => {
+  it('allows moderators to inspect copyright files while restricting workflow changes to admins', async () => {
     const id = (await create()).data.sikayet.id;
-    for (const user of [owner, claimant]) for (const role of ['admin', 'moderator']) {
-      const detail = await request(`/admin/reports/${id}`, { user, role });
+    for (const user of [owner, claimant]) {
+      const detail = await request(`/admin/reports/${id}`, { user, role: 'moderator' });
       expect(detail.status).toBe(200);
       expect(detail.data.report.evidenceSnapshot.target.content).toBe('Başvuru anındaki metin');
       expect(detail.data.report.canManage).toBe(false);
-      expect((await request(`/admin/reports/${id}/workflow`, { user, role, method: 'POST', body: {
-        operation: 'decision', revision: 0, outcome: 'dismissed', action: 'none', rationale: 'İncelendi',
+      expect((await request(`/admin/reports/${id}/workflow`, { user, role: 'moderator', method: 'POST', body: {
+        operation: 'review', revision: 0,
       } })).status).toBe(403);
     }
-    expect((await request(`/admin/reports/${id}`, { user: admin, role: 'admin' })).data.report.canManage).toBe(true);
   });
-
+  it.each([
+    ['reporter', claimant],
+    ['target owner', owner],
+    ['unrelated admin', admin],
+  ])('allows the %s to review and decide a copyright file as an admin', async (_label, user) => {
+    const id = (await create()).data.sikayet.id;
+    expect((await request(`/admin/reports/${id}`, { user, role: 'admin' })).data.report.canManage).toBe(true);
+    expect((await staff(id, 0, 'review', {}, user)).status).toBe(200);
+    const result = await staff(id, 1, 'decision', { outcome: 'dismissed', action: 'none', rationale: 'İncelendi.' }, user);
+    expect(result.status).toBe(200);
+    expect(result.data.report.decisions[0]).toMatchObject({ by: String(user), rationale: 'İncelendi.' });
+  });
+  it('allows an admin to decide a legacy copyright report they filed on their own work', async () => {
+    const report = await Report.create({ reporter: owner, targetType: 'work', targetId: work._id, reason: 'telif_ihlali' });
+    expect((await request(`/admin/reports/${report._id}`, { user: owner, role: 'admin' })).data.report.canManage).toBe(true);
+    expect((await staff(report._id, 0, 'review', {}, owner)).status).toBe(200);
+    const result = await staff(report._id, 1, 'decision', { outcome: 'dismissed', action: 'none', rationale: 'Deneme başvurusu.' }, owner);
+    expect(result.status).toBe(200);
+    expect(result.data.report).toMatchObject({ status: 'dismissed', targetOwner: String(owner), resolvedBy: String(owner) });
+    expect(await Notification.countDocuments({ report: report._id, recipient: owner })).toBe(2);
+  });
 });

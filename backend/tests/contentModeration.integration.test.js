@@ -12,6 +12,7 @@ import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
 import User from '../models/User.js';
 import Work from '../models/Work.js';
+import Character from '../models/Character.js';
 import Chapter from '../models/Chapter.js';
 import ChapterVersion from '../models/ChapterVersion.js';
 import Report from '../models/Report.js';
@@ -26,6 +27,7 @@ import uploadRoutes from '../routes/upload.js';
 import userRoutes from '../routes/user.js';
 import worksRoutes from '../routes/works.js';
 import chapterRoutes from '../routes/chapter.js';
+import characterRoutes from '../routes/characters.js';
 import aiRoutes from '../routes/ai.js';
 import { prepareContentModeration } from '../services/prepareContentModeration.js';
 import { fileContentReport, decideContent, manualVisualBlock } from '../services/contentModeration.js';
@@ -52,12 +54,13 @@ beforeAll(async () => {
   app.use('/api/reports', ensureAuth, reportRoutes);
   app.use('/api/ai', aiRoutes);
   app.use('/api/upload', uploadRoutes); app.use('/api/user', userRoutes); app.use('/api/works', worksRoutes); app.use('/api/chapters', chapterRoutes);
+  app.use('/api/characters', characterRoutes);
   server = app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
   base = `http://127.0.0.1:${server.address().port}/api`;
 }, 120000);
 afterAll(async () => { if (server) await new Promise(resolve => server.close(resolve)); await mongoose.disconnect(); await replica?.stop(); vi.unstubAllEnvs(); });
 beforeEach(async () => {
-  for (const model of [User, Work, Chapter, ChapterVersion, Report, ContentCase, ImageAsset, VisualAccount, Notification]) await model.deleteMany({});
+  for (const model of [User, Work, Character, Chapter, ChapterVersion, Report, ContentCase, ImageAsset, VisualAccount, Notification]) await model.deleteMany({});
   [owner, admin, moderator, ...reporters] = await User.create(['user', 'admin', 'moderator', ...Array(7).fill('user')].map((role, i) => ({ email: `u${i}@example.test`, kullaniciAdi: `member${i}`, role, profileComplete: true, birthYear: 1990, ...newTermsAcceptance() })));
   vi.spyOn(cloudinary.uploader, 'destroy').mockResolvedValue({ result: 'ok' });
   vi.spyOn(cloudinary.uploader, 'upload_stream').mockImplementation((options, callback) => new Writable({ write(chunk, encoding, done) { done(); }, final(done) {
@@ -85,6 +88,50 @@ async function decision(caseId, action = 'remove', by = admin) {
   return decideContent(caseId, actor(by), { action, revision: current.revision, reason: 'Bağlam incelendi; gerekçeli karar.', message: 'Destek ekibine başvurabilirsiniz.' });
 }
 async function violation(kind = 'avatar') { const fixture = await image(kind); const r = await report(fixture); await decision(r.contentCase); return r.contentCase; }
+
+it('stores private portraits durably, keeps the last successful upload, and supports moderation reversal', async () => {
+  const work = await Work.create({ user: owner._id, title: 'Özel karakterler' });
+  const character = await Character.create({ user: owner._id, work: work._id, name: 'Lavinia' });
+  const path = `/characters/${character._id}/portrait?workId=${work._id}`;
+  const ownerToken = await createNativeSession(owner);
+  const otherToken = await createNativeSession(reporters[0]);
+  const fetchAs = (url, token, options = {}) => fetch(base.replace(/\/api$/, '') + url, {
+    ...options, headers: { Authorization: `Bearer ${token}` },
+  });
+  const upload = (bytes, token = ownerToken, mime = 'image/png') => {
+    const body = new FormData();
+    body.append('file', new Blob([bytes], { type: mime }), 'portrait.png');
+    return fetchAs('/api' + path, token, { method: 'POST', body });
+  };
+  const largePhoto = await sharp({ create: { width: 1200, height: 1600, channels: 3, background: 'purple' } })
+    .withMetadata().png().toBuffer();
+  expect((await upload(png, otherToken)).status).toBe(404);
+  const stored = await upload(largePhoto);
+  expect(stored.status).toBe(201);
+  const { item } = await stored.json();
+  expect((await upload(png, ownerToken, 'image/jpeg')).status).toBe(400);
+  expect((await upload(Buffer.alloc(2 * 1024 * 1024 + 1))).status).toBe(400);
+  expect((await request(`/characters?workId=${work._id}`)).data.items[0].imageUrl).toBe(item.imageUrl);
+  expect((await fetchAs(item.imageUrl, otherToken)).status).toBe(404);
+  const picture = await fetchAs(item.imageUrl, ownerToken);
+  expect(picture.headers.get('content-type')).toBe('image/webp');
+  const metadata = await sharp(Buffer.from(await picture.arrayBuffer())).metadata();
+  expect(metadata).toMatchObject({ format: 'webp', width: 768, height: 1024 });
+  expect(metadata.exif).toBeUndefined();
+  const complaint = { targetType: 'characterImage', targetId: item._id, expectedUrl: item.imageUrl, reason: 'uygunsuz_icerik' };
+  expect((await request('/reports', reporters[0], 'POST', complaint)).status).toBe(403);
+  const result = await request('/reports', moderator, 'POST', complaint);
+  expect(result.status).toBe(201);
+  const caseId = result.data.sikayet.contentCase;
+  const removed = await decision(caseId);
+  expect(removed.entry.status).toBe('removed');
+  expect((await fetchAs(item.imageUrl, ownerToken)).status).toBe(404);
+  expect((await decision(caseId, 'reverse')).entry.status).toBe('reversed');
+  expect((await fetchAs(item.imageUrl, ownerToken)).status).toBe(200);
+  expect((await request(path, owner, 'DELETE')).data.item.imageUrl).toBeUndefined();
+  expect((await fetchAs(item.imageUrl, ownerToken)).status).toBe(404);
+  expect(cloudinary.uploader.upload_stream).not.toHaveBeenCalled();
+});
 
 it('requires membership to report and staff roles to view evidence or decide', async () => {
   const f = await image();

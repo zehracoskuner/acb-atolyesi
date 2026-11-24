@@ -66,7 +66,6 @@ export async function transition(r, actor, operation, body) {
       if (r.targetType === 'comment') owner = (await commentTarget(r.targetId))?.author;
       if (owner) { r.targetOwner = owner; set.targetOwner = owner; }
     }
-    if (same(r.reporter, actor.id) || same(r.targetOwner, actor.id)) fail(403, 'Taraf olduğunuz dosyada karar veremezsiniz.');
     if (operation === 'note') set.adminNote = textField(body.privateNote);
     if (operation === 'review') {
       if (stage !== 'received') fail(409, 'İnceleme bu aşamada başlatılamaz.');

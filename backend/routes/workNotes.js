@@ -2,6 +2,8 @@ import express from "express";
 import WorkNote from "../models/WorkNote.js";
 import ensureAuth from "../middlewares/ensureAuth.js";
 import ensureWorkOwner from "../middlewares/ensureWorkOwner.js";
+import { notePlainText } from "../utils/richNote.js";
+import { sanitizeChapterHtml } from "../utils/sanitizeHtml.js";
 
 const router = express.Router({ mergeParams: true });
 router.use(ensureAuth, ensureWorkOwner(req => req.params.workId));
@@ -21,8 +23,18 @@ router.post("/", async (req, res) => {
 
 router.put("/:noteId", async (req, res) => {
   const { workId, noteId } = req.params;
+  const { richBody } = req.body;
   const patch = Object.fromEntries(["title", "body", "source", "meta"]
     .filter(key => req.body[key] !== undefined).map(key => [key, req.body[key]]));
+  if (richBody !== undefined) {
+    if (typeof richBody !== "string" || richBody.length > 500000) {
+      return res.status(400).json({ message: "Not içeriği geçersiz veya çok uzun." });
+    }
+    const html = sanitizeChapterHtml(richBody);
+    const plain = notePlainText(html);
+    patch.body = plain;
+    patch.mobileRichBody = { html, plain };
+  }
   const item = await WorkNote.findOneAndUpdate(
     { _id: noteId, workId },
     { $set: patch },

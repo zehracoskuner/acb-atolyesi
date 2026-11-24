@@ -6,6 +6,7 @@ import ChapterVersion from "../models/ChapterVersion.js";
 import { sanitizeChapterHtml } from "../utils/sanitizeHtml.js";
 import { ownerChapter } from "./chapterPublication.js";
 import { validateChapterMedia } from "./chapterMedia.js";
+import { chapterEditorContent, preserveLegacyClientParagraphIds } from "./readerContent.js";
 
 import { initializeDevelopment, advanceDevelopment, developmentStatus } from "./developmentProgress.js";
 
@@ -73,7 +74,7 @@ export async function updateChapterOrder({ id, userId, order }) {
   }, { readConcern: { level: "snapshot" }, writeConcern: { w: "majority" }, readPreference: "primary" });
 }
 
-export async function saveChapterVersion({ id, userId, expectedRevision, title, content, media, restoreRevision, eligibleWordDelta = 0 }) {
+export async function saveChapterVersion({ id, userId, expectedRevision, title, content, media, restoreRevision, eligibleWordDelta = 0, paragraphEditing = false }) {
   if (!Number.isSafeInteger(eligibleWordDelta) || eligibleWordDelta < 0) throw fail(400, "Geçersiz kelime artışı.");
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)
     throw fail(400, "Güncel kayıt bilgisi gerekli. Bölümü yeniden açın.");
@@ -100,10 +101,17 @@ export async function saveChapterVersion({ id, userId, expectedRevision, title, 
     }
     const current = ownerChapter(chapter);
     const nextTitle = title === undefined ? current.title : title.trim() || current.title;
-    const nextContent = content === undefined ? current.content : sanitizeChapterHtml(content);
+    const cleanContent = value => sanitizeChapterHtml(value, { paragraphIds: true });
+    const matchesContent = (next, saved) => next === saved ||
+      (paragraphEditing && next === cleanContent(chapterEditorContent(saved)));
+    let nextContent = content === undefined ? current.content : cleanContent(content);
+    if (content !== undefined && !source && !paragraphEditing) {
+      nextContent = preserveLegacyClientParagraphIds(nextContent, current.content);
+    }
     const nextMedia = media === undefined ? (current.media || []) : await validateChapterMedia(media, userId, session, current.media || []);
-    const contentChanged = nextContent !== current.content;
-    const changed = nextTitle !== current.title || nextContent !== current.content || JSON.stringify(nextMedia) !== JSON.stringify(current.media || []);
+    const contentChanged = !matchesContent(nextContent, current.content);
+    if (!contentChanged) nextContent = current.content;
+    const changed = nextTitle !== current.title || contentChanged || JSON.stringify(nextMedia) !== JSON.stringify(current.media || []);
     if (!changed && source) throw fail(400, "Seçilen metin mevcut metinle aynı; geri yükleme gerekmiyor.");
     if (!changed && !source) {
       if (work.isModified()) await work.save({ session });
@@ -123,7 +131,7 @@ export async function saveChapterVersion({ id, userId, expectedRevision, title, 
     if (["pending_review", "rejected"].includes(chapter.status)) chapter.moderationHold = true;
     if (keepPublished) {
       chapter.publishedRevision ??= revision;
-      chapter.hasUnpublishedChanges = nextTitle !== chapter.title || nextContent !== chapter.content || JSON.stringify(nextMedia) !== JSON.stringify(chapter.media || []);
+      chapter.hasUnpublishedChanges = nextTitle !== chapter.title || !matchesContent(nextContent, chapter.content) || JSON.stringify(nextMedia) !== JSON.stringify(chapter.media || []);
       chapter.draftContent = chapter.hasUnpublishedChanges ? { title: nextTitle, content: nextContent, media: nextMedia } : undefined;
       chapter.set({ revision: revision + 1, savedAt });
     } else {

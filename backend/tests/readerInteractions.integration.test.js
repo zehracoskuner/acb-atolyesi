@@ -171,6 +171,13 @@ describe('paragraph anchors and general report targets', () => {
   it('uses server reasons, validates comment targets and delivers chapter and paragraph reports to moderators', async () => {
     const root = (await create()).body.item, paragraph = (await inline()).body.item;
     const reasons = await request('/reports/reasons'); expect(reasons.body.reasons).toHaveProperty('spam');
+    expect(reasons.body.reasons).not.toHaveProperty('telif_ihlali');
+    for (const targetId of [root._id, paragraph._id]) {
+      const response = await request('/reports', { method: 'POST', user: 2, body: {
+        targetType: 'comment', targetId, reason: 'telif_ihlali', description: 'Gerekçe', originalWork: 'Özgün eser',
+      } });
+      expect(response.status).toBe(400);
+    }
     const report = (targetId, user = 2) => request('/reports', { method: 'POST', user, body: { targetType: 'comment', targetId, reason: 'spam' } });
     expect((await report(root._id, null)).status).toBe(401); expect((await report(root._id, 1)).status).toBe(400);
     expect((await report(String(new mongoose.Types.ObjectId()))).status).toBe(404);

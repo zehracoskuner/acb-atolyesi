@@ -26,7 +26,7 @@
 | `PATCH/DELETE /api/comments/:commentId` | Sahiplik kontrolü korunur. Düzenleme atomik silinmemiş durum koşulu kullanır. Silme yanıtında `deletedId` ve `tombstone` eklenir. Web de bu yanıtla zinciri korur. |
 | `POST /api/comments/:commentId/like` | Mevcut atomik `liked`/`likeCount` yanıtı kullanılır; ham beğenen kimlikleri yayınlanmaz. |
 | `GET /api/inline-comments` | Oturum kontrolü ve mevcut sayfalama/özet korunur; sayfalı yanıta `total` ve `page` eklenir. Yalnızca yayınlanmış yorumlar görünür; gizli moderasyon notları çıkarılır. |
-| **`GET /api/reports/reasons`** | Yeni: mevcut backend neden sabitini döndürür. Mobil yorum formu aynı nedenleri kullanır. |
+| **`GET /api/reports/reasons`** | Yorum şikâyetlerinin nedenlerini döndürür. Mobil yorum formu bu listeyi kullanır. |
 | `POST /api/reports` | `targetType: "comment"` gerçek hedefi iki mevcut yorum koleksiyonunda da doğrular. Kendi/olmayan/erişilemeyen yorum reddedilir; bekleyen mükerrer şikâyet 409 döner. Açıklama isteğe bağlıdır; telif için mevcut özgün eser bilgisi zorunluluğu korunur. |
 | Admin/moderatör rapor listesi | Paragraf yorum hedefini de başlık ve eser bağlamıyla çözer; mevcut kaldırma eylemi ilgili paragraf yorumunu reddedebilir. |
 
@@ -36,9 +36,9 @@ Yeni bildirim türü veya gerçek zamanlı altyapı eklenmedi. Mevcut kendi kend
 
 İki istemci de sunucunun güvenli `blocks`/`contentVersion` verisini kullanır. Boşluk HTML'i görsel olarak korunur ama yorum paragrafı olarak numaralandırılmaz (`index: -1`). İç blokları olan editör `div` sarmalayıcıları ayrıştırılır; güvenli hizalama stilleri korunur. Başlık, paragraf, alıntı ve her liste öğesi bloktur. Bir paragraf veya `pre` içindeki şiir dizeleri/satır sonları aynı bloğun parçasıdır.
 
-Blok kimliği güvenli HTML'in SHA-256 parmak izidir. Değişmeden kalan benzersiz blok yer değiştirse de eşleşebilir. Aynı HTML'den birden çok blok varsa eşleşme ancak aynı yayın sürümü ve aynı indeksle güvenilirdir. Metin/biçim değişirse veya yeni sürümde tekrar eden blok belirsizleşirse yorum güncel paragrafa taşınmaz.
+Web ve mobil editörler paragraflara kalıcı kimlik verir. Yazım ve biçim düzenlemelerinde veya paragraf taşındığında yorum aynı paragrafa bağlı kalır. Metin değişmişse okur önceki paragraf metnini yorumdan açabilir. Paragraf silindiğinde ya da bölme ve birleştirmede hangi parçaya ait olduğu belirsizleştiğinde yorum eski paragraf metniyle birlikte Eski pasaj yorumları alanında görünür.
 
-Eski yalnızca `paragraphIndex` taşıyan kayıtlar silinmez veya topluca numaralandırılmaz; önceki sürüm yorumları alanında korunur. Bunların özgün paragrafı geçmiş yayın verisi olmadan kanıtlanamaz. Bu çözüm editörün taşıdığı kalıcı blok UUID'si veya anlamsal metin eşleştirme değildir. Misafir önizlemesine tam metin gönderilmez; eşleştirme için yalnızca gerçek yayın sürümü ve blok parmak izleri aktarılır.
+Yayın değişirken eski parmak iziyle özgün pasajı doğrulanan yorumlar kalıcı paragraf kimliğine bağlanır. Yalnızca paragraf sırasını taşıyan eski kayıtlar Eski pasaj yorumları alanında korunur. Yeni yorum gönderilirken sunucu güncel yayın sürümünü ve blok parmak izini doğrular.
 
 Bildirim modelinde yorum kimliği yoktur. Mobil yorum bildirimi doğru eser/bölümün yorum panelini açar; tek bir yoruma otomatik odaklama desteği varmış gibi davranılmaz.
 

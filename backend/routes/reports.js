@@ -25,12 +25,15 @@ const SEBEP_ETIKETLERI = {
   nefret_soylemi:  "Nefret Söylemi",
   diger:           "Diğer",
 };
+const YORUM_SEBEP_ETIKETLERI = Object.fromEntries(
+  Object.entries(SEBEP_ETIKETLERI).filter(([reason]) => reason !== "telif_ihlali"),
+);
 
 const TARGET_LABELS = {
   work: "Eser", chapter: "Bölüm", user: "Kullanıcı", comment: "Yorum",
 };
 
-router.get('/reasons', (_req, res) => res.json({ reasons: SEBEP_ETIKETLERI }));
+router.get('/reasons', (_req, res) => res.json({ reasons: YORUM_SEBEP_ETIKETLERI }));
 
 /* ─── Şikayet oluştur ─────────────────────────
    POST /api/reports
@@ -52,7 +55,7 @@ router.post("/", async (req, res) => {
     }
 
     const gecerliTargetler = ["work", "chapter", "user", "comment"];
-    const gecerliSebepler  = Object.keys(SEBEP_ETIKETLERI);
+    const gecerliSebepler  = Object.keys(targetType === "comment" ? YORUM_SEBEP_ETIKETLERI : SEBEP_ETIKETLERI);
 
     if (!gecerliTargetler.includes(targetType))
       return res.status(400).json({ message: "Geçersiz hedef türü." });

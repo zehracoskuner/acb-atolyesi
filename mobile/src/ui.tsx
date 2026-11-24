@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { message } from './api';
 
 // The website's Explore / Workshop palette. Font files are bundled for offline use.
-const light = { paper: '#F8F7F3', card: '#FFFFFF', ink: '#242C29', muted: '#64716B', accent: '#236455', rust: '#A23D2B', line: '#E4E7DF', soft: '#EDEEE7', sage: '#58694F', pale: '#E4EFE7', onAccent: '#FFFFFF' };
+const light = { paper: '#F8F7F3', card: '#FFFFFF', ink: '#242C29', muted: '#64716B', accent: '#109d7c', rust: '#a56358', line: '#E4E7DF', soft: '#EDEEE7', sage: '#bee4a9', pale: '#E4EFE7', onAccent: '#FFFFFF' };
 const dark = { paper: '#141D1A', card: '#1C2823', ink: '#F0EFE5', muted: '#ACBAB1', accent: '#96D3B7', rust: '#FFAD98', line: '#37473E', soft: '#29382F', sage: '#ACC69E', pale: '#293F34', onAccent: '#14291F' };
 type ThemeMode = 'light' | 'dark' | 'system';
 const ThemeContext = createContext({ mode: 'system' as ThemeMode, dark: false, setMode: (_mode: ThemeMode) => {}, error: '' });

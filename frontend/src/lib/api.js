@@ -110,7 +110,29 @@ export async function apiDownloadBook(workId, format) {
   try { link.click(); } finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
 }
 
+const characterPortraitPath = /^\/api\/characters\/[a-z\d-]+\/portrait\/[a-z\d-]+$/i;
+const guidePortraitPath = /^\/api\/public\/works\/[a-f\d]{24}\/character-guide\/portraits\/[a-f\d]{24}\/[a-f\d]{24}(?:\?duringChapter=(?:start|[a-f\d]{24}))?$/i;
+
+export function isPrivateCharacterPortrait(url) {
+  return typeof url === "string" && (characterPortraitPath.test(url) || guidePortraitPath.test(url));
+}
+
+export async function apiGetCharacterPortrait(url, { signal } = {}) {
+  if (!isPrivateCharacterPortrait(url)) throw new Error("Geçersiz karakter fotoğrafı adresi.");
+  const path = API_BASE.replace(/\/$/, "") + url.slice("/api".length);
+  const res = await fetch(path, {
+    headers: getHeaders(false), credentials: "include", cache: "no-store", redirect: "error", signal,
+  });
+  if (!res.ok) throw new Error("Fotoğraf yüklenemedi.");
+  const blob = await res.blob();
+  if (!blob.size || !["image/webp", "image/jpeg", "image/png"].includes(blob.type)) {
+    throw new Error("Geçersiz fotoğraf yanıtı.");
+  }
+  return blob;
+}
+
 export async function apiPost(path, body, { timeoutMs } = {}) {
+  const multipart = body instanceof FormData;
   const controller = timeoutMs ? new AbortController() : null;
   const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
@@ -118,10 +140,10 @@ export async function apiPost(path, body, { timeoutMs } = {}) {
   try {
     res = await fetch(API_BASE + path, {
       method: "POST",
-      headers: getHeaders(),
+      headers: getHeaders(!multipart),
       credentials: "include",
       cache: "no-store",
-      body: JSON.stringify(body || {}),
+      body: multipart ? body : JSON.stringify(body || {}),
       ...(controller ? { signal: controller.signal } : {}),
     });
   } catch (e) {

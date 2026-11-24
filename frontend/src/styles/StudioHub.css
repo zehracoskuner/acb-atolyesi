@@ -33,6 +33,11 @@
 /* ═══════════════════════════════
    LAYOUT & BASE
 ═══════════════════════════════ */
+/* Keep the studio's rem-based layout at its usual scale even on direct visits. */
+html:has(.studio-root, .studio-splash) {
+  font-size: 106.25%;
+}
+
 .studio-root {
   background:  var(--paper);
   font-family: 'DM Sans', sans-serif;

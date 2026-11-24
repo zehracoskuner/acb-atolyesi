@@ -27,6 +27,7 @@ const CharacterUniversePage = lazy(() => import("./pages/CharactersPage"));
 const WorkHomePage          = lazy(() => import("./pages/WorkNotes"));
 const ExplorePage           = lazy(() => import("./pages/ExplorePage"));
 const StoryHomePage         = lazy(() => import("./pages/StoryDetailsPage"));
+const PublicCharacterGuide  = lazy(() => import("./pages/PublicCharacterGuide"));
 const ProfilePage           = lazy(() => import("./pages/ProfilePage"));
 const StudioHub             = lazy(() => import("./pages/StudioPage"));
 const AuthCallback          = lazy(() => import("./pages/AuthCallBack"));
@@ -91,6 +92,7 @@ createRoot(document.getElementById("root")).render(
           <Route path="/profile/me"                  element={<ProfilePage />} />
           <Route path="/profile/:id"                 element={<ProfilePage />} />
           <Route path="/story/:workId"               element={<StoryHomePage />} />
+          <Route path="/story/:workId/character-guide" element={<PublicCharacterGuide />} />
           <Route path="/read/:workId"                element={<Read />} />
           <Route path="/work/:workId"                element={<WorkStudioPage />} />
           <Route path="/work/:workId/chapters"       element={<ChaptersPage />} />

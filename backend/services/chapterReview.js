@@ -6,6 +6,7 @@ import { staff } from './contentModeration.js';
 import { fail, textField } from './reportWorkflow.js';
 import { txOptions } from './imageAssets.js';
 import { ownerChapter } from './chapterPublication.js';
+import { pinPublishedInlineComments } from './inlineCommentPublication.js';
 
 export function chapterReview(action) {
   return async (req, res) => {
@@ -27,6 +28,7 @@ export function chapterReview(action) {
           const working = ownerChapter(chapter);
           const wasPublished = chapter.status === 'published';
           if (action === 'approve') {
+            if (wasPublished && submission.content !== chapter.content) await pinPublishedInlineComments(chapter, session);
             chapter.title = submission.title; chapter.content = submission.content; chapter.media = submission.media;
             chapter.publishedRevision = submission.revision;
             chapter.status = 'published';

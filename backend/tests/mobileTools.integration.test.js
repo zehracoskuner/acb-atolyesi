@@ -92,6 +92,31 @@ describe('mobile form durability contract on real routes and MongoDB', () => {
     expect(saved.data.content).toBe(initial.content);
     expect((await request('/mobile/tools/personal', 'POST', { ...body, recordId: saved.recordId })).status).toBe(400);
   });
+  it('shares web work-note formatting with mobile and keeps the plain field in sync', async () => {
+    const endpoint = `/works/${workId}/notes`;
+    const created = await request(endpoint, 'POST', {});
+    expect(created.status).toBe(201);
+    expect(created.data.item.body).toBe('');
+    const recordId = created.data.item._id;
+    const html = '<h2>Bölüm</h2>İlk satır<div><br /></div><div><b>İkinci satır</b></div><ul><li>Fikir</li></ul>';
+    const update = await request(`${endpoint}/${recordId}`, 'PUT', { title: 'Eser notu', richBody: html + '<img src=x>' });
+    expect(update.status).toBe(200);
+    expect(update.data.item.body).toBe('Bölüm\nİlk satır\n\nİkinci satır\nFikir');
+    expect(update.data.item.mobileRichBody).toEqual({ html, plain: update.data.item.body });
+    expect((await request(`${endpoint}/${recordId}`, 'PUT', { title: 'Yeni başlık' })).status).toBe(200);
+    const { data: { saved } } = await request(`/mobile/tools/notes/${recordId}?workId=${workId}`);
+    expect(saved.data).toEqual({ title: 'Yeni başlık', body: html });
+    const mobileUpdate = await request('/mobile/tools/notes', 'POST', {
+      workId, recordId, draftId: randomUUID(), expectedVersion: saved.version, data: { ...saved.data, title: 'Mobil başlık' },
+    });
+    expect(mobileUpdate.status).toBe(200);
+    const webNote = (await request(endpoint)).data.items.find(item => item._id === recordId);
+    expect(webNote.body).toBe(update.data.item.body);
+    expect(webNote.mobileRichBody).toEqual(update.data.item.mobileRichBody);
+    const cleared = await request(`${endpoint}/${recordId}`, 'PUT', { richBody: '' });
+    expect(cleared.data.item.mobileRichBody).toEqual({ html: '', plain: '' });
+    expect(cleared.data.item.body).toBe('');
+  });
   it.each(['scenes', 'world'])('isolates %s records and atomically rejects two competing writes to the same nested item', async kind => {
     const body = mutation(kind); const { data: { saved } } = await request(`/mobile/tools/${kind}`, 'POST', body);
     expect((await request(`/mobile/tools/${kind}`, 'POST', mutation(kind))).status).toBe(200);

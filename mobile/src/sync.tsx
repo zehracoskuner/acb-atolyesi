@@ -19,7 +19,7 @@ function engineFor(draft: Draft) {
   const key = draftKey(draft.userId, draft.chapterId, draft.workId);
   if (!engines.has(key)) engines.set(key, new DraftEngine(draft, draftStorage, async d => {
     if (activeAccountId() !== d.userId) throw new Error('Taslağın hesabıyla yeniden giriş yap.');
-    const result = await api<{ item: Chapter }>(`/chapters/${d.chapterId}`, 'PUT', saveFields(d));
+    const result = await api<{ item: Chapter }>(`/chapters/${d.chapterId}?editor=1`, 'PUT', saveFields(d));
     return result.item;
   }, changed));
   return engines.get(key)!;
@@ -36,7 +36,7 @@ async function loadDraft(userId: string, chapterId: string, workId: string) {
     const existing = engines.get(key)!;
     const network = await NetInfo.fetch();
     if (network.isConnected === false || network.isInternetReachable === false) return existing;
-    try { const { item } = await api<{ item: Chapter }>(`/chapters/${chapterId}`); await existing.refreshRemote(item); }
+    try { const { item } = await api<{ item: Chapter }>(`/chapters/${chapterId}?editor=1`); await existing.refreshRemote(item); }
     catch (error) { if ((error as { status?: number }).status !== 0) throw error; }
     return existing;
   }
@@ -56,7 +56,7 @@ async function loadDraft(userId: string, chapterId: string, workId: string) {
   }
   let draft: Draft;
   try {
-    const { item } = await api<{ item: Chapter }>(`/chapters/${chapterId}`);
+    const { item } = await api<{ item: Chapter }>(`/chapters/${chapterId}?editor=1`);
     draft = local ? reconcile(local, item, true) : fromChapter(item, userId, workId);
   } catch (error) {
     // Only connectivity failures may use the offline copy. Do not bypass authorization.
@@ -91,7 +91,7 @@ export async function syncAccount(userId: string): Promise<SyncReport> {
       const key = draftKey(draft.userId, draft.chapterId, draft.workId);
       const engine = engines.get(key) || await openDraft(userId, draft.chapterId, draft.workId);
       if (engine.recoveryPending) {
-        const { item } = await api<{ item: Chapter }>(`/chapters/${draft.chapterId}`);
+        const { item } = await api<{ item: Chapter }>(`/chapters/${draft.chapterId}?editor=1`);
         await engine.refreshRemote(item);
       }
       if (!engine.draft.dirty || engine.draft.conflict) continue;

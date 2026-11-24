@@ -10,7 +10,9 @@ describe.skipIf(!process.env.MOBILE_READER_BROWSER)('reader interaction componen
   let browser: Browser, preview: ChildProcess, context: BrowserContext, page: Page;
   let calls: { path: string; method: string; body: any }[], roots: any[], likeFailure: boolean, sendFailure: boolean, likeDelay: number, checkDelay: number;
   const owner = { _id: 'visual-author', kullaniciAdi: 'deniz_yazar' }, other = { _id: 'other', kullaniciAdi: 'okur' };
-  const blocks = Array.from({ length: 35 }, (_, index) => ({ id: `b${index}`, index, text: `Paragraf ${index} İstanbul ışıkları. `.repeat(8), html: `<p>Paragraf ${index} ${'İstanbul ışıkları. '.repeat(18)}</p>` }));
+  type PassageComment = { _id: string; content: string; author: typeof owner; previousPassage?: boolean; paragraphText?: string };
+  let inlineComments: Record<number, PassageComment[]>;
+  const blocks = Array.from({ length: 35 }, (_, index) => ({ id: `b${index}`, paragraphId: `passage-${index}`, index, text: `Paragraf ${index} İstanbul ışıkları. `.repeat(8), html: `<p>Paragraf ${index} ${'İstanbul ışıkları. '.repeat(18)}</p>` }));
   const chapter = (id: string) => ({ _id: id, title: id === 'c2' ? 'İkinci bölüm' : 'İlk bölüm', blocks, contentVersion: 'published-v1', content: '', revision: 1 });
   beforeAll(async () => {
     preview = spawn(process.execPath, ['scripts/design-preview.mjs'], { cwd: fileURLToPath(new NodeURL('../', import.meta.url)), windowsHide: true, env: { ...process.env, MOBILE_QA_PORT: process.env.MOBILE_READER_TEST_PORT || '5197' }, stdio: 'pipe' });
@@ -24,6 +26,7 @@ describe.skipIf(!process.env.MOBILE_READER_BROWSER)('reader interaction componen
   afterAll(async () => { await browser?.close(); preview?.kill(); });
   beforeEach(async () => {
     calls = []; likeFailure = false; sendFailure = false; likeDelay = 0; checkDelay = 0;
+    inlineComments = { 2: [{ _id: 'inline1', content: 'Bu paragrafa özel', author: owner, previousPassage: true, paragraphText: 'Pasajın eski metni' }] };
     roots = [
       { _id: 'root1', content: 'Ana yorum', author: owner, createdAt: '2026-10-20T10:00:00Z', likeCount: 0, isLiked: false, replies: [{ _id: 'reply1', content: 'İlk yanıt', author: other, createdAt: '2026-10-20T11:00:00Z', likeCount: 0 }] },
       { _id: 'root2', content: '<img src=x onerror=alert(1)> düz metin', author: other, createdAt: '2026-10-19T10:00:00Z', likeCount: 0, replies: [] },
@@ -40,7 +43,18 @@ describe.skipIf(!process.env.MOBILE_READER_BROWSER)('reader interaction componen
       else if (path === '/public/works/w/preview') data = { preview: true, item: chapter('c1') };
       else if (path.endsWith('/like/check')) { const delay = checkDelay; checkDelay = 0; if (delay) await new Promise(resolve => setTimeout(resolve, delay)); data = { liked: false, likeCount: path.includes('c2') ? 2 : 0 }; }
       else if (path.startsWith('/chapters/') && method === 'POST') { if (likeDelay) await new Promise(resolve => setTimeout(resolve, likeDelay)); status = likeFailure ? 503 : 200; data = likeFailure ? { message: 'Beğeni kaydedilemedi.' } : { liked: body.liked, likeCount: body.liked ? 1 : 0 }; }
-      else if (path === '/inline-comments') data = url.searchParams.has('summary') ? { counts: { 2: 1 }, detachedCount: 1 } : { items: [{ _id: 'inline1', content: 'Bu paragrafa özel', author: owner }], total: 1, page: 1, pages: 1 };
+      else if (path === '/inline-comments') {
+        if (method === 'POST') {
+          const item = { _id: `new-inline-${calls.length}`, content: body.content, author: owner };
+          (inlineComments[body.paragraphIndex] ||= []).push(item);
+          data = { item };
+        } else if (url.searchParams.has('summary')) {
+          data = { counts: Object.fromEntries(Object.entries(inlineComments).map(([index, items]) => [index, items.length])), detachedCount: 0 };
+        } else {
+          const items = inlineComments[Number(url.searchParams.get('paragraphIndex'))] || [];
+          data = { items, total: items.length, page: 1, pages: items.length ? 1 : 0 };
+        }
+      }
       else if (path.startsWith('/comments/chapter/')) {
         if (method === 'POST') {
           if (sendFailure) { status = 503; data = { message: 'Yorum gönderilemedi.' }; }
@@ -51,7 +65,7 @@ describe.skipIf(!process.env.MOBILE_READER_BROWSER)('reader interaction componen
         if (path.endsWith('/like')) { item.isLiked = body.liked; item.likeCount = body.liked ? 1 : 0; data = { liked: item.isLiked, likeCount: item.likeCount }; }
         else if (method === 'PATCH') { item.content = body.content; item.isEdited = true; data = { item }; }
         else if (method === 'DELETE') { if (item.replies.length) { item.isDeleted = true; item.content = null; } else roots = roots.filter(r => r._id !== id); data = { tombstone: !!item.replies.length }; }
-      } else if (path === '/reports/reasons') data = { reasons: { spam: 'Spam', taciz: 'Taciz' } };
+      } else if (path === '/reports/reasons') data = { reasons: { spam: 'Spam', taciz: 'Taciz', telif_ihlali: 'Telif İhlali' } };
       else if (path === '/reports') { status = 201; data = { message: 'Alındı' }; }
       if (method === 'GET' && page.url().includes('guest=1') && (path.startsWith('/comments/') || path === '/inline-comments')) { status = 401; data = { message: 'Yorumları okumak için giriş yap.' }; }
       await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
@@ -102,7 +116,10 @@ describe.skipIf(!process.env.MOBILE_READER_BROWSER)('reader interaction componen
     await page.getByText('Yanıtlar korunacak, yorumun kaldırıldığı bilgisi görünecek.').waitFor(); await page.getByRole('button', { name: 'Sil', exact: true }).click();
     await page.getByText('[Bu yorum kaldırıldı]', { exact: true }).waitFor(); await page.getByText('Yanıta yanıt', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Yorum menüsü', exact: true }).last().click(); await page.getByRole('button', { name: 'Şikâyet et', exact: true }).click();
-    await page.getByRole('button', { name: 'Spam', exact: true }).click(); await page.getByRole('button', { name: 'Şikâyeti gönder', exact: true }).click();
+    const spam = page.getByRole('button', { name: 'Spam', exact: true });
+    await spam.waitFor();
+    expect(await page.getByRole('button', { name: 'Telif İhlali', exact: true }).count()).toBe(0);
+    await spam.click(); await page.getByRole('button', { name: 'Şikâyeti gönder', exact: true }).click();
     await page.getByText('Şikâyetin incelemeye alındı.', { exact: true }).waitFor(); expect(calls.find(c => c.path === '/reports' && c.method === 'POST')?.body).toMatchObject({ targetType: 'comment', targetId: 'root2', reason: 'spam' });
     expect(calls.some(c => c.path.endsWith('/report'))).toBe(false);
   });
@@ -110,11 +127,54 @@ describe.skipIf(!process.env.MOBILE_READER_BROWSER)('reader interaction componen
     await load('?guest=1'); await page.getByRole('button', { name: 'Bölüm yorumları', exact: true }).click(); await page.getByText('Yorumlar yüklenemedi. Yorumları okumak için giriş yap.', { exact: true }).waitFor(); expect(await page.getByText('Ana yorum', { exact: true }).count()).toBe(0); await page.getByRole('button', { name: 'Yorum yapmak için giriş yap', exact: true }).click();
     await page.waitForURL(/#\/auth\/login$/); expect(calls.some(c => c.method === 'POST' && c.path.endsWith('/like'))).toBe(false);
   });
+  it('posts a chapter-wide comment from the footer and keeps paragraph actions beside the text', async () => {
+    await load();
+    await page.getByRole('button', { name: 'Okuma menüsü', exact: true }).click();
+    await page.getByRole('heading', { name: 'Okuma menüsü', exact: true }).waitFor();
+    expect(await page.getByRole('button', { name: 'Paragraf yorumları', exact: true }).count()).toBe(0);
+    await page.getByRole('button', { name: 'Kapat', exact: true }).click();
+    await page.frameLocator('iframe').locator('footer').getByRole('button', { name: 'Bölüm yorumları (3)', exact: true }).click();
+    await page.getByRole('heading', { name: 'Bölüm yorumları', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Bu bölüm hakkında düşüncelerini yaz…', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Bu bölüm hakkında düşüncelerini yaz…' }).fill('Bölümün tamamı için yorum.');
+    await page.getByRole('button', { name: 'Gönder', exact: true }).click();
+    await page.getByText('Yorumun kaydedildi.', { exact: true }).waitFor();
+    expect(calls.find(c => c.method === 'POST' && c.path === '/comments/chapter/c1')?.body).toEqual({
+      content: 'Bölümün tamamı için yorum.', workId: 'w', chapterId: 'c1',
+    });
+  });
   it('opens the chosen paragraph separately and captures readable panels in all themes', async () => {
-    await load(); await page.frameLocator('iframe').locator('[data-paragraph="2"]').click();
-    await page.getByRole('heading', { name: 'Paragraf yorumları', exact: true }).waitFor(); await page.getByText('Bu paragrafa özel', { exact: true }).waitFor();
-    expect(calls.some(c => c.path.includes('paragraphIndex=2'))).toBe(true); await page.getByRole('button', { name: 'Kapat', exact: true }).click();
+    await page.setViewportSize({ width: 320, height: 640 });
+    await load();
+    const surface = page.frameLocator('iframe');
+    const marker = surface.getByRole('button', { name: '3. paragraf, 1 yorum', exact: true });
+    await marker.scrollIntoViewIfNeeded();
+    const top = await marker.evaluate(() => scrollY);
+    await marker.click();
+    const heading = page.getByRole('heading', { name: 'Paragraf yorumları', exact: true });
+    await heading.waitFor();
+    await page.getByText('Bu paragrafa özel', { exact: true }).waitFor();
+    expect(await heading.evaluate(el => el.parentElement!.parentElement!.getBoundingClientRect().height / innerHeight)).toBeCloseTo(0.58, 1);
+    const oldPassage = page.getByText('Pasajın eski metni', { exact: true });
+    expect(await oldPassage.count()).toBe(0);
+    await page.getByRole('button', { name: 'Önceki sürüme yazıldı', exact: true }).click();
+    await oldPassage.waitFor();
     await mkdir('artifacts/reader-interactions', { recursive: true });
+    await page.screenshot({ path: 'artifacts/reader-interactions/paragraph-compact.png' });
+    await page.getByRole('button', { name: 'Bu paragrafa yorum yaz…', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Bu paragraf hakkında düşüncelerini yaz…' }).fill('Paragrafı okurken yazdım.');
+    await page.getByRole('button', { name: 'Gönder', exact: true }).click();
+    await page.getByText('Yorumun kaydedildi.', { exact: true }).waitFor();
+    expect(calls.find(c => c.method === 'POST' && c.path === '/inline-comments')?.body).toMatchObject({ chapterId: 'c1', paragraphIndex: 2, blockId: 'b2' });
+    await page.getByRole('button', { name: 'Kapat', exact: true }).click();
+    const updated = surface.getByRole('button', { name: '3. paragraf, 2 yorum', exact: true });
+    await updated.waitFor();
+    await page.waitForFunction(() => document.querySelector('iframe')?.contentDocument?.activeElement?.matches('[data-passage="passage-2"]'));
+    expect(await updated.getAttribute('aria-expanded')).toBe('false');
+    expect(Math.abs(await updated.evaluate(() => scrollY) - top)).toBeLessThan(2);
+    await page.screenshot({ path: 'artifacts/reader-interactions/paragraph-marker.png' });
+    expect(calls.some(c => c.path.includes('paragraphIndex=2'))).toBe(true);
+    await page.setViewportSize({ width: 390, height: 844 });
     for (const theme of ['light', 'sepia', 'dark']) {
       await page.evaluate(theme => localStorage.setItem('reader.preferences.v2:visual-author', JSON.stringify({ theme })), theme);
       await page.reload(); await page.getByRole('button', { name: 'Bölüm yorumları', exact: true }).waitFor(); await panel(); await page.waitForTimeout(350);
