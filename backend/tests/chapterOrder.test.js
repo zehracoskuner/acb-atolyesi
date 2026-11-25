@@ -3,8 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import mongoose from 'mongoose';
 import Chapter from '../models/Chapter.js';
 import Work from '../models/Work.js';
-import ChapterVersion from '../models/ChapterVersion.js';
-import { updateChapterOrder } from '../services/chapterHistory.js';
+import { updateChapterOrder } from '../services/chapterEditing.js';
 
 afterEach(() => vi.restoreAllMocks());
 function fixture({ owned = true, found = true } = {}) {
@@ -17,12 +16,11 @@ function fixture({ owned = true, found = true } = {}) {
   vi.spyOn(Chapter, 'findById').mockReturnValue(query);
   vi.spyOn(Work, 'findOne').mockReturnValue({ session: async () => owned ? { _id: 'w' } : null });
   const lock = vi.spyOn(Work, 'updateOne').mockResolvedValue({ modifiedCount: 1 });
-  const versions = vi.spyOn(ChapterVersion, 'create');
-  return { chapter, session, lock, versions };
+  return { chapter, session, lock };
 }
 
 describe('chapter order metadata', () => {
-  it('persists order without changing text, revision, publication or history', async () => {
+  it('persists order without changing text, revision or publication', async () => {
     const f = fixture();
     const before = { ...f.chapter };
     const result = await updateChapterOrder({ id: 'c', userId: 'owner', order: 0 });
@@ -31,7 +29,6 @@ describe('chapter order metadata', () => {
     expect(result.draftedFromPublished).toBe(false);
     expect(f.chapter.save).toHaveBeenCalledWith({ session: f.session });
     expect(f.lock).toHaveBeenCalledWith({ _id: 'w' }, { $inc: { __v: 1 } }, { session: f.session });
-    expect(f.versions).not.toHaveBeenCalled();
   });
   it.each([-1, 0.5, '2', null, Number.MAX_SAFE_INTEGER + 1])('rejects invalid order %s', async order => {
     const f = fixture();
@@ -49,7 +46,7 @@ describe('chapter order metadata', () => {
   });
 });
 
-describe('PUT routing preserves versioned text saves', () => {
+describe('PUT routing preserves revision checks', () => {
   const source = fs.readFileSync(new URL('../routes/chapter.js', import.meta.url), 'utf8');
   const start = source.indexOf('router.put("/:id", ensureAuth');
   const handlerSource = source.slice(start, source.indexOf('\n});', start) + 4);
@@ -57,7 +54,7 @@ describe('PUT routing preserves versioned text saves', () => {
     let handler;
     const order = vi.fn().mockResolvedValue({ item: { order: 0 } });
     const save = vi.fn().mockResolvedValue({ revision: 6, item: {} });
-    new Function('router', 'ensureAuth', 'updateChapterOrder', 'saveChapterVersion', 'historyError', 'editorView', handlerSource)(
+    new Function('router', 'ensureAuth', 'updateChapterOrder', 'saveChapter', 'chapterError', 'editorView', handlerSource)(
       { put: (_, auth, fn) => { expect(auth).toBe('auth'); handler = fn; } },
       'auth', order, save, (_, error) => { throw error; }, item => item);
     const res = { code: 200, status(code) { this.code = code; return this; }, json: vi.fn() };
@@ -76,7 +73,7 @@ describe('PUT routing preserves versioned text saves', () => {
     expect(f.order).not.toHaveBeenCalled();
     expect(f.save).not.toHaveBeenCalled();
   });
-  it('text saves keep expectedRevision and the existing history service', async () => {
+  it('text saves keep expectedRevision on the editing service', async () => {
     const f = route();
     await f.handler({ params: { id: 'c' }, query: { editor: '1' }, user: { id: 'owner' }, body: { title: 'New', expectedRevision: 5 } }, f.res);
     expect(f.save).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 5, title: 'New', paragraphEditing: true }));

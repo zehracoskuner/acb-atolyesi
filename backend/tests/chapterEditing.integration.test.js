@@ -3,20 +3,22 @@ import mongoose from "mongoose";
 import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, afterEach, describe, it, expect, vi } from "vitest";
 import Chapter from "../models/Chapter.js";
-import ChapterVersion from "../models/ChapterVersion.js";
 import Work from "../models/Work.js";
 import ImageAsset from "../models/ImageAsset.js";
+import Fingerprint from "../models/DevelopmentFingerprint.js";
 import { applyChapterDraft } from "../services/chapterPublication.js";
-import { saveChapterVersion, createChapterVersion, markChapterCheckpoint, updateChapterOrder } from "../services/chapterHistory.js";
+import { saveChapter, createChapter, updateChapterOrder } from "../services/chapterEditing.js";
+import { migrateChapterDevelopment } from "../scripts/migrate-chapter-development.mjs";
+import { textHash } from "../services/developmentWriting.js";
 
 // Opt-in, loopback only, never reads .env or the application's MONGO_URI.
 const uri = process.env.CHAPTER_TEST_MONGO_URI;
 const database = `acb_chapter_test_${randomUUID().replaceAll("-", "")}`;
-describe.skipIf(!uri)("MongoDB replica-set chapter history integration", () => {
+describe.skipIf(!uri)("MongoDB replica-set chapter editing integration", () => {
   beforeAll(async () => {
     if (!/^mongodb:\/\/(localhost|127\.0\.0\.1):\d+\/?(?:\?.*)?$/.test(uri)) throw new Error("Only a loopback replica-set URI without database or credentials is allowed.");
     await mongoose.connect(uri, { dbName: database, serverSelectionTimeoutMS: 5000 });
-    await Promise.all([Chapter.init(), ChapterVersion.init(), Work.init()]);
+    await Promise.all([Chapter.init(), Work.init()]);
   });
   afterEach(() => vi.restoreAllMocks());
   afterAll(async () => {
@@ -29,25 +31,24 @@ describe.skipIf(!uri)("MongoDB replica-set chapter history integration", () => {
     const chapter = await Chapter.create({ work: work._id, title: "Test chapter", content: "original" });
     return { id: chapter._id, userId, expectedRevision: 0 };
   }
-  it("persists media-only revisions privately, publishes, removes and restores media with text", async () => {
+  it("persists media-only revisions privately, publishes, removes and reinstates media with text", async () => {
     const base = await fixture();
     const chapter = await Chapter.findById(base.id);
     chapter.status = "published"; await chapter.save();
     await Work.updateOne({ _id: chapter.work }, { $set: { status: "published", publishedChapterIds: [chapter._id] } });
     const media = [{ type: "spotify", url: "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", caption: "Şarkı" }];
-    const saved = await saveChapterVersion({ ...base, media });
+    const saved = await saveChapter({ ...base, media });
     expect(saved.item.media).toEqual(media);
     expect(saved.item.hasUnpublishedChanges).toBe(true);
     expect(saved.revision).toBe(1);
     expect((await Chapter.findById(base.id)).media.toObject()).toEqual([]);
-    expect((await ChapterVersion.findOne({ chapter: base.id, revision: 1 })).media.toObject()).toEqual(media);
     const publish = await Chapter.findById(base.id).select("+draftContent");
     applyChapterDraft(publish); await publish.save();
     expect((await Chapter.findById(base.id)).media.toObject()).toEqual(media);
-    const removed = await saveChapterVersion({ ...base, expectedRevision: 1, media: [] });
+    const removed = await saveChapter({ ...base, expectedRevision: 1, media: [] });
     expect(removed.item.media).toEqual([]);
     expect((await Chapter.findById(base.id)).media.toObject()).toEqual(media);
-    const restored = await saveChapterVersion({ ...base, expectedRevision: 2, restoreRevision: 1 });
+    const restored = await saveChapter({ ...base, expectedRevision: 2, media });
     expect(restored.item.media).toEqual(media);
     expect(restored.item.content).toBe("original");
     expect(restored.item.hasUnpublishedChanges).toBe(false);
@@ -57,38 +58,36 @@ describe.skipIf(!uri)("MongoDB replica-set chapter history integration", () => {
     const base = await fixture();
     const image = { type: "image", url: "https://res.cloudinary.com/test/image/upload/v1/media.jpg", caption: "Görsel" };
     await ImageAsset.create({ owner: new mongoose.Types.ObjectId(), url: image.url, state: "active" });
-    await expect(saveChapterVersion({ ...base, media: [image] })).rejects.toMatchObject({ status: 400 });
+    await expect(saveChapter({ ...base, media: [image] })).rejects.toMatchObject({ status: 400 });
     await ImageAsset.updateOne({ url: image.url }, { $set: { owner: base.userId } });
-    expect((await saveChapterVersion({ ...base, media: [image] })).item.media).toEqual([image]);
+    expect((await saveChapter({ ...base, media: [image] })).item.media).toEqual([image]);
     await ImageAsset.updateOne({ url: image.url }, { $set: { state: "removed" } });
-    await expect(saveChapterVersion({ ...base, expectedRevision: 1, media: [image] })).rejects.toMatchObject({ status: 400 });
-    await expect(saveChapterVersion({ ...base, expectedRevision: 1, media: [{ ...image, url: "https://example.com/image.png" }] })).rejects.toMatchObject({ status: 400 });
+    await expect(saveChapter({ ...base, expectedRevision: 1, media: [image] })).rejects.toMatchObject({ status: 400 });
+    await expect(saveChapter({ ...base, expectedRevision: 1, media: [{ ...image, url: "https://example.com/image.png" }] })).rejects.toMatchObject({ status: 400 });
     expect((await Chapter.findById(base.id)).revision).toBe(1);
   });
-  it("counts committed organic words across chapters, excludes import/restore, and stays eligible after deletion", async () => {
+  it("counts committed organic words across chapters, excludes imports and repeated text, and stays eligible after deletion", async () => {
     const base = await fixture();
     const chapter = await Chapter.findById(base.id);
     const workId = chapter.work;
     expect((await readDevelopment({ workId, userId: base.userId })).eligibleForDevelopmentReview).toBe(false);
-    await saveChapterVersion({ ...base, content: "word ".repeat(3000), eligibleWordDelta: 3000 });
+    await saveChapter({ ...base, content: "word ".repeat(3000), eligibleWordDelta: 3000 });
     expect((await Work.findById(workId)).eligibleForDevelopmentReview).toBe(false);
-    const second = await createChapterVersion({ workId, userId: base.userId, title: "second" });
-    await saveChapterVersion({ id: second.item._id, userId: base.userId, expectedRevision: 0, content: "last", eligibleWordDelta: 1 });
+    const second = await createChapter({ workId, userId: base.userId, title: "second" });
+    await saveChapter({ id: second.item._id, userId: base.userId, expectedRevision: 0, content: "last", eligibleWordDelta: 1 });
     expect((await Work.findById(workId)).eligibleForDevelopmentReview).toBe(true);
-    await saveChapterVersion({ ...base, expectedRevision: 1, content: "deleted" });
-    await saveChapterVersion({ ...base, expectedRevision: 2, content: "import ".repeat(20000) });
-    await saveChapterVersion({ ...base, expectedRevision: 3, restoreRevision: 1, eligibleWordDelta: 20000 });
+    await saveChapter({ ...base, expectedRevision: 1, content: "deleted" });
+    await saveChapter({ ...base, expectedRevision: 2, content: "import ".repeat(20000) });
+    await saveChapter({ ...base, expectedRevision: 3, restoreRevision: 1, eligibleWordDelta: 20000 });
     const work = await Work.findById(workId);
     expect(work.developmentNewWords).toBe(3000);
     expect(work.eligibleForDevelopmentReview).toBe(true);
     expect(work.developmentAnalysisCount).toBe(0);
-    expect((await ChapterVersion.findOne({ chapter: base.id, revision: 4 })).restoredFromRevision).toBe(1);
-    expect(await ChapterVersion.countDocuments({ chapter: base.id })).toBe(5);
   });
   it("serializes organic progress from different chapters without losing increments", async () => {
     const base = await fixture(), chapter = await Chapter.findById(base.id);
-    const other = await createChapterVersion({ workId: chapter.work, userId: base.userId, title: "other" });
-    await Promise.all([base.id, other.item._id].map(id => saveChapterVersion({ ...base, id, content: String(id) + " text ".repeat(2500), eligibleWordDelta: 2500 })));
+    const other = await createChapter({ workId: chapter.work, userId: base.userId, title: "other" });
+    await Promise.all([base.id, other.item._id].map(id => saveChapter({ ...base, id, content: String(id) + " text ".repeat(2500), eligibleWordDelta: 2500 })));
     const work = await Work.findById(chapter.work);
     expect(work.developmentNewWords).toBe(5000); expect(work.eligibleForDevelopmentReview).toBe(true);
   });
@@ -105,76 +104,43 @@ describe.skipIf(!uri)("MongoDB replica-set chapter history integration", () => {
   });
   it("does not count failed, stale, repeated or title-only saves", async () => {
     const base = await fixture(), chapter = await Chapter.findById(base.id);
-    const saved = await saveChapterVersion({ ...base, content: "typed words", eligibleWordDelta: 2 });
-    await expect(saveChapterVersion({ ...base, content: "stale", eligibleWordDelta: 9000 })).rejects.toMatchObject({ status: 409 });
-    await saveChapterVersion({ ...base, expectedRevision: saved.revision, content: "typed words", eligibleWordDelta: 2 });
-    await saveChapterVersion({ ...base, expectedRevision: saved.revision, title: "new title", eligibleWordDelta: 9000 });
+    const saved = await saveChapter({ ...base, content: "typed words", eligibleWordDelta: 2 });
+    await expect(saveChapter({ ...base, content: "stale", eligibleWordDelta: 9000 })).rejects.toMatchObject({ status: 409 });
+    await saveChapter({ ...base, expectedRevision: saved.revision, content: "typed words", eligibleWordDelta: 2 });
+    await saveChapter({ ...base, expectedRevision: saved.revision, title: "new title", eligibleWordDelta: 9000 });
     expect((await Work.findById(chapter.work)).developmentNewWords).toBe(1);
-    await expect(saveChapterVersion({ ...base, eligibleWordDelta: -1 })).rejects.toMatchObject({ status: 400 });
-    vi.spyOn(ChapterVersion, "create").mockRejectedValueOnce(new Error("snapshot fails"));
-    await expect(saveChapterVersion({ ...base, expectedRevision: 2, content: "uncommitted", eligibleWordDelta: 5000 })).rejects.toThrow();
+    await expect(saveChapter({ ...base, eligibleWordDelta: -1 })).rejects.toMatchObject({ status: 400 });
+    vi.spyOn(Work.prototype, "save").mockRejectedValueOnce(new Error("work save fails"));
+    await expect(saveChapter({ ...base, expectedRevision: 2, content: "uncommitted", eligibleWordDelta: 5000 })).rejects.toThrow();
     expect((await Work.findById(chapter.work)).developmentNewWords).toBe(1);
   });
-  it("concurrent same-base writes cannot both commit; restore appends", async () => {
+  it("rejects stale writes and never creates the retired collection", async () => {
     const base = await fixture();
-    const writes = await Promise.allSettled(["one", "two"].map(content => saveChapterVersion({ ...base, content })));
-    expect(writes.filter(r => r.status === "fulfilled")).toHaveLength(1);
-    expect(writes.find(r => r.status === "rejected").reason.status).toBe(409);
-    expect(await ChapterVersion.countDocuments({ chapter: base.id })).toBe(2);
-    const restored = await saveChapterVersion({ ...base, expectedRevision: 1, restoreRevision: 0 });
-    expect(restored.item.content).toBe("original");
-    expect(restored.item.status).toBe("draft");
-    expect(restored.revision).toBe(2);
-    expect(await ChapterVersion.countDocuments({ chapter: base.id })).toBe(3);
-  });
-  it("checkpoints mark the saved revision without changing text, revision or publication", async () => {
-    const base = await fixture();
-    const saved = await saveChapterVersion({ ...base, content: "checkpoint text" });
-    const count = await ChapterVersion.countDocuments({ chapter: base.id });
-    const before = (await Chapter.findById(base.id)).toObject();
-    const marked = await markChapterCheckpoint({ ...base, expectedRevision: saved.revision, label: "  Edit öncesi  " });
-    expect(marked.item).toMatchObject({ revision: saved.revision, isCheckpoint: true, label: "Edit öncesi", content: "checkpoint text" });
-    await markChapterCheckpoint({ ...base, expectedRevision: saved.revision, label: "İlk taslak" });
-    expect(await ChapterVersion.countDocuments({ chapter: base.id })).toBe(count);
-    const after = (await Chapter.findById(base.id)).toObject();
-    expect(after).toEqual(before);
-    await expect(markChapterCheckpoint({ ...base, label: "stale" })).rejects.toMatchObject({ status: 409 });
-    await expect(markChapterCheckpoint({ ...base, userId: new mongoose.Types.ObjectId() })).rejects.toMatchObject({ status: 403 });
-    await expect(markChapterCheckpoint({ ...base, label: "x".repeat(81) })).rejects.toMatchObject({ status: 400 });
-  });
-  it("a legacy checkpoint captures the saved baseline once and remains restorable", async () => {
-    const base = await fixture();
-    await markChapterCheckpoint(base);
-    await markChapterCheckpoint(base);
-    expect(await ChapterVersion.countDocuments({ chapter: base.id })).toBe(1);
-    await saveChapterVersion({ ...base, content: "new text" });
-    const restored = await saveChapterVersion({ ...base, expectedRevision: 1, restoreRevision: 0 });
-    expect(restored.item.content).toBe("original");
-    expect(restored.revision).toBe(2);
-    expect((await ChapterVersion.findOne({ chapter: base.id, revision: 0 })).isCheckpoint).toBe(true);
-  });
-  it("new chapter and its initial version commit together", async () => {
-    const base = await fixture();
-    const old = await Chapter.findById(base.id);
-    const result = await createChapterVersion({ workId: old.work, userId: base.userId, title: "New" });
-    expect(result.revision).toBe(0);
-    expect((await ChapterVersion.findOne({ chapter: result.item._id, revision: 0 })).title).toBe("New");
-    vi.spyOn(ChapterVersion, "create").mockRejectedValueOnce(new Error("fail initial history"));
-    await expect(createChapterVersion({ workId: old.work, userId: base.userId, title: "Must not exist" })).rejects.toThrow();
-    expect(await Chapter.countDocuments({ title: "Must not exist" })).toBe(0);
+    const chapter = await Chapter.findById(base.id);
+    const created = await createChapter({ workId: chapter.work, userId: base.userId, title: "New" });
+    expect(created).toMatchObject({ revision: 0, item: { title: "New", content: "" } });
+    const writes = await Promise.allSettled(["one", "two"].map(content => saveChapter({ ...base, content })));
+    const saved = writes.find(r => r.status === "fulfilled").value;
+    expect(writes.find(r => r.status === "rejected").reason).toMatchObject({
+      status: 409, code: "CHAPTER_CONFLICT", current: { content: saved.item.content, revision: 1 },
+    });
+    expect((await Chapter.findById(base.id)).content).toBe(saved.item.content);
+    const same = await saveChapter({ ...base, expectedRevision: 1, content: saved.item.content });
+    expect(same).toMatchObject({ revision: 1, savedAt: saved.savedAt });
+    expect(await mongoose.connection.db.listCollections({ name: "chapterversions" }).toArray()).toEqual([]);
   });
   it("concurrent new chapters append after sparse stored orders without renumbering", async () => {
     const base = await fixture();
     const old = await Chapter.findById(base.id);
     old.order = 17; await old.save();
     const created = await Promise.all(["A", "B", "C"].map(title =>
-      createChapterVersion({ workId: old.work, userId: base.userId, title })));
+      createChapter({ workId: old.work, userId: base.userId, title })));
     expect(created.map(r => r.item.order).sort((a, b) => a - b)).toEqual([18, 19, 20]);
     expect((await Chapter.findById(base.id)).order).toBe(17);
     expect((await Chapter.findById(base.id)).content).toBe("original");
   });
 
-  it("reordering preserves publication, text, saved revision and history", async () => {
+  it("reordering preserves publication, text and saved revision", async () => {
     const base = await fixture();
     const chapter = await Chapter.findById(base.id);
     chapter.status = "published";
@@ -191,8 +157,7 @@ describe.skipIf(!uri)("MongoDB replica-set chapter history integration", () => {
     for (const key of ["title", "content", "status", "reviewNote", "revision", "savedAt"])
       expect(after[key]).toEqual(before[key]);
     expect((await Work.findById(chapter.work)).publishedChapterIds.map(String)).toEqual([String(chapter._id)]);
-    expect(await ChapterVersion.countDocuments({ chapter: base.id })).toBe(0);
-    const renamed = await saveChapterVersion({ ...base, title: "Renamed after reorder" });
+    const renamed = await saveChapter({ ...base, title: "Renamed after reorder" });
     expect(renamed.revision).toBe(1);
     expect(renamed.item.order).toBe(2);
   });
@@ -200,13 +165,12 @@ describe.skipIf(!uri)("MongoDB replica-set chapter history integration", () => {
     const base = await fixture();
     await Promise.all([
       updateChapterOrder({ ...base, order: 3 }),
-      saveChapterVersion({ ...base, content: "Concurrent new text" }),
+      saveChapter({ ...base, content: "Concurrent new text" }),
     ]);
     const chapter = await Chapter.findById(base.id);
     expect(chapter.order).toBe(3);
     expect(chapter.content).toBe("Concurrent new text");
     expect(chapter.revision).toBe(1);
-    expect(await ChapterVersion.countDocuments({ chapter: base.id })).toBe(2);
   });
   it("failed reorder rolls back its order and work lock", async () => {
     const base = await fixture();
@@ -217,16 +181,37 @@ describe.skipIf(!uri)("MongoDB replica-set chapter history integration", () => {
     expect((await Chapter.findById(base.id)).order).toBe(before.order);
     expect((await Work.findById(before.work)).__v).toBe(workBefore.__v);
   });
-  it("version insertion failure rolls back the actual chapter write", async () => {
+  it("failure after a chapter save rolls the write back", async () => {
     const base = await fixture();
-    const create = ChapterVersion.create.bind(ChapterVersion);
-    let calls = 0;
-    vi.spyOn(ChapterVersion, "create").mockImplementation((...args) => {
-      if (++calls === 2) throw new Error("Injected version failure");
-      return create(...args);
-    });
-    await expect(saveChapterVersion({ ...base, content: "must roll back" })).rejects.toThrow("Injected");
+    vi.spyOn(Work.prototype, "save").mockRejectedValueOnce(new Error("Injected work save failure"));
+    await expect(saveChapter({ ...base, content: "must roll back" })).rejects.toThrow("Injected");
     expect((await Chapter.findById(base.id)).content).toBe("original");
-    expect(await ChapterVersion.countDocuments({ chapter: base.id })).toBe(0);
+  });
+  it("migrates historical word baselines once and preserves current content and progress", async () => {
+    const base = await fixture();
+    const chapters = Chapter.collection;
+    const historical = "one two three four five";
+    await chapters.updateOne({ _id: base.id }, { $set: {
+      status: "published", draftContent: { title: "Private", content: "private draft" },
+      reviewSubmission: { title: "Review", content: "review text", revision: 0 },
+    } });
+    const chapter = await chapters.findOne({ _id: base.id });
+    const work = await Work.collection.findOne({ _id: chapter.work });
+    const versions = mongoose.connection.db.collection("chapterversions");
+    await versions.insertOne({ chapter: base.id, work: chapter.work, revision: 0, content: historical });
+
+    expect(await migrateChapterDevelopment(mongoose.connection)).toEqual({ chaptersWithHistory: 1, initialized: 0 });
+    expect(await chapters.findOne({ _id: base.id })).toEqual(chapter);
+    expect(await migrateChapterDevelopment(mongoose.connection, { apply: true })).toEqual({ chaptersWithHistory: 1, initialized: 1 });
+    expect(await migrateChapterDevelopment(mongoose.connection, { apply: true })).toEqual({ chaptersWithHistory: 0, initialized: 0 });
+    expect(await chapters.findOne({ _id: base.id })).toEqual({ ...chapter, developmentWordHighWater: 5 });
+    expect(await Work.collection.findOne({ _id: chapter.work })).toEqual(work);
+    expect(await Fingerprint.distinct("hash", { workId: chapter.work })).toEqual(
+      expect.arrayContaining([textHash(historical), textHash("private draft")]));
+
+    await versions.drop();
+    await saveChapter({ ...base, content: historical, eligibleWordDelta: 5 });
+    expect((await Work.findById(chapter.work)).developmentNewWords).toBe(0);
+    expect(await mongoose.connection.db.listCollections({ name: "chapterversions" }).toArray()).toEqual([]);
   });
 });

@@ -368,7 +368,7 @@ function CharacterUniverse({ workId }) {
         let result;
         if (blob) {
           const form = new FormData();
-          form.append("file", blob, "karakter.webp");
+          form.append("file", blob, blob.name || "karakter.webp");
           result = await apiPost(path, form);
         } else result = await apiDelete(path);
         setCharacters(current => current.map(node => node.id === id ? { ...node, imageUrl: result.item.imageUrl } : node));

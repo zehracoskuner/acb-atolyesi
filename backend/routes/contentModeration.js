@@ -5,6 +5,8 @@ import VisualAccount from '../models/VisualAccount.js';
 import Report from '../models/Report.js';
 import Chapter from '../models/Chapter.js';
 import { decideContent, manualVisualBlock } from '../services/contentModeration.js';
+import { readPortraitAsset } from '../services/characterPortraits.js';
+import { readModerationImage } from '../services/imageAssets.js';
 import requireRole from '../middlewares/requireRole.js';
 import uploadOrigin from '../middlewares/uploadOrigin.js';
 const router = Router();
@@ -28,9 +30,10 @@ router.get('/cases/:id', staffOnly, handle(async (req, res) => {
 router.get('/cases/:id/evidence', staffOnly, handle(async (req, res) => {
   const item = await ContentCase.findById(req.params.id);
   const asset = item?.asset && await ImageAsset.findById(item.asset).select('+bytes');
-  if (!asset?.bytes) return res.status(404).json({ message: 'Özel görsel kanıtı bulunmuyor.' });
+  const bytes = asset?.privatePortrait ? await readPortraitAsset(asset) : await readModerationImage(asset);
+  if (!bytes) return res.status(404).json({ message: 'Özel görsel kanıtı bulunmuyor.' });
   const mime = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(asset.mime) ? asset.mime : 'application/octet-stream';
-  res.set('X-Content-Type-Options', 'nosniff').type(mime).send(asset.bytes);
+  res.set('X-Content-Type-Options', 'nosniff').type(mime).send(bytes);
 }));
 router.post('/cases/:id/decision', uploadOrigin, staffOnly, handle(async (req, res) => res.json(await decideContent(req.params.id, req.user, req.body))));
 router.get('/users/:id/images', staffOnly, handle(async (req, res) => res.json({ item: await VisualAccount.findById(req.params.id).lean() })));

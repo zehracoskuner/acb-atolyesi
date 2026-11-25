@@ -5,7 +5,8 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const files = ['shared/features.js', 'shared/drawingProtocol.js', 'shared/chapterMedia.js'];
+const commonFiles = ['shared/features.js', 'shared/drawingProtocol.js', 'shared/chapterMedia.js', 'shared/characterPortrait.js'];
+const files = [...commonFiles, 'shared/chapterParagraphs.js', 'shared/chapterParagraphEditor.js', 'shared/relationshipTypes.js'];
 const hashes = {};
 const imports = { frontend: [], backend: [] };
 async function scan(directory, side) {
@@ -16,7 +17,8 @@ async function scan(directory, side) {
     else if (/\.(js|jsx)$/.test(entry.name)) {
       const source = await readFile(full, 'utf8');
       for (const match of source.matchAll(/from\s+["']([^"']*shared\/[^"']+)["']/g)) {
-        const resolved = await realpath(path.resolve(path.dirname(full), match[1]));
+        const importPath = path.resolve(path.dirname(full), match[1]);
+        const resolved = await realpath(path.extname(importPath) ? importPath : `${importPath}.js`);
         const relative = path.relative(root, resolved).replaceAll('\\', '/');
         if (!files.includes(relative)) throw new Error(`Unexpected shared import: ${relative}`);
         imports[side].push({ source: path.relative(root, full).replaceAll('\\', '/'), target: relative });
@@ -27,7 +29,7 @@ async function scan(directory, side) {
 for (const file of files) hashes[file] = createHash('sha256').update(await readFile(path.join(root, file))).digest('hex');
 await scan(path.join(root, 'frontend/src'), 'frontend');
 await scan(path.join(root, 'backend'), 'backend');
-for (const side of Object.keys(imports)) for (const file of files) {
+for (const side of Object.keys(imports)) for (const file of commonFiles) {
   if (!imports[side].some(item => item.target === file)) throw new Error(`${side} does not resolve ${file}`);
 }
 for (const file of files) await import(new URL('../' + file, import.meta.url));

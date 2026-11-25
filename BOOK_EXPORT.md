@@ -15,12 +15,11 @@ kalıcı indirme bağlantısı oluşturulmaz. Yanıt `private, no-store` kullan�
   Bölüm kimlikleri ve `revision` değerleri başlangıçta sabitlenir; metinler
   aynı snapshot içinden okunur. Üretim başlamadan transaction kapatılır.
   Sonraki düzenleme, silme ve eklemeler çıktıdaki sürümleri değiştirmez.
-  Mevcut `ChapterVersion` kayıtları değiştirilmez. Henüz geçmiş kaydı olmayan
-  eski bölümler de güncel kayıtlı metinlerinden eksiksiz alınır.
+  Bölümler güncel kayıtlı metinlerinden alınır.
 - `order`, `createdAt`, `_id` sıralaması deterministiktir. Bölüm sürükleme
   işlemi `PUT /api/works/:id/chapter-order` ile tam bölüm listesini doğrular
-  ve sırayı atomik kaydeder. Metni ve sürüm geçmişini değiştirmez.
-- Mevcut sürüm kaydı gibi replica set / sharded MongoDB gerekir. Snapshot
+  ve sırayı atomik kaydeder. Metin revizyonu korunur.
+- Replica set / sharded MongoDB gerekir. Snapshot
   desteklenmiyorsa, eksik bölüm varsa veya üretim başarısızsa hata döner;
   karışık sürümler üretebilen sıradan okumalara geri düşülmez.
 - Editörde “Önce kaydet ve indir” tüm bölümlerin kayıtlarını bekler.

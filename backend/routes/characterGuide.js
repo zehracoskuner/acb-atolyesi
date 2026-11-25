@@ -2,7 +2,7 @@ import express from "express";
 import ensureAuth from "../middlewares/ensureAuth.js";
 import Work from "../models/Work.js";
 import CharacterGuide from "../models/CharacterGuide.js";
-import ImageAsset from "../models/ImageAsset.js";
+import { readStoredPortrait } from "../services/characterPortraits.js";
 import { guideSources, readerGuideBoundary, validGuideId, validateCharacterGuide, validateRelationshipDraft, visibleCharacterGuide } from "../services/characterGuide.js";
 
 const fields = "user title status contentWarning publishedChapterIds customChapterTitles";
@@ -151,9 +151,8 @@ publicCharacterGuide.get("/portraits/:characterId/:assetId", async (req, res, ne
   if (!characters.some(person => person.id === characterId && person.portraitAssetId === assetId)) return res.sendStatus(404);
   try {
     const url = `/api/characters/${characterId}/portrait/${assetId}`;
-    const asset = await ImageAsset.findOne({ _id: assetId, owner: work.user, url, privatePortrait: true, state: "active" })
-      .select("+bytes");
-    if (!asset?.bytes) return res.sendStatus(404);
-    return res.set("X-Content-Type-Options", "nosniff").type("image/webp").send(asset.bytes);
+    const bytes = await readStoredPortrait({ _id: assetId, owner: work.user, url, state: "active" });
+    if (!bytes) return res.sendStatus(404);
+    return res.set("X-Content-Type-Options", "nosniff").type("image/webp").send(bytes);
   } catch (error) { next(error); }
 });

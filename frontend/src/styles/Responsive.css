@@ -85,7 +85,7 @@
 
 @media (pointer: coarse) {
   /* Avoid iOS focus zoom without changing checkbox, range or canvas controls. */
-  :is(.reports-page, .report-case, .book-download-panel, .chapter-history-box,
+  :is(.reports-page, .report-case, .book-download-panel,
     .sd-root, .np-layout, .wn-root, .terms-screen, .adm-root, .mod-root)
     :is(input:not([type='checkbox']):not([type='range']):not([type='color']), select, textarea) { font-size: 16px; }
 }

@@ -3,6 +3,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import ImageAsset from '../models/ImageAsset.js';
 import VisualAccount from '../models/VisualAccount.js';
 import { fail } from './reportWorkflow.js';
+import { readImageEvidence, storeImageEvidence } from './imageEvidence.js';
 
 export const txOptions = { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' }, readPreference: 'primary' };
 export async function accountForWrite(owner, session) {
@@ -37,19 +38,29 @@ export async function withImageChange(owner, url, oldUrl, save) {
   }, txOptions);
 }
 export async function registerImage(owner, file, result) {
-  return mongoose.connection.transaction(async session => {
-    await assertImageAllowed(owner, session);
-    const [asset] = await ImageAsset.create([{
-      owner, url: result.secure_url, publicId: result.public_id, providerVersion: String(result.version || ''),
-      bytes: file.buffer, mime: file.mimetype,
-    }], { session });
-    return asset;
-  }, txOptions).catch(async error => {
+  const _id = new mongoose.Types.ObjectId();
+  try {
+    const evidence = await storeImageEvidence(_id, file.buffer);
+    return await mongoose.connection.transaction(async session => {
+      await assertImageAllowed(owner, session);
+      const [asset] = await ImageAsset.create([{
+        _id, owner, url: result.secure_url, publicId: result.public_id, providerVersion: String(result.version || ''),
+        evidence, mime: file.mimetype,
+      }], { session });
+      return asset;
+    }, txOptions);
+  } catch (error) {
     // A concurrent sanction/DB error must not leave a newly accepted upload public.
-    if (result.public_id) await cloudinary.uploader.destroy(result.public_id, { resource_type: 'image', invalidate: true })
+    if (result.public_id && !error.hasErrorLabel?.('UnknownTransactionCommitResult')) await cloudinary.uploader.destroy(result.public_id, { resource_type: 'image', invalidate: true })
       .catch(e => console.error('Unregistered image cleanup failed:', result.public_id, e.message));
     throw error;
-  });
+  }
+}
+
+export async function readModerationImage(asset) {
+  if (!asset?.evidence) return asset?.bytes;
+  try { return await readImageEvidence(asset.evidence); }
+  catch (error) { if (asset.bytes) return asset.bytes; throw error; }
 }
 export function publishImage(buffer) {
   return new Promise((resolve, reject) => {
@@ -81,15 +92,19 @@ export async function legacyImage(url, owner) {
       bytes = Buffer.concat(chunks); mime = `image/${resource.format === 'jpg' ? 'jpeg' : resource.format}`;
     }
   }
-  try { asset = await ImageAsset.create({ owner, url, publicId, bytes, mime, delivery: publicId ? 'available' : 'external' }); }
+  const _id = new mongoose.Types.ObjectId();
+  const evidence = bytes ? await storeImageEvidence(_id, bytes) : undefined;
+  try { asset = await ImageAsset.create({ _id, owner, url, publicId, evidence, mime, delivery: publicId ? 'available' : 'external' }); }
   catch (e) { if (e.code !== 11000) throw e; asset = await ImageAsset.findOne({ url }); }
   return asset;
 }
 export async function purgeImage(assetId) {
-  const asset = await ImageAsset.findById(assetId);
-  if (!asset || asset.state !== 'removed' || asset.delivery === 'purged') return asset;
+  const asset = await ImageAsset.findById(assetId).select('+bytes');
+  // Restricted portraits remain private evidence for decisions and reversals.
+  if (!asset || asset.state !== 'removed' || asset.privatePortrait || asset.delivery === 'purged') return asset;
   if (!asset.publicId) { asset.delivery = 'external'; await asset.save(); return asset; }
   try {
+    if (!await readModerationImage(asset)) throw new Error('Geri yükleme kanıtı bulunamadı.');
     const result = await cloudinary.uploader.destroy(asset.publicId, { resource_type: 'image', invalidate: true });
     if (!['ok', 'not found'].includes(result.result)) throw new Error('Sağlayıcı silmeyi doğrulamadı.');
     asset.delivery = 'purged'; asset.deliveryError = '';

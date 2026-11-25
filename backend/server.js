@@ -9,6 +9,8 @@ import mongoose from "mongoose";
 import AuthSession from "./models/AuthSession.js";
 import Work from "./models/Work.js";
 import Chapter from "./models/Chapter.js";
+import ImageAsset from "./models/ImageAsset.js";
+import { readModerationImage } from "./services/imageAssets.js";
 import { createLifecycle } from "./services/serverLifecycle.js";
 import { connectDB } from "./config/db.js";
 import passport      from "passport";
@@ -79,6 +81,9 @@ const lifecycle = createLifecycle({ database: mongoose, stopWorker: () => stopWo
 const PORT = process.env.PORT || 5000;
 const isProd = process.env.NODE_ENV === "production";
 const adminPath = process.env.ADMIN_SECRET_PATH;
+const railwayRelease = process.env.RAILWAY_GIT_COMMIT_SHA;
+const hasRailwayRelease = /^[a-f0-9]{40}$/i.test(railwayRelease ?? "");
+let imageEvidenceVerified = false;
 
 if (!adminPath) {
   console.error("❌ ADMIN_SECRET_PATH tanımlı değil.");
@@ -157,7 +162,11 @@ app.use('/api', cookieOrigin);
 app.use(passport.initialize());
 
 // ── Health ──
-app.get("/api/ready", lifecycle.ready);
+app.get("/api/ready", (_req, res, next) => {
+  if (hasRailwayRelease) res.set("X-ACB-Release", railwayRelease);
+  if (imageEvidenceVerified) res.set("X-ACB-Image-Evidence", "verified");
+  next();
+}, lifecycle.ready);
 app.get("/api/health", (_, res) =>
   res.json({ ok: true, msg: "ACB Atölyesi ayakta ✅" })
 );
@@ -293,6 +302,12 @@ const startServer = async () => {
     await prepareUploadRateLimits();
     await prepareContentModeration();
     await prepareSpotlight();
+    if (hasRailwayRelease) {
+      // Prove that the deployed reader can retrieve evidence without loading MongoDB bytes.
+      ImageAsset.findOne({ "evidence.publicId": { $exists: true } }).select("evidence").maxTimeMS(3000).lean()
+        .then(async asset => { imageEvidenceVerified = Boolean(await readModerationImage(asset)); })
+        .catch(error => console.error("Image evidence verification failed:", error.code || error.name));
+    }
     stopWorker = startSpotlightWorker();
     console.log("📥 Veritabanı bağlantısı başarılı.");
 

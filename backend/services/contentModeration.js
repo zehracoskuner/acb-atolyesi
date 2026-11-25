@@ -10,7 +10,8 @@ import Chapter from '../models/Chapter.js';
 import Character from '../models/Character.js';
 import Notification from '../models/Notification.js';
 import { fail, textField, captureEvidence } from './reportWorkflow.js';
-import { legacyImage, accountForWrite, txOptions, publishImage, purgeImage } from './imageAssets.js';
+import { legacyImage, accountForWrite, txOptions, publishImage, purgeImage, readModerationImage } from './imageAssets.js';
+import { readPortraitAsset } from './characterPortraits.js';
 
 const DAY = 86400000;
 const same = (a, b) => String(a) === String(b);
@@ -123,8 +124,10 @@ export async function decideContent(id, actor, body) {
   let restored;
   if (action === 'reverse' && entry.asset) {
     const asset = await ImageAsset.findById(entry.asset).select('+bytes');
-    if (asset.privatePortrait && asset.bytes) restored = { secure_url: asset.url };
-    else if (asset.bytes) restored = await publishImage(asset.bytes);
+    if (!asset) fail(409, 'Görsel kaydı bulunamadı.');
+    const bytes = asset.privatePortrait ? await readPortraitAsset(asset) : await readModerationImage(asset);
+    if (asset.privatePortrait && bytes) restored = { secure_url: asset.url };
+    else if (bytes) restored = await publishImage(bytes);
     else if (asset.delivery === 'external') restored = { secure_url: asset.url };
     else fail(409, 'Özel kanıt yok; sağlayıcı yedeğinden geri yükleme gerekir.');
   }
@@ -152,12 +155,13 @@ export async function decideContent(id, actor, body) {
         await chapter.save({ session });
         await Work.updateOne({ _id: chapter.work }, { $pull: { publishedChapterIds: chapter._id } }, { session });
         await syncWork(chapter.work, session);
-        await notify(current.owner, `ACB Atölyesi: Bölüm kararı: ${action === 'remove' ? 'yayından kaldırıldı' : 'geri alındı'}. Gerekçe: ${reason}. Metniniz ve sürüm geçmişiniz korunuyor.`, session, id);
+        await notify(current.owner, `ACB Atölyesi: Bölüm kararı: ${action === 'remove' ? 'yayından kaldırıldı' : 'geri alındı'}. Gerekçe: ${reason}. Metniniz korunuyor.`, session, id);
       } else {
         const asset = await ImageAsset.findById(current.asset).select('+bytes').session(session);
         if (action === 'remove') {
           if (current.status !== 'pending') fail(409, 'Karar verilmiş.');
-          asset.state = 'removed'; asset.delivery = asset.privatePortrait ? 'purged' : asset.publicId ? 'purge_pending' : 'external';
+          asset.state = 'removed';
+          asset.delivery = asset.privatePortrait ? asset.providerUrl ? 'restricted' : 'purged' : asset.publicId ? 'purge_pending' : 'external';
           await asset.save({ session });
           await removeImageReferences(asset, current, session);
           current.status = 'removed';
@@ -169,7 +173,8 @@ export async function decideContent(id, actor, body) {
             await asset.save({ session });
           }
           else await ImageAsset.create([{ owner: asset.owner, url: restored.secure_url, publicId: restored.public_id,
-            bytes: asset.bytes, mime: asset.mime, providerVersion: String(restored.version || '') }], { session });
+            evidence: asset.evidence, bytes: asset.evidence ? undefined : asset.bytes,
+            mime: asset.mime, providerVersion: String(restored.version || '') }], { session });
           // Only untouched placeholders created by this exact decision may be restored.
           if (asset.privatePortrait) {
             await Character.updateOne({ _id: current.target, user: current.owner, removedImageCase: String(id), imageUrl: { $exists: false } },

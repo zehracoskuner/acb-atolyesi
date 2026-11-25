@@ -9,14 +9,13 @@ import DevelopmentCoachDialog from "../components/DevelopmentCoachDialog";
 import DevelopmentCoachPreference from "../components/DevelopmentCoachPreference";
 import DevelopmentCoachArchive from "../components/DevelopmentCoachArchive";
 import { DEVELOPMENT_COACH_LAUNCH_ENABLED } from "../../../shared/features.js";
-import { CHAPTER_HISTORY_ENABLED } from "../../../shared/features.js";
 import { createParagraphTracker } from "../../../shared/chapterParagraphEditor.js";
 import BookDownload from "../components/BookDownload";
 import { saveBeforeBookDownload } from "../lib/bookDownload";
 import "../styles/ChaptersPage.css";
 import EtikHatirlatma from "../components/EtikHatirlatma";
 import AtelierTab from "../components/AtelierTab";
-import ChapterHistory, { ChapterPreview } from "../components/ChapterHistory";
+import ChapterPreview from "../components/ChapterPreview";
 import { draftKey, readDrafts, persistDraft } from "../lib/chapterDrafts";
 import DOMPurify from "dompurify";
 import ChapterMediaEditor from "../components/ChapterMediaEditor";
@@ -87,22 +86,34 @@ function popUndoSnapshot(id, stacksRef) {
 }
 
 /* ── Reducer ── */
+function hasChapterChanges(chapter, title = chapter._baseTitle, content = chapter._baseContent, media = chapter._baseMedia) {
+  return chapter.title !== title || chapter.content !== content ||
+    JSON.stringify(chapter.media || []) !== JSON.stringify(media || []);
+}
+
 function chaptersReducer(state, action) {
   switch (action.type) {
     case "SET":    return action.chapters;
     case "ADD":    return [...state, action.chapter];
     case "DELETE": return state.filter((c) => c._id !== action.id);
     case "UPDATE_TITLE":
-      return state.map((c) => c._id === action.id && !c._deleting ? { ...c, title: action.title, _dirty: true, _edit: c._edit + 1, _saveError: false } : c);
+      return state.map((c) => c._id === action.id && !c._deleting
+        ? { ...c, title: action.title, _dirty: c._saving || hasChapterChanges({ ...c, title: action.title }), _edit: c._edit + 1, _saveError: false } : c);
     case "UPDATE_MEDIA":
-      return state.map(c => c._id === action.id && !c._deleting ? { ...c, media: action.update(c.media || []), _dirty: true, _edit: c._edit + 1, _saveError: false } : c);
+      return state.map(c => {
+        if (c._id !== action.id || c._deleting) return c;
+        const next = { ...c, media: action.update(c.media || []) };
+        return { ...next, _dirty: c._saving || hasChapterChanges(next), _edit: c._edit + 1, _saveError: false };
+      });
     case "MEDIA_UPLOADING":
       return state.map(c => c._id === action.id ? { ...c, _mediaUploading: action.value } : c);
     case "UPDATE_CHAPTER_CONTENT":
     case "UNDO_CONTENT":
       return state.map((ch) => {
         if (ch._id !== action.chapterId || ch._deleting) return ch;
-        return { ...ch, content: action.content, _eligibleWords: (ch._eligibleWords || 0) + (action.eligibleWords || 0), _dirty: true, _edit: ch._edit + 1, _saveError: false };
+        const next = { ...ch, content: action.content };
+        const dirty = ch._saving || hasChapterChanges(next);
+        return { ...next, _eligibleWords: dirty ? (ch._eligibleWords || 0) + (action.eligibleWords || 0) : ch._savedEligibleWords, _dirty: dirty, _edit: ch._edit + 1, _saveError: false };
       });
     case "UPDATE_STATUS":
       return state.map((c) => c._id !== action.id ? c : { ...c, status: action.status, reviewStatus: action.reviewStatus, hasUnpublishedChanges: action.hasUnpublishedChanges ?? c.hasUnpublishedChanges, reviewNote: action.reviewNote ?? c.reviewNote });
@@ -124,19 +135,22 @@ function chaptersReducer(state, action) {
         status: action.item.status, reviewStatus: action.item.reviewStatus, hasUnpublishedChanges: !!action.item.hasUnpublishedChanges, reviewNote: action.item.reviewNote ?? "",
         // A receipt acknowledges a snapshot; it must not rewrite the live DOM
         // (even harmless sanitizer serialization like <br /> moves the caret).
-        _saving: false, _saveError: false, _dirty: c._edit !== action.edit,
+        _saving: false, _saveError: false,
+        _dirty: c._edit !== action.edit && hasChapterChanges(c, action.sent?.title ?? action.item.title,
+          action.sent?.content ?? action.item.content, action.sent?.media ?? action.item.media),
       });
     case "SAVE_ERROR":
       return state.map(c => c._id === action.id && c._request === action.request ? { ...c, _saving: false, _saveError: true, _conflict: action.current || c._conflict } : c);
     case "RESOLVE":
-      return state.map(c => c._id !== action.id ? c : { ...c,
-        title: action.title, content: action.content, media: action.media ?? c.media ?? [], revision: action.revision,
-        _savedEligibleWords: c._eligibleWords || 0,
-        _resolvedDraftKeys: [...(c._resolvedDraftKeys || []), ...(action.draftKey ? [action.draftKey] : [])],
-        _dirty: true, _edit: c._edit + 1, _saveError: false, _conflict: null, _recovery: null });
-    case "RESTORED":
-      return state.map(c => c._id !== action.id ? c : c._edit === action.edit ? action.chapter : {
-        ...c, revision: action.chapter.revision, savedAt: action.chapter.savedAt, status: action.chapter.status, hasUnpublishedChanges: action.chapter.hasUnpublishedChanges, _dirty: true });
+      return state.map(c => {
+        if (c._id !== action.id) return c;
+        const next = { ...c, title: action.title, content: action.content, media: action.media ?? c.media ?? [],
+          revision: action.revision, _baseTitle: action.remote?.title ?? c._baseTitle,
+          _baseContent: action.remote?.content ?? c._baseContent, _baseMedia: action.remote?.media ?? c._baseMedia };
+        return { ...next, _savedEligibleWords: c._eligibleWords || 0,
+          _resolvedDraftKeys: [...(c._resolvedDraftKeys || []), ...(action.draftKey ? [action.draftKey] : [])],
+          _dirty: hasChapterChanges(next), _edit: c._edit + 1, _saveError: false, _conflict: null, _recovery: null };
+      });
     case "CONFLICT_REFRESH":
       return state.map(c => c._id !== action.id ? c : { ...c, _conflict: action.current });
     case "DISMISS_DRAFT":
@@ -536,7 +550,6 @@ function ChapterEditor({ userId }) {
   const fetchGeneration = useRef(0);
   const undoStacksRef = useRef({});
   const [localError, setLocalError] = useState("");
-  const [historyId, setHistoryId] = useState(null);
   const [development, setDevelopment] = useState(false);
   const [developmentQuota, setDevelopmentQuota] = useState(null);
   const developmentStatusGeneration = useRef(0);
@@ -587,7 +600,6 @@ function ChapterEditor({ userId }) {
       if (mounted.current) setDevelopmentState({ status: "error", message: error.message });
     } finally { developmentRequest.current = false; }
   };
-  const [restoreMessage, setRestoreMessage] = useState("");
   useEffect(() => {
     let active = true;
     if (!DEVELOPMENT_COACH_LAUNCH_ENABLED) return;
@@ -607,11 +619,6 @@ function ChapterEditor({ userId }) {
     const resetTimer = developmentQuota?.retryAfter ? setTimeout(refresh, Math.min(developmentQuota.retryAfter * 1000 + 100, 2147483647)) : null;
     return () => { active = false; clearInterval(timer); clearTimeout(resetTimer); window.removeEventListener("focus", refresh); };
   }, [workId, developmentQuota?.retryAfter, coachPreference]);
-  useEffect(() => {
-    if (!restoreMessage) return;
-    const timer = setTimeout(() => setRestoreMessage(""), 7000);
-    return () => clearTimeout(timer);
-  }, [restoreMessage]);
   const dispatch = useCallback(action => {
     if (!mounted.current) return;
     const next = chaptersReducer(chaptersRef.current, action);
@@ -836,42 +843,6 @@ useEffect(() => {
     finally { if (acquired) publishingIds.current.delete(ch._id); setPublishing(false); }
   };
 
-  const restoreVersion = async (selected) => {
-    const ch = chaptersRef.current.find(c => c._id === historyId);
-    if (!ch || ch._deleting || publishingIds.current.has(ch._id) || ch._conflict || ch._recovery) return false;
-    if (!await saveChapter(ch._id)) throw new Error("Önce mevcut metnin sunucuya kaydedilmesi gerekiyor.");
-    const current = chaptersRef.current.find(c => c._id === ch._id);
-    if (!current || current._deleting || publishingIds.current.has(ch._id) || current._edit !== ch._edit || current._dirty) throw new Error("Kayıt sırasında metin değişti. Önizlemeyi kontrol edip tekrar deneyin.");
-    publishingIds.current.add(ch._id);
-    clearTimeout(autoSaveTimers.current[ch._id]);
-    try {
-      const result = await apiPost(`/chapters/${ch._id}/versions/${selected.revision}/restore?editor=1`, { expectedRevision: current.revision });
-      if (!isChapterSaveReceipt(result, ch._id, current.revision)) throw new Error("Geri yükleme yanıtı doğrulanamadı.");
-      dispatch({ type: "RESTORED", id: ch._id, edit: current._edit, chapter: normalizeChapter(result.item) });
-      setRestoreMessage("Seçtiğin metinden devam ediyorsun. Önceki taslağın Geçmiş'te saklandı.");
-      return true;
-    } catch (err) {
-      dispatch({ type: "SAVE_ERROR", id: ch._id, request: current._request, current: err.status === 409 ? err.data?.current : null });
-      throw err;
-    } finally { publishingIds.current.delete(ch._id); }
-  };
-
-  const saveCheckpoint = async (label) => {
-    const ch = chaptersRef.current.find(c => c._id === historyId);
-    if (!ch || ch._deleting || ch._conflict || ch._recovery || publishingIds.current.has(ch._id)) throw new Error("Önce bölümün kayıt durumunu çözün.");
-    if (!await saveChapter(ch._id)) throw new Error("Metin sunucuya kaydedilemedi. Yerel taslağınız korunuyor.");
-    const current = chaptersRef.current.find(c => c._id === ch._id);
-    if (!current || current._dirty || current._edit !== ch._edit) throw new Error("Kayıt sırasında metin değişti. Tekrar deneyin.");
-    try {
-      const result = await apiPost(`/chapters/${ch._id}/checkpoint?editor=1`, { expectedRevision: current.revision, label });
-      if (!result.item || result.item.revision !== current.revision || !result.item.isCheckpoint) throw new Error("Kaydın saklandığı doğrulanamadı.");
-      return result.item;
-    } catch (err) {
-      if (err.status === 409 && err.data?.current) dispatch({ type: "CONFLICT_REFRESH", id: ch._id, current: err.data.current });
-      throw err;
-    }
-  };
-
   const resolveLocal = async (chapter, draft) => {
     try {
       const { item } = await apiGet(`/chapters/${chapter._id}?editor=1`);
@@ -883,7 +854,7 @@ useEffect(() => {
       const current = chaptersRef.current.find(c => c._id === chapter._id);
       if (current._edit !== chapter._edit) { setError("Karşılaştırma sırasında metin değişti. Tekrar kontrol edin."); return; }
       dispatch({ type: "RESOLVE", id: chapter._id, revision: item.revision ?? 0,
-        draftKey: draft?.key,
+        draftKey: draft?.key, remote: item,
         title: draft?.title ?? current.title, content: DOMPurify.sanitize(draft?.content ?? current.content), media: draft ? (draft.media || []) : (current.media || []) });
     } catch (err) { setError(err.message); }
   };
@@ -898,7 +869,6 @@ useEffect(() => {
       if (pageTab !== PAGE_TABS.BOLUMLER && !focusMode) return;
       const mod=e.ctrlKey||e.metaKey;
       if (developmentOpen) return;
-      if (historyId && (e.key === "F11" || (mod && ["ArrowDown", "ArrowUp"].includes(e.key)))) { e.preventDefault(); return; }
       if(mod&&e.key==="s"){e.preventDefault();if(activeChapterId)saveChapter(activeChapterId);}
       if(e.key==="F11"){e.preventDefault();setFocusMode(v=>!v);}
       if(e.key==="Escape"){setFocusMode(false);}
@@ -916,7 +886,7 @@ useEffect(() => {
     };
     window.addEventListener("keydown",down);
     return()=>window.removeEventListener("keydown",down);
-  },[activeChapterId,saveChapter,jumpToChapter,dispatch,pageTab,focusMode,historyId,developmentOpen]);
+  },[activeChapterId,saveChapter,jumpToChapter,dispatch,pageTab,focusMode,developmentOpen]);
 
   const activeChapter=chapters.find(c=>c._id===activeChapterId);
   const totalWc = useMemo(() => chapters.reduce((sum, ch) => sum + wcFromHtml(ch.content), 0), [chapters]);
@@ -949,7 +919,7 @@ useEffect(() => {
   return (
     <>
     <DevelopmentCoachPreference initialOnly onChange={setCoachPreference} />
-    <div className="cp-root" inert={focusMode && !!activeChapter || !!historyId || developmentOpen || coachPreference === "undecided"}>
+    <div className="cp-root" inert={focusMode && !!activeChapter || developmentOpen || coachPreference === "undecided"}>
       {sidebarOpen && <button className="cp-sidebar-backdrop" aria-label="Bölüm menüsünü kapat" onClick={() => setSidebarOpen(false)} />}
       {/* ── SIDEBAR ── */}
       <aside className={`cp-sidebar ${sidebarOpen ? "cp-sidebar--open" : ""}`}>
@@ -1017,7 +987,6 @@ useEffect(() => {
                 <button className="cp-tb-btn cp-development-btn" disabled={developmentQuota?.remaining === 0} onClick={openDevelopment}>✦ Gelişimimi takip et</button>
                 {developmentQuota && <span className="cp-development-quota" role="status">Kalan analiz: {developmentQuota.remaining}/{developmentQuota.dailyLimit} (24 saat)</span>}
               </>}
-              {CHAPTER_HISTORY_ENABLED && <button className="cp-tb-btn cp-compact-tool" aria-label="Geçmiş" title="Geçmiş" disabled={!activeChapterId} onClick={() => setHistoryId(activeChapterId)}><span className="cp-tb-btn-icon" aria-hidden="true">◷</span><span className="cp-tool-label">Geçmiş</span></button>}
               <button className="cp-tb-btn cp-compact-tool" aria-label="Odak" title="Odak (F11)" disabled={!activeChapterId} onClick={() => setFocusMode(true)} data-tour="write-odak-btn"><span className="cp-tb-btn-icon" aria-hidden="true">⛶</span><span className="cp-tool-label">Odak</span></button>
             </>}
             <button className="cp-tb-btn cp-theme-btn" onClick={() => setTheme(t => t === "light" ? "dark" : "light")} aria-label={theme === "light" ? "Karanlık moda geç" : "Aydınlık moda geç"} title={theme === "light" ? "Karanlık moda geç" : "Aydınlık moda geç"}>{theme === "light" ? "☾" : "☀"}</button>
@@ -1098,8 +1067,6 @@ useEffect(() => {
     </div>
     {/* Portals — cp-root dışında, viewport'a göre fixed */}
     {focusMode&&activeChapter&&<FocusOverlay key={activeChapter._id} chapter={activeChapter} onClose={()=>setFocusMode(false)} onContentChange={handleContentChange} onTitleChange={handleTitleChange} saveStatus={saveStatus} onSave={()=>saveChapter(activeChapterId)}/>}
-    {CHAPTER_HISTORY_ENABLED && historyId && chapters.find(c => c._id === historyId) && <ChapterHistory key={historyId} chapter={chapters.find(c => c._id === historyId)} onClose={() => setHistoryId(null)} onRestore={restoreVersion} onCheckpoint={saveCheckpoint} renderCurrent={({ readOnly }) => <section data-chapter-id={historyId}><h3>Şu anki metin</h3><RichEditor readOnly={readOnly} value={chapters.find(c => c._id === historyId)?.content} onChange={(html, eligible) => handleContentChange(historyId, html, eligible)} /></section>} />}
-    {restoreMessage && <div className="cp-restore-toast" role="status">{restoreMessage}</div>}
     {developmentOpen && <DevelopmentCoachDialog state={developmentState} onClose={() => setDevelopmentOpen(false)} />}
     {announceModal&&<AnnounceModal chapterTitle={announceModal.title} workId={workId} onClose={()=>setAnnounceModal(null)}/>}
     {reviewPending&&<ReviewPendingBanner onClose={()=>setReviewPending(false)}/>}

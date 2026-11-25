@@ -57,6 +57,15 @@ beforeEach(() => {
   ip = `192.0.2.${sequence}`;
   role = "user";
   uploaded = [];
+  const evidence = new Map();
+  const fetchLocal = globalThis.fetch;
+  cloudinary.config({ cloud_name: 'test', api_key: 'test', api_secret: 'test-secret' });
+  vi.spyOn(globalThis, 'fetch').mockImplementation((input, options) => {
+    const source = new URL(input);
+    const key = /\/image\/authenticated\/s--[\w-]+--\/v1\/(acb-moderation-evidence\/.+)\.png$/.exec(source.pathname)?.[1];
+    if (!key) return fetchLocal(input, options);
+    return Promise.resolve(new Response(evidence.get(key), { status: evidence.has(key) ? 200 : 404 }));
+  });
   vi.stubEnv("JWT_SECRET", randomBytes(32).toString("hex"));
   vi.stubEnv("CLIENT_URL", "https://app.example.test");
   vi.spyOn(User, "findById").mockImplementation(() => ({ select: () => ({ lean: async () => ({
@@ -68,7 +77,18 @@ beforeEach(() => {
     const chunks = [];
     return new Writable({
       write(chunk, encoding, done) { chunks.push(chunk); done(); },
-      final(done) { uploaded.push(Buffer.concat(chunks)); url = `https://res.cloudinary.com/test/image/upload/cover-${++assetSequence}.png`; callback(null, { secure_url: url, public_id: `cover-${assetSequence}` }); done(); },
+      final(done) {
+        const bytes = Buffer.concat(chunks);
+        if (options.type === 'authenticated') {
+          evidence.set(options.public_id, bytes);
+          callback(null, { public_id: options.public_id, resource_type: 'image', type: 'authenticated', format: 'png', version: 1 });
+        } else {
+          uploaded.push(bytes);
+          url = `https://res.cloudinary.com/test/image/upload/cover-${++assetSequence}.png`;
+          callback(null, { secure_url: url, public_id: `cover-${assetSequence}` });
+        }
+        done();
+      },
     });
   });
 });
@@ -147,7 +167,7 @@ it("does not ask AI to approve technically valid images", async () => {
   moderateCover.mockResolvedValue({ severity: "reject", reason: "test" });
   expect((await upload()).status).toBe(200);
   expect(moderateCover).not.toHaveBeenCalled();
-  expect(cloudinary.uploader.upload_stream).toHaveBeenCalledTimes(1);
+  expect(cloudinary.uploader.upload_stream).toHaveBeenCalledTimes(2);
 });
 it("uses uploaded URLs for work creation and subsequent cover changes", async () => {
   const workId = "000000000000000000001234";
@@ -274,7 +294,7 @@ it("counts validation, successful uploads and provider failures without refund, 
   const counter = await mongoose.connection.db.collection("upload_rate_limits").findOne({ _id: `upload:user:${id}` });
   expect(counter.hits).toBe(21);
   expect(moderateCover).not.toHaveBeenCalled();
-  expect(cloudinary.uploader.upload_stream).toHaveBeenCalledTimes(2);
+  expect(cloudinary.uploader.upload_stream).toHaveBeenCalledTimes(3);
 });
 
 it("fails closed on quota database errors", async () => {

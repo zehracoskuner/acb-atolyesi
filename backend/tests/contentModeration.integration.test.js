@@ -14,7 +14,6 @@ import User from '../models/User.js';
 import Work from '../models/Work.js';
 import Character from '../models/Character.js';
 import Chapter from '../models/Chapter.js';
-import ChapterVersion from '../models/ChapterVersion.js';
 import Report from '../models/Report.js';
 import ImageAsset from '../models/ImageAsset.js';
 import ContentCase from '../models/ContentCase.js';
@@ -32,7 +31,8 @@ import aiRoutes from '../routes/ai.js';
 import { prepareContentModeration } from '../services/prepareContentModeration.js';
 import { fileContentReport, decideContent, manualVisualBlock } from '../services/contentModeration.js';
 import { blockedUntil, assertImageAllowed } from '../services/imageAssets.js';
-import { saveChapterVersion } from '../services/chapterHistory.js';
+import { migrateCharacterPortraits } from '../services/portraitMigration.js';
+import { saveChapter } from '../services/chapterEditing.js';
 import { newTermsAcceptance } from '../config/terms.js';
 vi.mock('../services/emailService.js', () => ({ sendMail: vi.fn(), sendStaffMail: vi.fn(), sendAdminMail: vi.fn(), SITE_URL: 'https://example.test' }));
 vi.mock('../utils/aiModerator.js', () => ({ moderateCover: vi.fn(() => { throw Error('AI must not run'); }), moderateChapter: vi.fn(() => { throw Error('AI must not run'); }) }));
@@ -40,6 +40,7 @@ vi.mock('@google/generative-ai', () => ({ GoogleGenerativeAI: class {
   getGenerativeModel() { return { generateContent: vi.fn(async () => ({ response: { text: () => JSON.stringify({ analysis: 'Coach analysis', closingNote: 'Keep writing', weakness: { skill: 'ritim', severity: 'low' } }) } })) }; }
 } }));
 let replica, server, base, owner, admin, moderator, reporters, png, serial = 0;
+const portraitObjects = new Map();
 const actor = user => ({ id: String(user._id), role: user.role });
 beforeAll(async () => {
   vi.stubEnv('JWT_SECRET', randomBytes(32).toString('hex'));
@@ -47,7 +48,7 @@ beforeAll(async () => {
   replica = await MongoMemoryReplSet.create({ replSet: { count: 1 }, binary: { version: '7.0.14', downloadDir: fileURLToPath(new URL('../node_modules/.cache/mongodb-binaries', import.meta.url)) } });
   await mongoose.connect(replica.getUri(), { dbName: 'content_moderation_test' });
   await prepareContentModeration();
-  await Promise.all([User.init(), Work.init(), Chapter.init(), ChapterVersion.init(), Notification.init()]);
+  await Promise.all([User.init(), Work.init(), Chapter.init(), Notification.init()]);
   png = await sharp({ create: { width: 8, height: 8, channels: 3, background: 'red' } }).png().toBuffer();
   const app = express(); app.use(cookieParser(), express.json());
   app.use('/api/moderation', ensureAuth, moderationRoutes);
@@ -60,12 +61,27 @@ beforeAll(async () => {
 }, 120000);
 afterAll(async () => { if (server) await new Promise(resolve => server.close(resolve)); await mongoose.disconnect(); await replica?.stop(); vi.unstubAllEnvs(); });
 beforeEach(async () => {
-  for (const model of [User, Work, Character, Chapter, ChapterVersion, Report, ContentCase, ImageAsset, VisualAccount, Notification]) await model.deleteMany({});
+  for (const model of [User, Work, Character, Chapter, Report, ContentCase, ImageAsset, VisualAccount, Notification]) await model.deleteMany({});
   [owner, admin, moderator, ...reporters] = await User.create(['user', 'admin', 'moderator', ...Array(7).fill('user')].map((role, i) => ({ email: `u${i}@example.test`, kullaniciAdi: `member${i}`, role, profileComplete: true, birthYear: 1990, ...newTermsAcceptance() })));
+  portraitObjects.clear();
+  cloudinary.config({ cloud_name: 'test', api_key: 'test', api_secret: 'test-only-secret' });
   vi.spyOn(cloudinary.uploader, 'destroy').mockResolvedValue({ result: 'ok' });
-  vi.spyOn(cloudinary.uploader, 'upload_stream').mockImplementation((options, callback) => new Writable({ write(chunk, encoding, done) { done(); }, final(done) {
-    const key = `asset-${++serial}`; callback(null, { secure_url: `https://res.cloudinary.com/test/image/upload/v1/${key}.png`, public_id: key, version: 1 }); done();
-  } }));
+  vi.spyOn(cloudinary.uploader, 'upload_stream').mockImplementation((options, callback) => {
+    const chunks = [];
+    return new Writable({ write(chunk, encoding, done) { chunks.push(chunk); done(); }, final(done) {
+      if (options.public_id?.startsWith('acb-moderation-evidence/')) {
+        portraitObjects.set(options.public_id, Buffer.concat(chunks));
+        callback(null, { public_id: options.public_id, resource_type: 'image', type: 'authenticated', format: 'png', version: 1 });
+        return done();
+      }
+      const isPortrait = options.type === 'authenticated';
+      const key = isPortrait ? options.public_id : `asset-${++serial}`;
+      if (isPortrait) portraitObjects.set(key, Buffer.concat(chunks));
+      const suffix = isPortrait ? `authenticated/s--signed--/v1/${key}.webp` : `upload/v1/${key}.png`;
+      callback(null, { secure_url: `https://res.cloudinary.com/test/image/${suffix}`, public_id: key, version: 1 });
+      done();
+    } });
+  });
 });
 afterEach(() => vi.restoreAllMocks());
 async function request(path, user = owner, method = 'GET', body) {
@@ -89,7 +105,23 @@ async function decision(caseId, action = 'remove', by = admin) {
 }
 async function violation(kind = 'avatar') { const fixture = await image(kind); const r = await report(fixture); await decision(r.contentCase); return r.contentCase; }
 
-it('stores private portraits durably, keeps the last successful upload, and supports moderation reversal', async () => {
+function mockPortraitDelivery() {
+  const fetchLocal = globalThis.fetch;
+  const delivered = [];
+  vi.spyOn(globalThis, 'fetch').mockImplementation((input, options) => {
+    const url = new URL(input);
+    if (url.hostname !== 'res.cloudinary.com') return fetchLocal(input, options);
+    const match = /^\/test\/image\/authenticated\/s--[\w-]+--\/v1\/(acb-character-portraits\/[a-f\d]{24})\.webp$/.exec(url.pathname) ||
+      /^\/test\/image\/authenticated\/s--[\w-]+--\/v1\/(acb-moderation-evidence\/.+)\.png$/.exec(url.pathname);
+    delivered.push(url.pathname);
+    const bytes = match && portraitObjects.get(match[1]);
+    return Promise.resolve(bytes ? new Response(bytes, { headers: { 'Content-Type': 'image/webp' } }) : new Response(null, { status: 404 }));
+  });
+  return delivered;
+}
+
+it('stores optimized private portraits in Cloudinary, preserves the previous image on failure and supports moderation reversal', async () => {
+  const delivered = mockPortraitDelivery();
   const work = await Work.create({ user: owner._id, title: 'Özel karakterler' });
   const character = await Character.create({ user: owner._id, work: work._id, name: 'Lavinia' });
   const path = `/characters/${character._id}/portrait?workId=${work._id}`;
@@ -103,20 +135,36 @@ it('stores private portraits durably, keeps the last successful upload, and supp
     body.append('file', new Blob([bytes], { type: mime }), 'portrait.png');
     return fetchAs('/api' + path, token, { method: 'POST', body });
   };
-  const largePhoto = await sharp({ create: { width: 1200, height: 1600, channels: 3, background: 'purple' } })
+  const largePhoto = await sharp({ create: { width: 1500, height: 2000, channels: 3, background: 'purple' } })
     .withMetadata().png().toBuffer();
   expect((await upload(png, otherToken)).status).toBe(404);
   const stored = await upload(largePhoto);
   expect(stored.status).toBe(201);
   const { item } = await stored.json();
+  const asset = await ImageAsset.findOne({ url: item.imageUrl }).select('+bytes');
+  expect(asset.providerUrl).toMatch(/^https:\/\/res\.cloudinary\.com\/test\/image\/authenticated\/v1\/.+\.webp$/);
+  expect(asset.bytes).toBeUndefined();
+  expect(cloudinary.uploader.upload_stream).toHaveBeenCalledWith(expect.objectContaining({
+    type: 'authenticated', overwrite: false,
+  }), expect.any(Function));
+  expect(portraitObjects.get(asset.publicId).length).toBeLessThan(750 * 1024);
   expect((await upload(png, ownerToken, 'image/jpeg')).status).toBe(400);
-  expect((await upload(Buffer.alloc(2 * 1024 * 1024 + 1))).status).toBe(400);
+  const oversized = await upload(Buffer.alloc(3 * 1024 * 1024 + 1));
+  expect(oversized.status).toBe(400);
+  expect((await oversized.json()).message).toMatch(/3 MB/);
+  cloudinary.uploader.upload_stream.mockImplementationOnce((_options, callback) => new Writable({
+    write(chunk, encoding, done) { done(); },
+    final(done) { callback(new Error('Provider offline')); done(); },
+  }));
+  expect((await upload(png)).status).toBe(502);
   expect((await request(`/characters?workId=${work._id}`)).data.items[0].imageUrl).toBe(item.imageUrl);
   expect((await fetchAs(item.imageUrl, otherToken)).status).toBe(404);
+  expect(delivered).toHaveLength(0);
   const picture = await fetchAs(item.imageUrl, ownerToken);
   expect(picture.headers.get('content-type')).toBe('image/webp');
+  expect(picture.headers.get('cache-control')).toBe('private, no-store');
   const metadata = await sharp(Buffer.from(await picture.arrayBuffer())).metadata();
-  expect(metadata).toMatchObject({ format: 'webp', width: 768, height: 1024 });
+  expect(metadata).toMatchObject({ format: 'webp', width: 1200, height: 1600 });
   expect(metadata.exif).toBeUndefined();
   const complaint = { targetType: 'characterImage', targetId: item._id, expectedUrl: item.imageUrl, reason: 'uygunsuz_icerik' };
   expect((await request('/reports', reporters[0], 'POST', complaint)).status).toBe(403);
@@ -125,12 +173,78 @@ it('stores private portraits durably, keeps the last successful upload, and supp
   const caseId = result.data.sikayet.contentCase;
   const removed = await decision(caseId);
   expect(removed.entry.status).toBe('removed');
+  expect(removed.delivery).toBe('restricted');
   expect((await fetchAs(item.imageUrl, ownerToken)).status).toBe(404);
+  expect((await fetchAs(`/api/moderation/cases/${caseId}/evidence`, await createNativeSession(admin))).headers.get('content-type')).toBe('image/webp');
   expect((await decision(caseId, 'reverse')).entry.status).toBe('reversed');
   expect((await fetchAs(item.imageUrl, ownerToken)).status).toBe(200);
   expect((await request(path, owner, 'DELETE')).data.item.imageUrl).toBeUndefined();
   expect((await fetchAs(item.imageUrl, ownerToken)).status).toBe(404);
+  expect(cloudinary.uploader.upload_stream).toHaveBeenCalledTimes(2);
+  expect(cloudinary.uploader.destroy).not.toHaveBeenCalled();
+});
+
+it('reads and restores a public image from private Cloudinary evidence without MongoDB bytes', async () => {
+  mockPortraitDelivery();
+  const body = new FormData();
+  body.append('file', new Blob([png], { type: 'image/png' }), 'cover.png');
+  const response = await fetch(`${base}/upload`, { method: 'POST', body, headers: { Authorization: `Bearer ${await createNativeSession(owner)}` } });
+  expect(response.status).toBe(200);
+  const upload = await response.json();
+  const asset = await ImageAsset.findById(upload.assetId).select('+bytes');
+  expect(asset.bytes).toBeUndefined();
+  expect(asset.evidence.publicId).toMatch(/^acb-moderation-evidence\//);
+  await User.updateOne({ _id: owner._id }, { $set: { avatarUrl: asset.url } });
+  const { contentCase } = await report({ asset, kind: 'avatar', target: owner._id });
+  const expected = portraitObjects.get(asset.evidence.publicId);
+  portraitObjects.delete(asset.evidence.publicId);
+  expect((await decision(contentCase)).delivery).toBe('purge_pending');
+  expect(cloudinary.uploader.destroy).not.toHaveBeenCalled();
+  portraitObjects.set(asset.evidence.publicId, expected);
+  expect((await decision(contentCase)).delivery).toBe('purged');
+  const evidence = await fetch(`${base}/moderation/cases/${contentCase}/evidence`, { headers: { Authorization: `Bearer ${await createNativeSession(admin)}` } });
+  expect(evidence.status).toBe(200);
+  expect(Buffer.from(await evidence.arrayBuffer()).equals(expected)).toBe(true);
+  expect((await decision(contentCase, 'reverse')).entry.status).toBe('reversed');
+  const restored = await ImageAsset.findOne({ url: (await User.findById(owner._id)).avatarUrl }).select('+bytes');
+  expect(restored.url).not.toBe(asset.url);
+  expect(restored.bytes).toBeUndefined();
+  expect(restored.evidence.publicId).toBe(asset.evidence.publicId);
+});
+
+it('copies legacy attached portraits without removing data, then releases Mongo storage only after verifying the provider copy', async () => {
+  mockPortraitDelivery();
+  const work = await Work.create({ user: owner._id, title: 'Eski portreler' });
+  const character = await Character.create({ user: owner._id, work: work._id, name: 'Lavinia' });
+  const _id = new mongoose.Types.ObjectId();
+  const url = `/api/characters/${character._id}/portrait/${_id}`;
+  const bytes = await sharp(png).webp().toBuffer();
+  await ImageAsset.create({ _id, owner: owner._id, url, privatePortrait: true, bytes, mime: 'image/webp' });
+  await Character.updateOne({ _id: character._id }, { $set: { imageUrl: url } });
+  const unlinked = await ImageAsset.create({ owner: owner._id, url: '/api/characters/unused/portrait/unused', privatePortrait: true, bytes, mime: 'image/webp' });
+  const load = id => ImageAsset.findById(id).select('+bytes');
+  const headers = { Authorization: `Bearer ${await createNativeSession(owner)}` };
+  expect(await migrateCharacterPortraits('--dry-run')).toMatchObject({ inspected: 2, eligible: 1, pending: 1, detachedWithoutCase: 1 });
   expect(cloudinary.uploader.upload_stream).not.toHaveBeenCalled();
+  expect(await migrateCharacterPortraits('--copy')).toMatchObject({ copied: 1, failed: 0 });
+  const copied = await load(_id);
+  expect(copied.bytes.equals(bytes)).toBe(true);
+  expect(copied.providerUrl).toContain('/image/authenticated/');
+  expect(await migrateCharacterPortraits('--copy')).toMatchObject({ alreadyCopied: 1, copied: 0 });
+  portraitObjects.delete(copied.publicId);
+  const fallback = await fetch(base + url.slice(4), { headers });
+  expect(fallback.status).toBe(200);
+  expect(Buffer.from(await fallback.arrayBuffer()).equals(bytes)).toBe(true);
+  portraitObjects.set(copied.publicId, Buffer.from('different'));
+  expect(await migrateCharacterPortraits('--release-mongo')).toMatchObject({ released: 0, failed: 1 });
+  expect((await load(_id)).bytes.equals(bytes)).toBe(true);
+  portraitObjects.set(copied.publicId, bytes);
+  expect(await migrateCharacterPortraits('--release-mongo')).toMatchObject({ released: 1, failed: 0 });
+  expect((await load(_id)).bytes).toBeUndefined();
+  expect((await load(unlinked._id)).bytes.equals(bytes)).toBe(true);
+  const picture = await fetch(base + url.slice(4), { headers });
+  expect(picture.status).toBe(200);
+  expect(Buffer.from(await picture.arrayBuffer()).equals(bytes)).toBe(true);
 });
 
 it('requires membership to report and staff roles to view evidence or decide', async () => {
@@ -243,7 +357,7 @@ it('blocked accounts cannot upload or associate old URLs, but can delete picture
   expect((await request('/user/avatar', owner, 'DELETE')).status).toBe(200);
   expect((await request('/user/profile', owner, 'PATCH', { bio: 'Still writing' })).status).toBe(200);
   const ch = await Chapter.create({ work: f.target, title: 'Draft' });
-  await expect(saveChapterVersion({ id: ch._id, userId: owner._id, expectedRevision: 0, content: '<p>Text</p>' })).resolves.toMatchObject({ revision: 1 });
+  await expect(saveChapter({ id: ch._id, userId: owner._id, expectedRevision: 0, content: '<p>Text</p>' })).resolves.toMatchObject({ revision: 1 });
 });
 it('chapter removal keeps text/history, survives draft saves, and requires revision-matched human approval', async () => {
   const work = await Work.create({ user: owner._id, title: 'Book', status: 'published' });
@@ -254,9 +368,8 @@ it('chapter removal keeps text/history, survives draft saves, and requires revis
   expect((await Chapter.findById(chapter._id)).content).toBe('<p>Original context</p>');
   expect(await VisualAccount.countDocuments()).toBe(0);
   expect((await request(`/chapters/${chapter._id}/status`, owner, 'PATCH', { status: 'published', expectedRevision: 0 })).status).toBe(202);
-  await saveChapterVersion({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Revised context</p>' });
+  await saveChapter({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Revised context</p>' });
   expect((await Chapter.findById(chapter._id)).moderationHold).toBe(true);
-  expect(await ChapterVersion.countDocuments({ chapter: chapter._id })).toBe(2);
   expect((await request(`/chapters/${chapter._id}/status`, owner, 'PATCH', { status: 'published', expectedRevision: 1 })).status).toBe(202);
   expect((await request(`/chapters/${chapter._id}/approve`, moderator, 'PATCH', { expectedRevision: 0, reason: 'Stale' })).status).toBe(409);
   expect((await request(`/chapters/${chapter._id}/approve`, moderator, 'PATCH', { expectedRevision: 1, reason: 'Yeni sürüm bağlamıyla uygun' })).status).toBe(200);
@@ -268,7 +381,7 @@ it('old chapter complaints cannot silently remove a newly published version and 
   const chapter = await Chapter.create({ work: work._id, title: 'Chapter', content: '<p>Original</p>', status: 'published' });
   await Work.updateOne({ _id: work._id }, { $set: { publishedChapterIds: [chapter._id] } });
   const r = await report({ kind: 'chapter', target: chapter._id });
-  await saveChapterVersion({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Edited</p>' });
+  await saveChapter({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Edited</p>' });
   expect((await request(`/chapters/${chapter._id}/status`, owner, 'PATCH', { status: 'published', expectedRevision: 1 })).status).toBe(200);
   await expect(decision(r.contentCase)).rejects.toMatchObject({ status: 409 });
   for (const file of ['routes/upload.js', 'config/cloudinary.js', 'routes/chapter.js']) {
@@ -281,7 +394,7 @@ it('private drafting does not invalidate complaints against the text still live'
   const chapter = await Chapter.create({ work: work._id, title: 'Chapter', content: '<p>Live version</p>', status: 'published' });
   await Work.updateOne({ _id: work._id }, { $set: { publishedChapterIds: [chapter._id] } });
   const r = await report({ kind: 'chapter', target: chapter._id });
-  await saveChapterVersion({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Private draft</p>' });
+  await saveChapter({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Private draft</p>' });
   await decision(r.contentCase, 'remove', moderator);
   const stored = await Chapter.findById(chapter._id).select('+draftContent');
   expect(stored.content).toBe('<p>Live version</p>');

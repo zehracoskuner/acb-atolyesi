@@ -3,6 +3,7 @@ import { ArrowDownLeft, ArrowUpRight, Camera, Check, ImagePlus, Link2, Pencil, S
 import Portrait from "./Portrait";
 import RelationshipWorkspace from "./RelationshipWorkspace";
 import { relationName, relationshipTypeIdentity } from "./graph";
+import { PORTRAIT_MAX_EDGE, PORTRAIT_MAX_INPUT_BYTES } from "../../../../shared/characterPortrait.js";
 
 export function UniverseDialog({ label, className = "", onClose, onOpen, busy, children }) {
   const dialog = useRef(null);
@@ -291,13 +292,14 @@ function drawPortrait(canvas, photo, maxEdge) {
 }
 
 async function encodePortrait(photo) {
+  if (!photo.crop) return photo.file;
   const canvas = document.createElement("canvas");
-  drawPortrait(canvas, photo, 1024);
-  for (const quality of [0.88, 0.73, 0.55]) {
+  drawPortrait(canvas, photo, PORTRAIT_MAX_EDGE);
+  for (const quality of [0.95, 0.88, 0.76]) {
     const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/webp", quality));
-    if (blob?.type === "image/webp" && blob.size <= 2 * 1024 * 1024) return blob;
+    if (blob?.type === "image/webp" && blob.size <= PORTRAIT_MAX_INPUT_BYTES) return blob;
   }
-  throw new Error("Fotoğraf 2 MB sınırına uygun WebP olarak hazırlanamadı.");
+  throw new Error("Kırpılan fotoğraf 3 MB sınırına uygun olarak hazırlanamadı.");
 }
 
 function PhotoEditor({ character, photo, setPhoto, remove, setRemove, setError, onDecoding, disabled, inputRef }) {
@@ -321,6 +323,11 @@ function PhotoEditor({ character, photo, setPhoto, remove, setRemove, setError, 
       setError("JPEG, PNG veya WebP biçiminde bir fotoğraf seçin.");
       return;
     }
+    if (file.size > PORTRAIT_MAX_INPUT_BYTES) {
+      onDecoding(false);
+      setError("Fotoğraf en fazla 3 MB olabilir.");
+      return;
+    }
     onDecoding(true);
     try {
       const image = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -328,7 +335,7 @@ function PhotoEditor({ character, photo, setPhoto, remove, setRemove, setError, 
         image.close();
         return;
       }
-      setPhoto({ bitmap: image, crop: false, x: 0, y: 0, zoom: 1 });
+      setPhoto({ file, bitmap: image, crop: false, x: 0, y: 0, zoom: 1 });
       setRemove(false);
     } catch {
       if (request === decodeRequest.current) setError("Fotoğraf açılamadı. Başka bir dosya seçin.");

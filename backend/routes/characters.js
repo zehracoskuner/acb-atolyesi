@@ -8,9 +8,11 @@ import uploadOrigin from "../middlewares/uploadOrigin.js";
 import { imageUpload } from "../middlewares/imageUpload.js";
 import { uploadLimiter, uploadUserLimiter } from "../middlewares/rateLimiter.js";
 import { assertImageAllowed, imagePermission, txOptions } from "../services/imageAssets.js";
+import { discardPortraitUpload, readStoredPortrait, uploadPortrait } from "../services/characterPortraits.js";
+import { PORTRAIT_MAX_INPUT_BYTES } from "../../shared/characterPortrait.js";
 
 const router = express.Router();
-const readPortrait = imageUpload("file", ["jpeg", "png", "webp"], { maxBytes: 2 * 1024 * 1024, portrait: true });
+const readPortrait = imageUpload("file", ["jpeg", "png", "webp"], { maxBytes: PORTRAIT_MAX_INPUT_BYTES, portrait: true });
 
 async function ownedPortraitCharacter(req, res, next) {
   const { id } = req.params;
@@ -30,6 +32,7 @@ async function ownedPortraitCharacter(req, res, next) {
 }
 
 router.get("/:id/portrait/:assetId", ensureAuth, async (req, res, next) => {
+  res.set("Cache-Control", "private, no-store");
   const { id, assetId } = req.params;
   if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(assetId)) return res.sendStatus(404);
   try {
@@ -37,27 +40,37 @@ router.get("/:id/portrait/:assetId", ensureAuth, async (req, res, next) => {
     const url = `/api/characters/${id}/portrait/${assetId}`;
     const character = await Character.findOne({ _id: id, user, imageUrl: url }).select("work").lean();
     if (!character || !await Work.exists({ _id: character.work, user })) return res.sendStatus(404);
-    const asset = await ImageAsset.findOne({ _id: assetId, owner: user, url, privatePortrait: true, state: "active" }).select("+bytes");
-    if (!asset?.bytes) return res.sendStatus(404);
-    return res.set("X-Content-Type-Options", "nosniff").type("image/webp").send(asset.bytes);
+    const bytes = await readStoredPortrait({ _id: assetId, owner: user, url, state: "active" });
+    if (!bytes) return res.sendStatus(404);
+    return res.set("X-Content-Type-Options", "nosniff").type("image/webp").send(bytes);
   } catch (err) { return next(err); }
 });
 
 router.post("/:id/portrait", uploadLimiter, uploadOrigin, ensureAuth, uploadUserLimiter, ownedPortraitCharacter, imagePermission, readPortrait, async (req, res, next) => {
   const scope = req.characterScope;
+  const assetId = new mongoose.Types.ObjectId();
+  const url = `/api/characters/${scope._id}/portrait/${assetId}`;
+  let uploaded;
   try {
+    uploaded = await uploadPortrait(assetId, req.file.buffer);
     const item = await mongoose.connection.transaction(async session => {
       await assertImageAllowed(req.user.id, session);
-      const assetId = new mongoose.Types.ObjectId();
-      const url = `/api/characters/${scope._id}/portrait/${assetId}`;
       const character = await Character.findOneAndUpdate(scope, { $set: { imageUrl: url }, $unset: { removedImageCase: 1 } }, { new: true, session });
       if (!character) return null;
-      await ImageAsset.create([{ _id: assetId, owner: req.user.id, url, privatePortrait: true, bytes: req.file.buffer, mime: req.file.mimetype }], { session });
+      await ImageAsset.create([{ _id: assetId, owner: req.user.id, url, privatePortrait: true, ...uploaded, mime: req.file.mimetype }], { session });
       return character;
     }, txOptions);
-    if (!item) return res.status(404).json({ message: "Karakter bulunamadı." });
+    if (!item) {
+      await discardPortraitUpload(assetId);
+      return res.status(404).json({ message: "Karakter bulunamadı." });
+    }
     return res.status(201).json({ item });
   } catch (err) {
+    if (uploaded && !err.hasErrorLabel?.("UnknownTransactionCommitResult")) {
+      // A failed commit response can still mean that the transaction committed.
+      const exists = await ImageAsset.exists({ _id: assetId }).catch(() => true);
+      if (!exists) await discardPortraitUpload(assetId);
+    }
     if (!err.status) return next(err);
     return res.status(err.status).json({ message: err.message, code: err.code, until: err.until });
   }

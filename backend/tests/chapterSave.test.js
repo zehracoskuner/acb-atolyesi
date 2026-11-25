@@ -4,10 +4,11 @@ import { apiPut, apiPatch, isChapterSaveReceipt } from "../../frontend/src/lib/a
 
 // Exercise the page's actual reducer and async handlers without a browser/DOM.
 const source = readFileSync(new URL("../../frontend/src/pages/ChaptersPage.jsx", import.meta.url), "utf8");
-const reducerText = source.slice(source.indexOf("function chaptersReducer"), source.indexOf("function chaptersReducer") + source.slice(source.indexOf("function chaptersReducer")).indexOf("\n}\n") + 2);
+const reducerStart = source.indexOf("function chaptersReducer");
+const reducerText = source.slice(source.indexOf("function hasChapterChanges"), source.indexOf("\n}\n", reducerStart) + 2);
 const reducer = new Function(reducerText + "; return chaptersReducer;")();
 function harness() {
-  const chaptersRef = { current: ["a", "b"].map(_id => ({ _id, title: _id, content: "old", status: "published", reviewNote: "", _edit: 0, _dirty: false })) };
+  const chaptersRef = { current: ["a", "b"].map(_id => ({ _id, title: _id, content: "old", status: "published", reviewNote: "", _baseTitle: _id, _baseContent: "old", _baseMedia: [], _edit: 0, _dirty: false })) };
   const dispatch = action => { chaptersRef.current = reducer(chaptersRef.current, action); };
   const request = vi.fn();
   const publishingIds = { current: new Set() };
@@ -21,7 +22,7 @@ function harness() {
   const unload = new Function("chaptersRef", "return " + source.split("const h = ")[1].split(";\n    window.addEventListener")[0])(chaptersRef);
   const patch = vi.fn(), announce = vi.fn(), alert = vi.fn(), pending = vi.fn();
   const publishStart = source.indexOf("  const handlePublish = async");
-  const publishEnd = source.indexOf("  const restoreVersion", publishStart);
+  const publishEnd = source.indexOf("  const resolveLocal", publishStart);
   const publish = new Function("chaptersRef", "activeChapterId", "publishingIds", "window", "alert", "setPublishing", "saveChapter", "autoSaveTimers", "apiPatch", "workId", "dispatch", "setReviewPending", "setTimeout", "setAnnounceModal",
     source.slice(publishStart, publishEnd) + "; return handlePublish;")(
     chaptersRef, "a", publishingIds, { confirm: () => true }, alert, vi.fn(), save,
@@ -54,6 +55,42 @@ const deferred = () => { let resolve, reject; const promise = new Promise((a,b) 
 const result = (id, revision = 1) => ({ revision, savedAt: "2026-09-20T00:00:00.000Z", item: { _id: id, revision, status: "draft", reviewNote: "" } });
 
 describe("chapter save flow", () => {
+  it("skips the save request when the edit returns to the saved content", async () => {
+    const h = harness();
+    h.change("a", "new text", true);
+    h.undo("a");
+    expect(h.chaptersRef.current[0]).toMatchObject({ content: "old", _dirty: false });
+    expect(await h.save("a")).toBe(true);
+    expect(h.request).not.toHaveBeenCalled();
+  });
+
+  it("retains an undo back to the old content while a newer save is in flight", async () => {
+    const h = harness(), pending = deferred();
+    h.change("a", "new text");
+    h.request.mockReturnValueOnce(pending.promise);
+    const saving = h.save("a");
+    h.undo("a");
+    pending.resolve(result("a"));
+    await saving;
+    expect(h.chaptersRef.current[0]).toMatchObject({ content: "old", _dirty: true });
+    h.request.mockResolvedValueOnce(result("a", 2));
+    await h.save("a");
+    expect(h.request.mock.calls[1][1]).toMatchObject({ content: "old", expectedRevision: 1 });
+  });
+
+  it("uses the remote base when a conflict is resolved with the pre-conflict text", async () => {
+    const h = harness();
+    h.edit("a", "unsaved");
+    const remote = { title: "a", content: "remote", media: [], revision: 1 };
+    h.request.mockRejectedValueOnce({ status: 409, data: { current: remote } });
+    await h.save("a");
+    h.get.mockResolvedValueOnce({ item: remote });
+    await h.resolveLocal(h.chaptersRef.current[0], { title: "a", content: "old" });
+    h.request.mockResolvedValueOnce(result("a", 2));
+    await h.save("a");
+    expect(h.request.mock.calls[1][1]).toMatchObject({ content: "old", expectedRevision: 1 });
+  });
+
   it("saves media-only edits and preserves media added while a save is pending", async () => {
     const h = harness(), d = deferred();
     const song = { type: "youtube", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", caption: "Song" };
@@ -182,12 +219,6 @@ describe("chapter save flow", () => {
     h.request.mockResolvedValue(result("a", 3));
     expect(await h.save("a")).toBe(true);
     expect(h.request.mock.calls[1][1]).toMatchObject({ expectedRevision: 2, content: "merged text" });
-  });
-  it("restoring a server version cannot discard edits made during the request", () => {
-    const h = harness(); h.edit("a", "typed during restore");
-    h.dispatch({ type: "RESTORED", id: "a", edit: 0, chapter: { revision: 8, savedAt: "server time", content: "old version" } });
-    expect(h.chaptersRef.current[0]).toMatchObject({ revision: 8, _dirty: true });
-    expect(h.chaptersRef.current[0].content).toBe("typed during restore");
   });
   it("debounces autosave and cancels timers on cleanup without retrying failed/in-flight saves", async () => {
     vi.useFakeTimers();

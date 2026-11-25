@@ -39,7 +39,7 @@ export function applyChapterDraft(chapter) {
 }
 
 // Chapter visibility and the work's reader index must commit together.
-export async function publishChapterVersion({ id, userId, expectedRevision, status, workId }) {
+export async function updateChapterPublication({ id, userId, expectedRevision, status, workId }) {
   const fail = (status, message, extra = {}) => { throw Object.assign(new Error(message), { status, ...extra }); };
   if (!['draft', 'published'].includes(status)) fail(400, 'Geçersiz durum.');
   return mongoose.connection.transaction(async session => {

@@ -1,7 +1,6 @@
 import { sessionStore } from "./fixtures/sessionStore.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 // Keep dormant history code covered; production flag is tested separately.
-vi.mock("../../shared/features.js", () => ({ CHAPTER_HISTORY_ENABLED: true }));
 import { once } from "node:events";
 import { randomBytes } from "node:crypto";
 import express from "express";
@@ -10,7 +9,6 @@ import Chapter from "../models/Chapter.js";
 import mongoose from "mongoose";
 import Fingerprint from "../models/DevelopmentFingerprint.js";
 import Sample from "../models/DevelopmentSample.js";
-import ChapterVersion from "../models/ChapterVersion.js";
 import InlineComment from "../models/InlineComment.js";
 import Work from "../models/Work.js";
 import CharacterGuide from "../models/CharacterGuide.js";
@@ -164,7 +162,6 @@ beforeEach(() => {
     notifications: [],
   };
   Object.values(db.users).forEach(user => Object.assign(user, { birthYear: 1990 }, newTermsAcceptance()));
-  db.versions = [];
   db.fingerprints = []; db.samples = [];
   vi.spyOn(Fingerprint, "exists").mockImplementation(filter => query(db.fingerprints.find(v => matches(v, filter)) || null));
   vi.spyOn(Fingerprint, "updateOne").mockImplementation(async (filter, update) => { if (!db.fingerprints.some(v => matches(v, filter))) db.fingerprints.push(update.$setOnInsert); });
@@ -181,13 +178,6 @@ beforeEach(() => {
     });
     queue = task.catch(() => {});
     return task;
-  });
-  vi.spyOn(ChapterVersion, "exists").mockImplementation(filter => query(db.versions.find(v => matches(v, filter)) || null));
-  vi.spyOn(ChapterVersion, "findOne").mockImplementation(filter => query(db.versions.find(v => matches(v, filter)) || null));
-  vi.spyOn(ChapterVersion, "find").mockImplementation(filter => query(db.versions.filter(v => matches(v, filter))));
-  vi.spyOn(ChapterVersion, "create").mockImplementation(async rows => {
-    db.versions.push(...JSON.parse(JSON.stringify(rows)));
-    return rows;
   });
   mockStorage(Work, "works");
   vi.spyOn(CharacterGuide, "exists").mockResolvedValue(null);
@@ -636,7 +626,7 @@ describe("Anonim yayının kaldırılması ve eski eserlerin gizliliği", () => 
 });
 
 
-describe("Version history and atomic saves (isolated storage)", () => {
+describe("Atomic chapter saves (isolated storage)", () => {
   it("two editors with the same base revision: only one succeeds", async () => {
     const results = await Promise.all(["first", "second"].map(content => request(B, "PUT", `/api/chapters/${CB}`, { expectedRevision: 0, content })));
     expect(results.map(r => r.status).sort()).toEqual([200, 409]);
@@ -645,54 +635,25 @@ describe("Version history and atomic saves (isolated storage)", () => {
     expect(success.revision).toBe(1);
     expect(Date.parse(success.savedAt)).toBeGreaterThan(0);
     expect(conflict.current.content).toBe(success.item.content);
-    expect(db.versions.map(v => v.revision)).toEqual([0, 1]);
   });
-  it("unchanged content does not generate another version", async () => {
+  it("unchanged content keeps the same saved revision", async () => {
     await request(B, "PUT", `/api/chapters/${CB}`, { expectedRevision: 0, content: "same" });
     const savedAt = db.chapters[CB].savedAt;
     const response = await request(B, "PUT", `/api/chapters/${CB}`, { expectedRevision: 1, content: "same" });
     expect(response.status).toBe(200);
     expect(response.body.revision).toBe(1);
     expect(response.body.savedAt).toBe(savedAt);
-    expect(db.versions).toHaveLength(2);
   });
-  it("history write failure rolls back chapter, publication and history", async () => {
+  it("work write failure rolls back the chapter and publication state", async () => {
     const before = structuredClone(db);
-    ChapterVersion.create.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("disk failure"));
+    vi.spyOn(Work.prototype, "save").mockRejectedValueOnce(new Error("disk failure"));
     const result = await request(B, "PUT", `/api/chapters/${CB}`, { expectedRevision: 0, content: "not committed" });
     expect(result.status).toBe(503);
     expect(db).toEqual(before);
     expect(result.body.savedAt).toBeUndefined();
   });
-  it("restore preserves history and leaves the published text and approval unchanged", async () => {
-    const original = db.chapters[CB].content;
+  it("rejects saves without an expected revision", async () => {
     await request(B, "PUT", `/api/chapters/${CB}`, { expectedRevision: 0, content: "new text" });
-    db.chapters[CB].status = "published";
-    db.chapters[CB].reviewedBy = STAFF;
-    db.chapters[CB].reviewedAt = new Date().toISOString();
-    db.chapters[CB].reviewNote = "approved";
-    const result = await request(B, "POST", `/api/chapters/${CB}/versions/0/restore`, { expectedRevision: 1 });
-    expect(result.status).toBe(200);
-    expect(result.body.item).toMatchObject({ content: original, revision: 2, status: "published", reviewedBy: STAFF, reviewNote: "approved", hasUnpublishedChanges: false });
-    expect(db.versions.map(v => v.content)).toEqual([original, "new text", original]);
-    expect(db.versions[2].restoredFrom).toBe(0);
-    expect(db.works[WB].publishedChapterIds).toEqual([CB]);
-  });
-  it.each([A, STAFF])("non-owner %s cannot list, read or restore versions", async user => {
-    await request(B, "PUT", `/api/chapters/${CB}`, { expectedRevision: 0, content: "private version" });
-    const before = structuredClone(db);
-    for (const [method, suffix, body] of [["GET", "/versions"], ["GET", "/versions/0"], ["POST", "/versions/0/restore", { expectedRevision: 1 }]]) {
-      const result = await request(user, method, `/api/chapters/${CB}${suffix}`, body);
-      expect(result.status).toBe(403);
-      expect(JSON.stringify(result.body)).not.toContain("private version");
-    }
-    expect(db).toEqual(before);
-  });
-  it("owner can preview, stale restore and missing revision are rejected", async () => {
-    await request(B, "PUT", `/api/chapters/${CB}`, { expectedRevision: 0, content: "new text" });
-    expect((await request(B, "GET", `/api/chapters/${CB}/versions`)).body.items).toHaveLength(2);
-    expect((await request(B, "GET", `/api/chapters/${CB}/versions/1`)).body.item.content).toBe("new text");
-    expect((await request(B, "POST", `/api/chapters/${CB}/versions/0/restore`, { expectedRevision: 0 })).status).toBe(409);
     expect((await request(B, "PUT", `/api/chapters/${CB}`, { content: "unsafe" })).status).toBe(400);
     expect(db.chapters[CB].draftContent.content).toBe("new text");
     expect(db.chapters[CB].content).toBe("B özel içeriği");

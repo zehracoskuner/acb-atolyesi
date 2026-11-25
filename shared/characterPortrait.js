@@ -1,0 +1,3 @@
+export const PORTRAIT_MAX_INPUT_BYTES = 3 * 1024 * 1024;
+export const PORTRAIT_MAX_EDGE = 1600;
+export const PORTRAIT_TARGET_BYTES = 750 * 1024;

@@ -24,7 +24,7 @@ Okur endpoint'i yalnızca yayınlanmış başlık/metni döndürür. Mevcut misa
 
 Son çalıştırma: 24 Ekim 2026. Seçilen yedi backend test dosyasında 161 test, mobil test paketinde 79 test geçti. Mobil TypeScript/lint kontrolleri ve web üretim derlemesi başarılı.
 
-- Backend: `node scripts/test-all.mjs tests/publishedDraft.integration.test.js tests/chapterSave.test.js tests/chapterOrder.test.js tests/chapterAccess.test.js tests/chapterHistory.integration.test.js tests/chapterMedia.test.js tests/contentModeration.integration.test.js` — ayrı yerel MongoDB replica setinde.
+- Backend: `node scripts/test-all.mjs tests/publishedDraft.integration.test.js tests/chapterSave.test.js tests/chapterOrder.test.js tests/chapterAccess.test.js tests/chapterEditing.integration.test.js tests/chapterMedia.test.js tests/contentModeration.integration.test.js` — ayrı yerel MongoDB replica setinde.
 - Mobil: `npm.cmd test`, `npm.cmd run typecheck`, `npm.cmd run lint`. `MOBILE_EDITOR_BROWSER` kurulu Chrome yoluna ayarlanarak dokuz gerçek tarayıcı editör testi de çalıştırıldı.
 - Web: `npm.cmd run build` başarılı. Mevcut büyük paket boyutu uyarısı devam ediyor.
 - Testler: uzun Türkçe metin, diyalog/listeli HTML, seçimle biçimlendirme, yapıştırma, geri al/yinele, tema sırasında DOM/seçim, çevrimdışı yeniden açılış, kayıt/yayınlama yarışları, başarısız yayınlama transaction'ı, eski yayın ile yeni çalışma metninin ayrılığı, sabit moderasyon başvurusu ve ret.
@@ -35,6 +35,6 @@ Fiziksel Android/iOS cihazında klavye üstü yerleşim, Gboard/iOS önerileri v
 
 - Mobil: `app/write/[id].tsx`, `app/studio/[id].tsx`, `app/_layout.tsx`, `src/components/RichEditor.tsx`, `src/editorDocument.ts`, `src/draftEngine.ts`, `src/sync.tsx`, `src/types.ts` ve ilgili kayıt/çevrimdışı/editör testleri.
 - Web: `frontend/src/pages/ChaptersPage.jsx`.
-- Backend: Chapter modeli; chapterPublication, chapterReview, chapterHistory servisleri; chapter, works, moderator, admin route'ları; yayın, moderasyon ve web kayıt testleri.
+- Backend: Chapter modeli; chapterPublication, chapterReview, chapterEditing servisleri; chapter, works, moderator, admin route'ları; yayın, moderasyon ve web kayıt testleri.
 
 Depoda önceden bulunan ve çalışma sırasında başka işlemlerce değişen dosyalar korunmuştur. Commit veya dağıtım yapılmamıştır.

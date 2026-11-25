@@ -64,11 +64,6 @@ Aşağıdaki ayrıntılar önceki uygulama ve karşılaştırma geçmişini de i
   koleksiyonda birikir; yenilemede ve koç kapatıldığında kaybolmaz. Arşiv okuması
   AI çağırmaz. `GET /api/chapters/development/:workId/analyses` sahiplik kontrolüyle
   20'şer kayıt ve sequence cursor kullanır. Farklı eser/kullanıcı notları karışmaz.
-- Geçmiş/sürüm özelliği `shared/features.js` içindeki
-  `CHAPTER_HISTORY_ENABLED=false` ile arayüzde ve public API'de kapalıdır.
-  Listeleme, önizleme, checkpoint ve restore 404 döner. Kodlar korunur.
-  İç revision/snapshot yazımı autosave, çatışma ve tekrar-sayım güvenliği için
-  sürer; kullanıcının erişebildiği sürüm özelliği çalışmaz.
 
 Yeni dosyalar: `shared/features.js`, `services/developmentConsent.js`,
 `DevelopmentCoachPreference.jsx`, `DevelopmentCoachArchive.jsx`,
@@ -134,14 +129,14 @@ Yeni:
 Güncellenen:
 - `models/Chapter.js`: bölümün ömür boyu en yüksek kelime sayısı.
 - `services/developmentProgress.js`: türetilen uygunluk ve 3000 eşiği.
-- `services/chapterHistory.js`: aynı kayıt transaction'ında katkı kabulü.
+- `services/chapterEditing.js`: aynı kayıt transaction'ında katkı kabulü.
 - `routes/chapter.js`: `eligibleWordDelta`, gelişim POST endpoint'i ve AI limiter.
 - `../frontend/src/pages/ChaptersPage.jsx`: input kaynağı, receipt sayacı, hazırlık UI.
-- `tests/chapterSave.test.js`, `tests/chapterHistory.integration.test.js`,
+- `tests/chapterSave.test.js`, `tests/chapterEditing.integration.test.js`,
   `tests/chapterAccess.test.js`: yeni sözleşme, eşik ve storage test doubles.
 - `../frontend/scripts/verify-writing.mjs`: gerçek tarayıcı kontrolleri.
 - `scripts/test-all.mjs`: isteğe bağlı test filtrelerini runner'a iletme.
-- `.env.example`, `CHAPTER_HISTORY.md`: güncel konfigürasyon/sözleşme.
+- `.env.example`, `CHAPTER_STORAGE_MIGRATION.md`: güncel konfigürasyon/sözleşme.
 
 Mevcut kullanıcı değişiklikleri korunmuştur. Paket/SDK silinmemiştir.
 
@@ -156,17 +151,17 @@ başlatılmamış eser mevcut kayıtlı yazısıyla bir kere baseline kazanır. 
 başlatılmış 3000–4999 kelimelik eserler ilk okumada yeni eşiğe göre uygun olur.
 
 Typing, paste, drop, tamamlanan IME olayları pozitif kelime farkı gönderir.
-İsim frontend/backend/testlerde `eligibleWordDelta` olmuştur. Undo, restore,
-hydration, refresh draft restore ve conflict recovery katkı talep etmez.
+İstemci katkıyı `eligibleWordDelta` alanında bildirir. Geri alma, ilk yükleme,
+yerel taslak kurtarma ve çakışma çözümü katkı talep etmez.
 İstek snapshot'ı ancak geçerli save receipt ile onaylanır; istek sürerken yeni
-yazılan metin sonraki kayda kalır. Sunucuda Chapter, ChapterVersion, Work,
+yazılan metin sonraki kayda kalır. Sunucuda Chapter, Work,
 fingerprint ve sample kayıtları tek transaction'dır. Başarısız kayıt katkı bırakmaz.
 
 Sunucu client delta'sını bölümün tarihsel en yüksek kelime sayısına göre yeni net
 büyümeyle sınırlar. Normalize Unicode/boşluk ve HTML'den çıkarılan metnin SHA-256
 hash'leri, aynı içeriğin yeniden yüklenmesini ve kaydedilmiş uzun katkının tekrar
-yapıştırılmasını eser genelinde engeller. Geçmişi olan bölümün high-water'ı ilk
-kayıtta revision'lardan tembel biçimde alınır. 32 kelimeden kısa ek parçalar
+yapıştırılmasını eser genelinde engeller. Eski bölümlerin en yüksek kelime
+sayıları dağıtım öncesinde taşınır. 32 kelimeden kısa ek parçalar
 parça hash'iyle elenmez; normal tekrar eden sözcükler engellenmez. Tam metin
 hash'i ve high-water koruması bunlarda da uygulanır.
 
@@ -238,14 +233,13 @@ kadar biriken dönem kapanır. Analiz sırasında gelen yazılar tüketilmez.
 Önceki yalnız bir son analizden profileSnapshot (yoksa result) alınır; geçmiş
 metinlerin tamamı gönderilmez. Başarı çıktısı en fazla 64 KiB ile sınırlandırılır.
 
-## Topbar ve Geçmiş
+## Topbar
 
 Uygun değilken düğme yoktur. Uygunken `✦ Gelişimimi takip et` kalıcı ve hareketsiz
 görünür (yalnız açıkça izin vermiş kullanıcıda); sürekli 1824/3000 göstergesi veya kendiliğinden popup yoktur. Tıklama
 hazırlık endpoint'ini çağırır; hazırlık/429/hata mesajları aynı dialog'da gösterilir.
 İlk Yazar Profili ve Gelişim Karşılaştırması başlıkları ayrılır. Tema ve Odak
-mevcut responsive yerlerini korur. Geçmiş/sürüm arayüzü yayın flag'iyle gizlidir;
-koç notları onun yerine kullanılmaz, ayrı arşiv bileşeninde saklanır.
+mevcut responsive yerlerini korur. Koç notları ayrı arşiv bileşeninde saklanır.
 
 ## AI entegrasyon haritası
 
@@ -332,11 +326,11 @@ status beklentisi, feedbackAndQueues rapor bölümlendirmesi, guestRendering
   sıfırlanması, son sonucu AI çağrısı olmadan tekrar açma, mobil Tema/Odak ve
   ilk onay/Hayır, Ayarlar’dan açma-kapatma, kapatıldığında arşivin gizlenmesi
   ve yeniden açıldığında eski notların okunması,
-  Geçmiş düğmesinin gizliliği ve atölye akışları. Gerçek provider'a çağrı yapılmadı.
+  Atölye akışları. Gerçek provider'a çağrı yapılmadı.
 - Adapter testlerinde gerçek kurulu SDK ve mock fetch; gerçek MongoDB transaction, kilit ve yarış davranışı
   çalıştırıldı. Testler uygulama `.env`/MONGO_URI'sini kullanmaz.
 - Test komutları: `node scripts/test-all.mjs` ve
-  `node scripts/test-all.mjs tests/developmentCoach.integration.test.js tests/chapterHistory.integration.test.js tests/chapterSave.test.js tests/chapterAccess.test.js`.
+  `node scripts/test-all.mjs tests/developmentCoach.integration.test.js tests/chapterEditing.integration.test.js tests/chapterSave.test.js tests/chapterAccess.test.js`.
 - Tarayıcı komutu: `node scripts/verify-writing.mjs`; dışarıda kurulu Playwright
   için `PLAYWRIGHT_MODULE` file URL desteği var. Harici font/network erişim
   uyarıları kontrolleri etkilemedi.

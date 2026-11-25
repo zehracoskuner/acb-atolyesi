@@ -1,5 +1,6 @@
 import multer from "multer";
 import sharp from "sharp";
+import { optimizePortrait } from "../services/characterPortraits.js";
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_PIXELS = 40_000_000; // Includes every frame of animated images.
@@ -15,6 +16,7 @@ export function imageUpload(field, formats = Object.keys(MIME), { maxBytes = MAX
     if (err) return res.status(400).json({ message: err.code === "LIMIT_FILE_SIZE"
       ? `Dosya ${maxBytes / 1024 / 1024} MB'dan büyük olamaz.` : "Geçersiz dosya yükleme isteği." });
     if (!req.file) return res.status(400).json({ message: "Resim yüklenemedi." });
+    if (req.file.size > maxBytes) return res.status(400).json({ message: `Dosya ${maxBytes / 1024 / 1024} MB'dan büyük olamaz.` });
     try {
       const options = { failOn: "warning", limitInputPixels: MAX_PIXELS, animated: true };
       const meta = await sharp(req.file.buffer, options).metadata();
@@ -24,10 +26,9 @@ export function imageUpload(field, formats = Object.keys(MIME), { maxBytes = MAX
           (meta.pages || 1) > (portrait ? 1 : 200)) throw new Error("Invalid image");
       // Decode all pixels/frames, strip metadata and trailing payloads, and encode
       // the same supported format. Metadata/signature checks alone are insufficient.
-      const pipeline = sharp(req.file.buffer, options).rotate().timeout({ seconds: 10 });
       const format = portrait ? "webp" : meta.format;
-      if (portrait) pipeline.resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true });
-      const buffer = await pipeline.toFormat(format).toBuffer();
+      const buffer = portrait ? await optimizePortrait(req.file.buffer) :
+        await sharp(req.file.buffer, options).rotate().timeout({ seconds: 10 }).toFormat(format).toBuffer();
       if (buffer.length > maxBytes) throw new Error("Image too large");
       req.file.buffer = buffer;
       req.file.size = buffer.length;
