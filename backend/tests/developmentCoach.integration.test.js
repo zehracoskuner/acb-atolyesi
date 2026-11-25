@@ -4,12 +4,11 @@ import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import Work from "../models/Work.js";
 import User from "../models/User.js";
 import Chapter from "../models/Chapter.js";
-import ChapterVersion from "../models/ChapterVersion.js";
 import Analysis from "../models/DevelopmentAnalysis.js";
 import Gate from "../models/DevelopmentGate.js";
 import Sample from "../models/DevelopmentSample.js";
 import Fingerprint from "../models/DevelopmentFingerprint.js";
-import { saveChapterVersion } from "../services/chapterHistory.js";
+import { saveChapter } from "../services/chapterEditing.js";
 import { readDevelopment } from "../services/developmentProgress.js";
 import { runDevelopmentCoach, readLatestDevelopment, prepareDevelopmentContext, listDevelopmentAnalyses } from "../services/developmentCoach.js";
 import { validateCoachResult } from "../services/developmentResult.js";
@@ -27,7 +26,7 @@ describe.skipIf(!uri)("development coach transactions", () => {
   beforeAll(async () => {
     if (!/^mongodb:\/\/(localhost|127\.0\.0\.1):\d+\/?(?:\?.*)?$/.test(uri)) throw Error("Loopback only");
     await mongoose.connect(uri, { dbName: database });
-    await Promise.all([User, Work, Chapter, ChapterVersion, Analysis, Gate, Sample, Fingerprint].map(m => m.init()));
+    await Promise.all([User, Work, Chapter, Analysis, Gate, Sample, Fingerprint].map(m => m.init()));
   });
   afterAll(async () => { if (mongoose.connection.name === database) await mongoose.connection.dropDatabase(); await mongoose.disconnect(); });
   async function fixture(userId = new mongoose.Types.ObjectId()) {
@@ -37,7 +36,7 @@ describe.skipIf(!uri)("development coach transactions", () => {
     const args = { userId, workId: work._id };
     const save = async (content, eligibleWordDelta, extra = {}) => {
       const current = await Chapter.findById(chapter._id);
-      return saveChapterVersion({ id: chapter._id, userId, expectedRevision: current.revision, content, eligibleWordDelta, ...extra });
+      return saveChapter({ id: chapter._id, userId, expectedRevision: current.revision, content, eligibleWordDelta, ...extra });
     };
     return { args, chapter, save };
   }
@@ -168,7 +167,7 @@ describe.skipIf(!uri)("development coach transactions", () => {
     const f = await fixture(); const text = "new ".repeat(3000);
     await f.save(text, 3000);
     const second = await Chapter.create({ work: f.args.workId, title: "Second" });
-    await saveChapterVersion({ id: second._id, userId: f.args.userId, expectedRevision: 0, content: text, eligibleWordDelta: 3000 });
+    await saveChapter({ id: second._id, userId: f.args.userId, expectedRevision: 0, content: text, eligibleWordDelta: 3000 });
     expect((await Work.findById(f.args.workId)).developmentNewWords).toBe(3000);
     const other = await fixture(f.args.userId); await other.save(text, 3000);
     expect((await Work.findById(other.args.workId)).developmentNewWords).toBe(3000);

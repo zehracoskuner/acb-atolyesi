@@ -1,6 +1,5 @@
 // Real-browser checks against actual components, with isolated in-memory API fixtures.
 // PLAYWRIGHT_MODULE may point to an existing Playwright installation (file URL).
-import { CHAPTER_HISTORY_ENABLED } from "../../shared/features.js";
 import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -12,12 +11,20 @@ const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || "playwright")
 const root = fileURLToPath(new URL("../", import.meta.url));
 const artifacts = await mkdtemp(join(tmpdir(), "acb-writing-"));
 const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0}*{box-sizing:border-box}</style></head><body><div id="root"></div><script type="module" src="/scripts/writing-fixture.jsx"></script></body></html>`;
-const vite = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, plugins: [{ name: "writing-fixture", configureServer(server) {
-  server.middlewares.use(async (req, res, next) => {
-    if (req.url?.split("?")[0] !== "/__writing-test") return next();
-    res.setHeader("Content-Type", "text/html"); res.end(await server.transformIndexHtml(req.url, html));
-  });
-} }] });
+const vite = await createServer({ root, server: { host: "127.0.0.1", port: 0 }, plugins: [{
+  name: "writing-fixture",
+  transform(source, id) {
+    if (id.endsWith("/shared/features.js")) {
+      return source.replace("DEVELOPMENT_COACH_LAUNCH_ENABLED = false", "DEVELOPMENT_COACH_LAUNCH_ENABLED = true");
+    }
+  },
+  configureServer(server) {
+    server.middlewares.use(async (req, res, next) => {
+      if (req.url?.split("?")[0] !== "/__writing-test") return next();
+      res.setHeader("Content-Type", "text/html"); res.end(await server.transformIndexHtml(req.url, html));
+    });
+  },
+}] });
 let browser;
 try {
   await vite.listen();
@@ -33,7 +40,7 @@ try {
   let coachPreference = "undecided", archive = [], preferenceReadFails = false;
   let dailySuccesses = 0;
   const quota = () => ({ dailyLimit: 2, used: developmentCooldown ? 2 : dailySuccesses, remaining: developmentCooldown ? 0 : Math.max(0, 2 - dailySuccesses), retryAfter: developmentCooldown || dailySuccesses >= 2 ? 3600 : 0 });
-  let versions = [{ ...chapter, chapter: chapter._id }], note = null, puts = 0;
+  let note = null, puts = 0;
   await page.route("**/api/**", async route => {
     const request = route.request(), url = new URL(request.url());
     const path = url.pathname.split("/api")[1], method = request.method();
@@ -69,18 +76,8 @@ try {
       assert.equal(body.expectedRevision, chapter.revision);
       developmentWords += body.eligibleWordDelta || 0;
       puts++; chapter = { ...chapter, ...body, revision: chapter.revision + 1, savedAt: new Date().toISOString() };
-      versions.push({ ...chapter, chapter: chapter._id }); result = { item: chapter, revision: chapter.revision, savedAt: chapter.savedAt, development: { eligibleForDevelopmentReview: developmentWords >= 3000 } };
-    } else if (path === "/chapters/chapter1/checkpoint") {
-      assert.equal(body.expectedRevision, chapter.revision);
-      const item = versions.find(v => v.revision === body.expectedRevision);
-      Object.assign(item, { isCheckpoint: true, label: body.label }); result = { item };
-    } else if (path === "/chapters/chapter1/versions") result = { items: [...versions].reverse(), nextBefore: null };
-    else if (/\/versions\/\d+\/restore$/.test(path)) {
-      assert.equal(body.expectedRevision, chapter.revision);
-      const selected = versions.find(v => v.revision === Number(path.split("/").at(-2)));
-      chapter = { ...chapter, title: selected.title, content: selected.content, revision: chapter.revision + 1, savedAt: new Date().toISOString() };
-      versions.push({ ...chapter }); result = { item: chapter, revision: chapter.revision, savedAt: chapter.savedAt };
-    } else if (/\/versions\/\d+$/.test(path)) result = { item: versions.find(v => v.revision === Number(path.split("/").at(-1))) };
+      result = { item: chapter, revision: chapter.revision, savedAt: chapter.savedAt, development: { eligibleForDevelopmentReview: developmentWords >= 3000 } };
+    }
     else if (path === "/notes" && method === "POST") { note = { ...body, _id: "note1" }; result = { item: note }; }
     else if (path === "/notes/note1" && method === "PATCH") { note = { ...note, ...body }; result = { item: note }; }
     else if (path === "/user/tour-complete") result = {};
@@ -113,7 +110,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(350); // allow the sidebar's responsive transition to finish
   rects = await geometry(); assert.equal(rects.length, 1);
-  assert.equal(await page.getByRole("button", { name: "Geçmiş", exact: true }).count(), CHAPTER_HISTORY_ENABLED ? 1 : 0);
+  assert.equal(await page.getByRole("button", { name: "Geçmiş", exact: true }).count(), 0);
   assert(await page.getByRole("button", { name: "Odak", exact: true }).isVisible());
   assert(await page.locator(".cp-theme-btn").isVisible());
   for (const icon of await page.locator(".cp-compact-tool .cp-tb-btn-icon").all()) assert(await icon.isVisible());
@@ -132,6 +129,11 @@ try {
   await page.locator('.cp-save-details summary').click();
   await page.waitForFunction(() => document.querySelector('.cp-save-details summary')?.textContent === 'Kaydedildi');
   assert(chapter.content.includes('Manuel kayıt'));
+  const savedPuts = puts;
+  await page.locator('.cp-save-details summary').click();
+  await page.getByRole('button', { name: 'Şimdi kaydet', exact: true }).click();
+  await page.locator('.cp-save-details summary').click();
+  assert.equal(puts, savedPuts);
   await editor.fill('Bölüm değiştirirken korunan taslak.');
   await page.locator('.cp-ch-btn').nth(1).click();
   assert.equal(await page.locator('.chapter-document .rich-content').count(), 1);
@@ -147,46 +149,6 @@ try {
   await page.waitForFunction(() => document.querySelector('.focus-save')?.textContent === 'Kaydedildi');
   await page.keyboard.press('Escape'); await page.locator('.acb-tour-help-btn').waitFor();
   await page.keyboard.press('F11'); await page.locator('.focus-veil').waitFor(); await page.keyboard.press('F11');
-  if (CHAPTER_HISTORY_ENABLED) {
-  await page.locator('.chapter-document .rich-content').first().fill('Checkpoint öncesi kaydedilmemiş metin.');
-  await page.getByRole('button', { name: 'Geçmiş', exact: false }).click();
-  await page.getByRole('button', { name: '☆ Bu anı sakla', exact: true }).click();
-  await page.getByPlaceholder('Edit öncesi').fill('Edit öncesi');
-  await page.getByRole('button', { name: 'Sakla', exact: true }).click();
-  await page.getByText("Bu an Geçmiş'te saklandı.", { exact: false }).waitFor();
-  assert(versions.some(v => v.isCheckpoint && v.label === 'Edit öncesi'));
-  assert(chapter.content.includes('Checkpoint öncesi'));
-  const checkpointCount = versions.length;
-  await page.getByRole("button", { name: "☆ Bu anı sakla", exact: true }).click();
-  await page.getByPlaceholder("Edit öncesi").fill("Edit öncesi");
-  await page.getByRole("button", { name: "Sakla", exact: true }).click();
-  await page.getByPlaceholder("Edit öncesi").waitFor({ state: "detached" });
-  assert.equal(versions.length, checkpointCount);
-  await page.screenshot({ path: join(artifacts, "versions.png") });
-  await page.locator('.chapter-history-list button').last().click();
-  assert.equal(await page.locator(".chapter-history-box .chapter-comparison").count(), 0);
-  assert.equal(await page.locator(".chapter-preview [contenteditable]").count(), 0);
-  const selectable = await page.locator(".chapter-preview").evaluate(el => { const range=document.createRange(); range.selectNodeContents(el); getSelection().removeAllRanges(); getSelection().addRange(range); return getSelection().toString(); });
-  assert(selectable.includes("Paragraf0"));
-  await page.getByRole("button", { name: "Karşılaştır", exact: true }).click();
-  const compareEditor = page.locator(".chapter-comparison .rich-content");
-  await compareEditor.fill("Karşılaştırmada yazılan son taslak.");
-  await page.setViewportSize({ width: 390, height: 844 });
-  const columns = await page.locator(".chapter-comparison > section").evaluateAll(nodes => nodes.map(n => ({ x:n.getBoundingClientRect().x, y:n.getBoundingClientRect().y })));
-  assert.equal(columns[0].x, columns[1].x); assert(columns[1].y > columns[0].y);
-  await page.setViewportSize({ width: 1600, height: 1000 });
-  await page.screenshot({ path: join(artifacts, "comparison.png") });
-  await page.getByRole("button", { name: "Karşılaştırmayı kapat" }).click();
-  assert.equal(await page.locator(".chapter-history-box .chapter-comparison").count(), 0);
-  const previousRevision = chapter.revision;
-  const countedBeforeRestore = developmentWords;
-  await page.getByRole("button", { name: "Bu metinden devam et" }).click();
-  await page.locator('.chapter-history-veil').waitFor({ state: 'detached' }); assert(chapter.content.includes('Paragraf0'));
-  assert(versions.some(v => v.content.includes("Karşılaştırmada yazılan son taslak.")));
-  assert(chapter.revision > previousRevision);
-  assert.equal(developmentWords, countedBeforeRestore);
-  await page.getByText("Seçtiğin metinden devam ediyorsun. Önceki taslağın Geçmiş\'te saklandı.", { exact: true }).waitFor();
-  }
   developmentWords = 0;
   developmentWords = 3000;
   await page.reload(); await page.locator(".chapter-document").first().waitFor();
@@ -318,6 +280,6 @@ try {
   await page.getByText('Kalan analiz: 1/2 (24 saat)', { exact: true }).waitFor();
   assert(await page.getByRole("button", { name: "✦ Gelişimimi takip et" }).isEnabled());
   assert.equal(developmentRequests, requestsAfterSuccess + 1);
-  console.log('PASS theme/mobile/focus/autosave/history disabled/3000 eligibility/paste/drop/IME/consent/settings/archive retained after opt-out/no real AI/atelier/notes/tour');
+  console.log('PASS theme/mobile/focus/autosave/history removed/3000 eligibility/paste/drop/IME/consent/settings/archive retained after opt-out/no real AI/atelier/notes/tour');
   console.log('Screenshots:', artifacts);
 } finally { await browser?.close(); await vite.close(); }

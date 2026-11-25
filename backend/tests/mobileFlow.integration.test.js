@@ -25,7 +25,6 @@ import library from '../routes/library.js';
 import readerAccess from '../middlewares/readerAccess.js';
 import User from '../models/User.js';
 import Relationship from '../models/Relationship.js';
-import ChapterVersion from '../models/ChapterVersion.js';
 import PushDevice from '../models/PushDevice.js';
 import PushDelivery from '../models/PushDelivery.js';
 import Notification from '../models/Notification.js';
@@ -39,7 +38,7 @@ describe('native login → feed → writing → reopen → publication → readi
     vi.stubEnv('JWT_SECRET', randomUUID() + randomUUID());
     repl = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
     await mongoose.connect(repl.getUri(), { dbName: `acb_mobile_test_${randomUUID().replaceAll('-', '')}` });
-    await Promise.all([User.init(), Relationship.init(), ChapterVersion.init(), PushDevice.init(), PushDelivery.init()]);
+    await Promise.all([User.init(), Relationship.init(), PushDevice.init(), PushDelivery.init()]);
     await User.create({ email: 'mobile@example.test', kullaniciAdi: 'gezgin_yazar', sifreHash: await bcrypt.hash('a-real-test-password', 4), emailVerified: true, profileComplete: true, birthYear: 1990, ...newTermsAcceptance() });
     const app = express(); app.use(express.json()); app.use(cookieParser()); app.use('/api', (req, res, next) => req.path.startsWith('/auth/') ? next() : readerAccess(req, res, next));
     for (const [path, router] of Object.entries({ auth, works, chapters, public: publicRoutes, feed, logs, 'reading-progress': progress, mobile, plots, characters, relationships, user: userRoutes, 'reading-lists': readingLists, quotes, library })) app.use(`/api/${path}`, router);

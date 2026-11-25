@@ -6,14 +6,13 @@ import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from "vites
 import User from "../models/User.js";
 import Work from "../models/Work.js";
 import Chapter from "../models/Chapter.js";
-import ChapterVersion from "../models/ChapterVersion.js";
 import InlineComment from "../models/InlineComment.js";
 import AuthSession from "../models/AuthSession.js";
 import Fingerprint from "../models/DevelopmentFingerprint.js";
 import Sample from "../models/DevelopmentSample.js";
 import { createNativeSession } from "../services/authSession.js";
 import { newTermsAcceptance } from "../config/terms.js";
-import { saveChapterVersion } from "../services/chapterHistory.js";
+import { saveChapter } from "../services/chapterEditing.js";
 import { readBookSnapshot } from "../services/bookSnapshot.js";
 import { chapterVersion } from "../services/contentModeration.js";
 import { captureEvidence } from "../services/reportWorkflow.js";
@@ -30,7 +29,7 @@ describe.skipIf(!uri)("private edits to published chapters", () => {
     if (!/^mongodb:\/\/(localhost|127\.0\.0\.1):\d+\/?(?:\?.*)?$/.test(uri)) throw new Error("Loopback only");
     vi.stubEnv("JWT_SECRET", randomBytes(48).toString("hex"));
     await mongoose.connect(uri, { dbName: database });
-    await Promise.all([User, Work, Chapter, ChapterVersion, InlineComment, AuthSession, Fingerprint, Sample].map(model => model.init()));
+    await Promise.all([User, Work, Chapter, InlineComment, AuthSession, Fingerprint, Sample].map(model => model.init()));
     const app = express(); app.use(express.json());
     app.use("/chapters", chapterRouter); app.use("/public", publicRouter); app.use("/inline-comments", inlineCommentsRouter);
     server = app.listen(0, "127.0.0.1"); await once(server, "listening");
@@ -52,7 +51,7 @@ describe.skipIf(!uri)("private edits to published chapters", () => {
     const response = await fetch(base + path, { method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
     return { status: response.status, body: await response.json() };
   }
-  const save = (content, expectedRevision = 0, title) => saveChapterVersion({ id: chapter._id, userId: owner._id, expectedRevision, content, title });
+  const save = (content, expectedRevision = 0, title) => saveChapter({ id: chapter._id, userId: owner._id, expectedRevision, content, title });
   const publish = revision => request(`/chapters/${chapter._id}/status`, "PATCH", { status: "published", expectedRevision: revision });
   const read = () => request(`/public/works/${work._id}/chapters/${chapter._id}`);
   it("keeps live text/title private from draft edits, reloads the owner draft and exports it", async () => {

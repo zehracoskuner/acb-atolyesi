@@ -157,7 +157,11 @@ app.use('/api', cookieOrigin);
 app.use(passport.initialize());
 
 // ── Health ──
-app.get("/api/ready", lifecycle.ready);
+app.get("/api/ready", (_req, res, next) => {
+  const release = process.env.RAILWAY_GIT_COMMIT_SHA;
+  if (/^[a-f0-9]{40}$/i.test(release ?? "")) res.set("X-ACB-Release", release);
+  next();
+}, lifecycle.ready);
 app.get("/api/health", (_, res) =>
   res.json({ ok: true, msg: "ACB Atölyesi ayakta ✅" })
 );

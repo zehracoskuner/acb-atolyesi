@@ -3,7 +3,7 @@ import ensureAuth from '../middlewares/ensureAuth.js';
 import { authLimiter, writeLimiter } from '../middlewares/rateLimiter.js';
 import { TERMS_VERSION } from '../config/terms.js';
 import legal from '../config/mobileLegal.json' with { type: 'json' };
-import { CHAPTER_HISTORY_ENABLED, DEVELOPMENT_COACH_LAUNCH_ENABLED, PLOTWORLD_SCENE_AI_ENABLED } from '../../shared/features.js';
+import { DEVELOPMENT_COACH_LAUNCH_ENABLED, PLOTWORLD_SCENE_AI_ENABLED } from '../../shared/features.js';
 import { validPushToken, verifyMobileEmail, reorderMobileScenes, moveMobileScene } from '../services/mobile.js';
 import PushDevice from '../models/PushDevice.js';
 import PushDelivery from '../models/PushDelivery.js';
@@ -22,7 +22,7 @@ const toolResponse = action => async (req, res, next) => {
 router.get('/tools/:kind/:recordId', ensureAuth, toolResponse(req => readMobileTool(req.user.id, req.params.kind, req.params.recordId, req.query)));
 router.post('/tools/:kind', ensureAuth, writeLimiter, toolResponse(req => saveMobileTool(req.user.id, req.params.kind, req.body)));
 router.get('/config', (_req, res) => res.json({ termsVersion: TERMS_VERSION, legal,
-  features: { chapterHistory: CHAPTER_HISTORY_ENABLED, developmentCoach: DEVELOPMENT_COACH_LAUNCH_ENABLED, sceneAI: PLOTWORLD_SCENE_AI_ENABLED } }));
+  features: { chapterHistory: false, developmentCoach: DEVELOPMENT_COACH_LAUNCH_ENABLED, sceneAI: PLOTWORLD_SCENE_AI_ENABLED } }));
 router.post('/verify-email', authLimiter, async (req, res, next) => {
   try { await verifyMobileEmail(req.body?.token); res.json({ verified: true }); } catch (error) { next(error); }
 });

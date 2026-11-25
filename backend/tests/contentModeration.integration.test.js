@@ -14,7 +14,6 @@ import User from '../models/User.js';
 import Work from '../models/Work.js';
 import Character from '../models/Character.js';
 import Chapter from '../models/Chapter.js';
-import ChapterVersion from '../models/ChapterVersion.js';
 import Report from '../models/Report.js';
 import ImageAsset from '../models/ImageAsset.js';
 import ContentCase from '../models/ContentCase.js';
@@ -32,7 +31,7 @@ import aiRoutes from '../routes/ai.js';
 import { prepareContentModeration } from '../services/prepareContentModeration.js';
 import { fileContentReport, decideContent, manualVisualBlock } from '../services/contentModeration.js';
 import { blockedUntil, assertImageAllowed } from '../services/imageAssets.js';
-import { saveChapterVersion } from '../services/chapterHistory.js';
+import { saveChapter } from '../services/chapterEditing.js';
 import { newTermsAcceptance } from '../config/terms.js';
 vi.mock('../services/emailService.js', () => ({ sendMail: vi.fn(), sendStaffMail: vi.fn(), sendAdminMail: vi.fn(), SITE_URL: 'https://example.test' }));
 vi.mock('../utils/aiModerator.js', () => ({ moderateCover: vi.fn(() => { throw Error('AI must not run'); }), moderateChapter: vi.fn(() => { throw Error('AI must not run'); }) }));
@@ -47,7 +46,7 @@ beforeAll(async () => {
   replica = await MongoMemoryReplSet.create({ replSet: { count: 1 }, binary: { version: '7.0.14', downloadDir: fileURLToPath(new URL('../node_modules/.cache/mongodb-binaries', import.meta.url)) } });
   await mongoose.connect(replica.getUri(), { dbName: 'content_moderation_test' });
   await prepareContentModeration();
-  await Promise.all([User.init(), Work.init(), Chapter.init(), ChapterVersion.init(), Notification.init()]);
+  await Promise.all([User.init(), Work.init(), Chapter.init(), Notification.init()]);
   png = await sharp({ create: { width: 8, height: 8, channels: 3, background: 'red' } }).png().toBuffer();
   const app = express(); app.use(cookieParser(), express.json());
   app.use('/api/moderation', ensureAuth, moderationRoutes);
@@ -60,7 +59,7 @@ beforeAll(async () => {
 }, 120000);
 afterAll(async () => { if (server) await new Promise(resolve => server.close(resolve)); await mongoose.disconnect(); await replica?.stop(); vi.unstubAllEnvs(); });
 beforeEach(async () => {
-  for (const model of [User, Work, Character, Chapter, ChapterVersion, Report, ContentCase, ImageAsset, VisualAccount, Notification]) await model.deleteMany({});
+  for (const model of [User, Work, Character, Chapter, Report, ContentCase, ImageAsset, VisualAccount, Notification]) await model.deleteMany({});
   [owner, admin, moderator, ...reporters] = await User.create(['user', 'admin', 'moderator', ...Array(7).fill('user')].map((role, i) => ({ email: `u${i}@example.test`, kullaniciAdi: `member${i}`, role, profileComplete: true, birthYear: 1990, ...newTermsAcceptance() })));
   vi.spyOn(cloudinary.uploader, 'destroy').mockResolvedValue({ result: 'ok' });
   vi.spyOn(cloudinary.uploader, 'upload_stream').mockImplementation((options, callback) => new Writable({ write(chunk, encoding, done) { done(); }, final(done) {
@@ -243,9 +242,9 @@ it('blocked accounts cannot upload or associate old URLs, but can delete picture
   expect((await request('/user/avatar', owner, 'DELETE')).status).toBe(200);
   expect((await request('/user/profile', owner, 'PATCH', { bio: 'Still writing' })).status).toBe(200);
   const ch = await Chapter.create({ work: f.target, title: 'Draft' });
-  await expect(saveChapterVersion({ id: ch._id, userId: owner._id, expectedRevision: 0, content: '<p>Text</p>' })).resolves.toMatchObject({ revision: 1 });
+  await expect(saveChapter({ id: ch._id, userId: owner._id, expectedRevision: 0, content: '<p>Text</p>' })).resolves.toMatchObject({ revision: 1 });
 });
-it('chapter removal keeps text/history, survives draft saves, and requires revision-matched human approval', async () => {
+it('chapter removal keeps text, survives draft saves, and requires revision-matched human approval', async () => {
   const work = await Work.create({ user: owner._id, title: 'Book', status: 'published' });
   const chapter = await Chapter.create({ work: work._id, title: 'Chapter', content: '<p>Original context</p>', status: 'published' });
   await Work.updateOne({ _id: work._id }, { $set: { publishedChapterIds: [chapter._id] } });
@@ -254,9 +253,8 @@ it('chapter removal keeps text/history, survives draft saves, and requires revis
   expect((await Chapter.findById(chapter._id)).content).toBe('<p>Original context</p>');
   expect(await VisualAccount.countDocuments()).toBe(0);
   expect((await request(`/chapters/${chapter._id}/status`, owner, 'PATCH', { status: 'published', expectedRevision: 0 })).status).toBe(202);
-  await saveChapterVersion({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Revised context</p>' });
+  await saveChapter({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Revised context</p>' });
   expect((await Chapter.findById(chapter._id)).moderationHold).toBe(true);
-  expect(await ChapterVersion.countDocuments({ chapter: chapter._id })).toBe(2);
   expect((await request(`/chapters/${chapter._id}/status`, owner, 'PATCH', { status: 'published', expectedRevision: 1 })).status).toBe(202);
   expect((await request(`/chapters/${chapter._id}/approve`, moderator, 'PATCH', { expectedRevision: 0, reason: 'Stale' })).status).toBe(409);
   expect((await request(`/chapters/${chapter._id}/approve`, moderator, 'PATCH', { expectedRevision: 1, reason: 'Yeni sürüm bağlamıyla uygun' })).status).toBe(200);
@@ -268,7 +266,7 @@ it('old chapter complaints cannot silently remove a newly published version and 
   const chapter = await Chapter.create({ work: work._id, title: 'Chapter', content: '<p>Original</p>', status: 'published' });
   await Work.updateOne({ _id: work._id }, { $set: { publishedChapterIds: [chapter._id] } });
   const r = await report({ kind: 'chapter', target: chapter._id });
-  await saveChapterVersion({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Edited</p>' });
+  await saveChapter({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Edited</p>' });
   expect((await request(`/chapters/${chapter._id}/status`, owner, 'PATCH', { status: 'published', expectedRevision: 1 })).status).toBe(200);
   await expect(decision(r.contentCase)).rejects.toMatchObject({ status: 409 });
   for (const file of ['routes/upload.js', 'config/cloudinary.js', 'routes/chapter.js']) {
@@ -281,7 +279,7 @@ it('private drafting does not invalidate complaints against the text still live'
   const chapter = await Chapter.create({ work: work._id, title: 'Chapter', content: '<p>Live version</p>', status: 'published' });
   await Work.updateOne({ _id: work._id }, { $set: { publishedChapterIds: [chapter._id] } });
   const r = await report({ kind: 'chapter', target: chapter._id });
-  await saveChapterVersion({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Private draft</p>' });
+  await saveChapter({ id: chapter._id, userId: owner._id, expectedRevision: 0, content: '<p>Private draft</p>' });
   await decision(r.contentCase, 'remove', moderator);
   const stored = await Chapter.findById(chapter._id).select('+draftContent');
   expect(stored.content).toBe('<p>Live version</p>');

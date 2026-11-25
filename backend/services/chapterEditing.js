@@ -2,7 +2,6 @@ import { captureDevelopmentWriting } from "./developmentWriting.js";
 import mongoose from "mongoose";
 import Chapter from "../models/Chapter.js";
 import Work from "../models/Work.js";
-import ChapterVersion from "../models/ChapterVersion.js";
 import { sanitizeChapterHtml } from "../utils/sanitizeHtml.js";
 import { ownerChapter } from "./chapterPublication.js";
 import { validateChapterMedia } from "./chapterMedia.js";
@@ -11,28 +10,7 @@ import { chapterEditorContent, preserveLegacyClientParagraphIds } from "./reader
 import { initializeDevelopment, advanceDevelopment, developmentStatus } from "./developmentProgress.js";
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
-export async function markChapterCheckpoint({ id, userId, expectedRevision, label = "" }) {
-  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw fail(400, "Güncel kayıt bilgisi gerekli.");
-  if (typeof label !== "string" || label.trim().length > 80) throw fail(400, "Kayıt adı en fazla 80 karakter olmalıdır.");
-  return mongoose.connection.transaction(async session => {
-    const { chapter } = await ownedChapter(id, userId, session);
-    const revision = chapter.revision ?? 0;
-    if (revision !== expectedRevision) throw Object.assign(fail(409, "Bölüm değişti. Güncel metni kontrol edin."), { code: "CHAPTER_CONFLICT", current: ownerChapter(chapter) });
-    // Legacy chapters may not have a snapshot yet. Capture exactly the saved text,
-    // without changing the chapter, revision, publication state or save timestamp.
-    let item = await ChapterVersion.findOne({ chapter: id, revision }).session(session);
-    if (!item) [item] = await ChapterVersion.create([{
-      chapter: id, work: chapter.work, revision, title: ownerChapter(chapter).title, content: ownerChapter(chapter).content, media: ownerChapter(chapter).media || [],
-      savedAt: chapter.savedAt || chapter.updatedAt,
-    }], { session });
-    item.isCheckpoint = true;
-    item.label = label.trim();
-    await item.save({ session });
-    return { item };
-  }, { readConcern: { level: "snapshot" }, writeConcern: { w: "majority" }, readPreference: "primary" });
-}
-
-export async function createChapterVersion({ workId, userId, title }) {
+export async function createChapter({ workId, userId, title }) {
   if (title !== undefined && typeof title !== "string") throw fail(400, "Başlık metin olmalıdır.");
   return mongoose.connection.transaction(async session => {
     const work = await Work.findOne({ _id: workId, user: userId }).session(session);
@@ -44,17 +22,15 @@ export async function createChapterVersion({ workId, userId, title }) {
     const savedAt = new Date();
     const [chapter] = await Chapter.create([{ work: workId, title: title?.trim() || `Bölüm ${order}`,
       content: "", order, status: "draft", revision: 0, savedAt }], { session });
-    await ChapterVersion.create([{ chapter: chapter._id, work: workId, revision: 0,
-      title: chapter.title, content: "", savedAt }], { session });
     return { item: chapter, revision: 0, savedAt };
   }, { readConcern: { level: "snapshot" }, writeConcern: { w: "majority" }, readPreference: "primary" });
 }
 
-export async function ownedChapter(id, userId, session = null) {
+async function ownedChapter(id, userId, session = null) {
   const chapter = await Chapter.findById(id).select("+draftContent").session(session);
   if (!chapter) throw fail(404, "Bölüm bulunamadı.");
   const work = await Work.findOne({ _id: chapter.work, user: userId }).session(session);
-  if (!work) throw fail(403, "Bu bölümün geçmişine yalnızca eser sahibi erişebilir.");
+  if (!work) throw fail(403, "Bu bölüme yalnızca eser sahibi erişebilir.");
   return { chapter, work };
 }
 
@@ -65,7 +41,7 @@ export async function updateChapterOrder({ id, userId, order }) {
     throw fail(400, "Bölüm sırası sıfır veya pozitif bir tam sayı olmalı.");
   return mongoose.connection.transaction(async session => {
     const { chapter } = await ownedChapter(id, userId, session);
-    // Use the same work lock as createChapterVersion for concurrent appends.
+    // Use the same work lock as createChapter for concurrent appends.
     await Work.updateOne({ _id: chapter.work }, { $inc: { __v: 1 } }, { session });
     chapter.order = order;
     await chapter.save({ session });
@@ -74,14 +50,12 @@ export async function updateChapterOrder({ id, userId, order }) {
   }, { readConcern: { level: "snapshot" }, writeConcern: { w: "majority" }, readPreference: "primary" });
 }
 
-export async function saveChapterVersion({ id, userId, expectedRevision, title, content, media, restoreRevision, eligibleWordDelta = 0, paragraphEditing = false }) {
+export async function saveChapter({ id, userId, expectedRevision, title, content, media, eligibleWordDelta = 0, paragraphEditing = false }) {
   if (!Number.isSafeInteger(eligibleWordDelta) || eligibleWordDelta < 0) throw fail(400, "Geçersiz kelime artışı.");
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)
     throw fail(400, "Güncel kayıt bilgisi gerekli. Bölümü yeniden açın.");
   if ((title !== undefined && typeof title !== "string") || (content !== undefined && typeof content !== "string"))
     throw fail(400, "Başlık ve içerik metin olmalıdır.");
-  if (restoreRevision !== undefined && (!Number.isSafeInteger(restoreRevision) || restoreRevision < 0))
-    throw fail(400, "Geçersiz kayıt.");
   return mongoose.connection.transaction(async session => {
     const { chapter, work } = await ownedChapter(id, userId, session);
     const revision = chapter.revision ?? 0;
@@ -91,40 +65,25 @@ export async function saveChapterVersion({ id, userId, expectedRevision, title, 
       });
     }
     await initializeDevelopment(work, session);
-    let source;
-    if (restoreRevision !== undefined) {
-      source = await ChapterVersion.findOne({ chapter: id, revision: restoreRevision }).session(session);
-      if (!source) throw fail(404, "Kayıt bulunamadı.");
-      title = source.title;
-      content = source.content;
-      media = source.media || [];
-    }
     const current = ownerChapter(chapter);
     const nextTitle = title === undefined ? current.title : title.trim() || current.title;
     const cleanContent = value => sanitizeChapterHtml(value, { paragraphIds: true });
     const matchesContent = (next, saved) => next === saved ||
       (paragraphEditing && next === cleanContent(chapterEditorContent(saved)));
     let nextContent = content === undefined ? current.content : cleanContent(content);
-    if (content !== undefined && !source && !paragraphEditing) {
+    if (content !== undefined && !paragraphEditing) {
       nextContent = preserveLegacyClientParagraphIds(nextContent, current.content);
     }
     const nextMedia = media === undefined ? (current.media || []) : await validateChapterMedia(media, userId, session, current.media || []);
     const contentChanged = !matchesContent(nextContent, current.content);
     if (!contentChanged) nextContent = current.content;
     const changed = nextTitle !== current.title || contentChanged || JSON.stringify(nextMedia) !== JSON.stringify(current.media || []);
-    if (!changed && source) throw fail(400, "Seçilen metin mevcut metinle aynı; geri yükleme gerekmiyor.");
-    if (!changed && !source) {
+    if (!changed) {
       if (work.isModified()) await work.save({ session });
       return { item: current, revision, savedAt: chapter.savedAt || chapter.updatedAt, draftedFromPublished: false, development: developmentStatus(work) };
     }
 
-    // Capture legacy/current text before replacing it. This is lazy, never a bulk migration.
-    const previous = await ChapterVersion.exists({ chapter: id, revision }).session(session);
-    if (!previous) await ChapterVersion.create([{
-      chapter: id, work: chapter.work, revision, title: current.title, content: current.content, media: current.media || [],
-      savedAt: chapter.savedAt || chapter.updatedAt || new Date(),
-    }], { session });
-    const acceptedWords = await captureDevelopmentWriting({ chapter, work, beforeContent: current.content, nextContent, claimed: eligibleWordDelta, excluded: !!source || !contentChanged, session });
+    const acceptedWords = await captureDevelopmentWriting({ chapter, work, beforeContent: current.content, nextContent, claimed: eligibleWordDelta, excluded: !contentChanged, session });
     const savedAt = new Date();
     const keepPublished = chapter.status === "published";
     const drafted = !keepPublished && chapter.status !== "draft";
@@ -140,19 +99,13 @@ export async function saveChapterVersion({ id, userId, expectedRevision, title, 
         status: "draft", ...(chapter.moderationHold ? {} : { reviewNote: "", reviewedAt: null, reviewedBy: null }) });
     }
     await chapter.save({ session });
-    await ChapterVersion.create([{
-      chapter: id, work: chapter.work, revision: chapter.revision, title: nextTitle,
-      content: nextContent, media: nextMedia, savedAt, ...(source ? { restoredFrom: source.revision, restoredFromRevision: source.revision } : {}),
-    }], { session });
     advanceDevelopment(work, acceptedWords);
     if (!keepPublished) work.publishedChapterIds = (work.publishedChapterIds || []).filter(value => String(value) !== String(id));
     work.status = work.publishedChapterIds.length ? "published" : "draft";
     await work.save({ session });
     return { item: ownerChapter(chapter), revision: chapter.revision, savedAt, draftedFromPublished: drafted, development: developmentStatus(work) };
   }, { readConcern: { level: "snapshot" }, writeConcern: { w: "majority" }, readPreference: "primary" }).catch(async error => {
-    // Concurrent legacy baseline inserts can surface as duplicate-key errors;
-    // convert only a verified moved revision into a user-visible conflict.
-    if (error.code === 11000 || error.name === "VersionError") {
+    if (error.name === "VersionError") {
       const { chapter } = await ownedChapter(id, userId);
       if ((chapter.revision ?? 0) !== expectedRevision) throw Object.assign(
         fail(409, "Bölüm başka bir sekme veya cihazda değişti. Metniniz korunuyor."),

@@ -8,16 +8,15 @@ import Work         from "../models/Work.js";
 import Notification from "../models/Notification.js";
 import User         from "../models/User.js";
 import { sendStaffMail } from "../services/emailService.js";
-import ChapterVersion from "../models/ChapterVersion.js";
-import { ownedChapter, saveChapterVersion, createChapterVersion, markChapterCheckpoint, updateChapterOrder } from "../services/chapterHistory.js";
+import { saveChapter, createChapter, updateChapterOrder } from "../services/chapterEditing.js";
 
 import { readDevelopment } from "../services/developmentProgress.js";
 import { runDevelopmentCoach, readLatestDevelopment, listDevelopmentAnalyses } from "../services/developmentCoach.js";
 import { aiLimiter } from "../middlewares/rateLimiter.js";
 import { deleteLikedChapter } from "../services/likes.js";
-import { ownerChapter, publishChapterVersion } from "../services/chapterPublication.js";
+import { ownerChapter, updateChapterPublication } from "../services/chapterPublication.js";
 import { chapterEditorContent, stripChapterParagraphIds } from "../services/readerContent.js";
-import { CHAPTER_HISTORY_ENABLED, DEVELOPMENT_COACH_LAUNCH_ENABLED } from "../../shared/features.js";
+import { DEVELOPMENT_COACH_LAUNCH_ENABLED } from "../../shared/features.js";
 
 const router = express.Router();
 const editorView = (item, req) => ({ ...item, content: req.query.editor === '1'
@@ -28,11 +27,6 @@ router.use(/^\/development(?=\/|$)/, ensureAuth, (_req, res, next) => {
   next();
 });
 router.use((_req, res, next) => { res.set("Cache-Control", "private, no-store"); next(); });
-router.use((req, res, next) => {
-  if (!CHAPTER_HISTORY_ENABLED && /^\/[^/]+\/(versions(?:\/|$)|checkpoint(?:\/|$))/i.test(req.path))
-    return res.status(404).json({ message: "Bu özellik henüz kullanıma açık değil." });
-  next();
-});
 
 async function assertWorkOwner(workId, userId) {
   const work = await Work.findOne({ _id: workId, user: userId });
@@ -81,17 +75,17 @@ router.get("/", ensureAuth, async (req, res) => {
 // ════════════════════════════════════════════
 router.get("/development/:workId", ensureAuth, async (req, res) => {
   try { res.json(await readDevelopment({ workId: req.params.workId, userId: req.user?.id || req.userId })); }
-  catch (err) { historyError(res, err); }
+  catch (err) { chapterError(res, err); }
 });
 
 router.get("/development/:workId/latest", ensureAuth, async (req, res) => {
   try { res.json(await readLatestDevelopment({ workId: req.params.workId, userId: req.user?.id || req.userId })); }
-  catch (err) { historyError(res, err); }
+  catch (err) { chapterError(res, err); }
 });
 router.get("/development/:workId/analyses", ensureAuth, async (req, res) => {
   try { res.json(await listDevelopmentAnalyses({ workId: req.params.workId, userId: req.user.id,
     before: req.query.before === undefined ? undefined : Number(req.query.before) })); }
-  catch (err) { historyError(res, err); }
+  catch (err) { chapterError(res, err); }
 });
 
 router.post("/development/:workId", ensureAuth, aiLimiter, async (req, res) => {
@@ -122,7 +116,7 @@ router.post("/", ensureAuth, async (req, res) => {
     const { workId, title } = req.body;
     const userId = req.user?.id || req.userId;
     if (!workId) return res.status(400).json({ message: "workId gerekli." });
-    res.status(201).json(await createChapterVersion({ workId, userId, title }));
+    res.status(201).json(await createChapter({ workId, userId, title }));
   } catch (err) {
     console.error("Create Chapter Error:", err);
     res.status(err.status || 500).json({ message: err.status && err.status < 500 ? err.message : "Bölüm oluşturulamadı." });
@@ -132,7 +126,7 @@ router.post("/", ensureAuth, async (req, res) => {
 // ════════════════════════════════════════════
 // 4. BÖLÜM GÜNCELLE — PUT /api/chapters/:id
 // ════════════════════════════════════════════
-function historyError(res, err) {
+function chapterError(res, err) {
   return res.status(err.status || 503).json({ message: err.status ? err.message : "Kayıt tamamlanamadı. Metniniz korunuyor; tekrar deneyin.", code: err.status ? err.code : undefined,
     current: err.current && editorView(err.current, res.req) });
 }
@@ -144,51 +138,19 @@ router.put("/:id", ensureAuth, async (req, res) => {
       return res.json(await updateChapterOrder({ id: req.params.id,
         userId: req.user?.id || req.userId, order: req.body.order }));
     }
-    const result = await saveChapterVersion({ id: req.params.id, userId: req.user?.id || req.userId,
+    const result = await saveChapter({ id: req.params.id, userId: req.user?.id || req.userId,
       expectedRevision: req.body.expectedRevision, title: req.body.title, content: req.body.content, media: req.body.media, eligibleWordDelta: req.body.eligibleWordDelta,
       paragraphEditing: req.query.editor === '1' });
     res.json({ ...result, item: editorView(result.item, req) });
-  } catch (err) { historyError(res, err); }
+  } catch (err) { chapterError(res, err); }
 });
-router.post("/:id/checkpoint", ensureAuth, async (req, res) => {
-  try {
-    res.json(await markChapterCheckpoint({ id: req.params.id, userId: req.user?.id || req.userId,
-      expectedRevision: req.body.expectedRevision, label: req.body.label }));
-  } catch (err) { historyError(res, err); }
-});
-router.get("/:id/versions", ensureAuth, async (req, res) => {
-  try {
-    await ownedChapter(req.params.id, req.user?.id || req.userId);
-    const before = req.query.before === undefined ? undefined : Number(req.query.before);
-    if (before !== undefined && (!Number.isSafeInteger(before) || before < 0)) return res.status(400).json({ message: "Geçersiz kayıt." });
-    const items = await ChapterVersion.find({ chapter: req.params.id, ...(before === undefined ? {} : { revision: { $lt: before } }) })
-      .select("revision title savedAt restoredFrom isCheckpoint label").sort({ revision: -1 }).limit(50).lean();
-    res.json({ items, nextBefore: items.length === 50 ? items.at(-1).revision : null });
-  } catch (err) { historyError(res, err); }
-});
-router.get("/:id/versions/:revision", ensureAuth, async (req, res) => {
-  try {
-    await ownedChapter(req.params.id, req.user?.id || req.userId);
-    const item = await ChapterVersion.findOne({ chapter: req.params.id, revision: Number(req.params.revision) }).lean();
-    if (!item) return res.status(404).json({ message: "Kayıt bulunamadı." });
-    res.json({ item });
-  } catch (err) { historyError(res, err); }
-});
-router.post("/:id/versions/:revision/restore", ensureAuth, async (req, res) => {
-  try {
-    const result = await saveChapterVersion({ id: req.params.id, userId: req.user?.id || req.userId,
-      expectedRevision: req.body.expectedRevision, restoreRevision: Number(req.params.revision) });
-    res.json({ ...result, item: editorView(result.item, req) });
-  } catch (err) { historyError(res, err); }
-});
-
 // ════════════════════════════════════════════
 // 5. DURUM GÜNCELLE — PATCH /api/chapters/:id/status
 // ════════════════════════════════════════════
 router.patch("/:id/status", ensureAuth, async (req, res) => {
   try {
     const userId = req.user?.id || req.userId;
-    const result = await publishChapterVersion({ id: req.params.id, userId,
+    const result = await updateChapterPublication({ id: req.params.id, userId,
       expectedRevision: req.body.expectedRevision, status: req.body.status, workId: req.body.workId });
     if (result.pending) {
       await notifyStaff({ workId: result.item.work, type: 'chapter_pending', text: `"${result.item.title}" bölümü moderatör onayı bekliyor.` });
@@ -197,7 +159,7 @@ router.patch("/:id/status", ensureAuth, async (req, res) => {
       catch (error) { console.error('Staff mail gönderilemedi:', error.message); }
     }
     res.status(result.pending ? 202 : 200).json({ ...result, item: editorView(result.item, req) });
-  } catch (error) { historyError(res, error); }
+  } catch (error) { chapterError(res, error); }
 });
 
 

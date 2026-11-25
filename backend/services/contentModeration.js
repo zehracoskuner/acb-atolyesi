@@ -152,7 +152,7 @@ export async function decideContent(id, actor, body) {
         await chapter.save({ session });
         await Work.updateOne({ _id: chapter.work }, { $pull: { publishedChapterIds: chapter._id } }, { session });
         await syncWork(chapter.work, session);
-        await notify(current.owner, `ACB Atölyesi: Bölüm kararı: ${action === 'remove' ? 'yayından kaldırıldı' : 'geri alındı'}. Gerekçe: ${reason}. Metniniz ve sürüm geçmişiniz korunuyor.`, session, id);
+        await notify(current.owner, `ACB Atölyesi: Bölüm kararı: ${action === 'remove' ? 'yayından kaldırıldı' : 'geri alındı'}. Gerekçe: ${reason}. Metniniz korunuyor.`, session, id);
       } else {
         const asset = await ImageAsset.findById(current.asset).select('+bytes').session(session);
         if (action === 'remove') {

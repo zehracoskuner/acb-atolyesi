@@ -42,7 +42,7 @@ Cloudinary silme başarısı tüm önbelleklerin aynı anda boşaldığı anlam�
 ## Bu değişikliğin dosyaları
 
 - Backend modelleri: `models/ImageAsset.js`, `ContentCase.js`, `VisualAccount.js`, `Report.js`, `Chapter.js`, `Work.js`, `User.js`.
-- Backend servisleri: `services/imageAssets.js`, `contentModeration.js`, `prepareContentModeration.js`, `chapterReview.js`, `chapterHistory.js`.
+- Backend servisleri: `services/imageAssets.js`, `contentModeration.js`, `prepareContentModeration.js`, `chapterReview.js`, `chapterEditing.js`.
 - Backend uçları/bağlantıları: `routes/contentModeration.js`, `upload.js`, `user.js`, `works.js`, `chapter.js`, `reports.js`, `adminReports.js`, `admin.js`, `moderator.js`; `config/cloudinary.js`, `server.js`.
 - Frontend: `components/ContentModerationPanel.jsx`, `ImageReportButton.jsx`, `ReportModal.jsx`; `pages/AdminPanel.jsx`, `ModeratorPanel.jsx`, `ProfilePage.jsx`, `StoryDetailsPage.jsx`.
 - Testler: `tests/contentModeration.integration.test.js`, `upload.test.js`, `chapterAccess.test.js`, `reportWorkflow.integration.test.js`; geçiş/teslim belgesi: `CONTENT_MODERATION.md`.

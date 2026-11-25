@@ -4,7 +4,6 @@ import { once } from "node:events";
 import User from "../models/User.js";
 import userRouter from "../routes/user.js";
 import chapterRouter from "../routes/chapter.js";
-import { CHAPTER_HISTORY_ENABLED } from "../../shared/features.js";
 vi.mock("../services/emailService.js", () => ({ sendMail: vi.fn(), sendStaffMail: vi.fn(), SITE_URL: "https://example.test" }));
 vi.mock("../../shared/features.js", async importOriginal => ({ ...await importOriginal(), DEVELOPMENT_COACH_LAUNCH_ENABLED: true }));
 vi.mock("../middlewares/ensureAuth.js", () => ({ default: (req, _res, next) => { req.user = { id: "507f1f77bcf86cd799439011" }; next(); }, optionalAuth: (_req, _res, next) => next() }));
@@ -27,8 +26,7 @@ it("defaults to undecided and accepts only explicit boolean choices", async () =
   const response = await fetch(base + "/user/development-coach", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: '{"preference":true}' });
   expect(response.status).toBe(400); expect(update).toHaveBeenCalledTimes(2);
 });
-it("keeps every public history/checkpoint/restore operation disabled", async () => {
-  expect(CHAPTER_HISTORY_ENABLED).toBe(false);
+it("returns 404 for removed history routes", async () => {
   for (const [method, path] of [["GET", "versions"], ["GET", "VERSIONS/1"], ["POST", "checkpoint"], ["POST", "versions/1/restore"]]) {
     expect((await fetch(base + "/chapters/507f1f77bcf86cd799439011/" + path, { method })).status).toBe(404);
   }
