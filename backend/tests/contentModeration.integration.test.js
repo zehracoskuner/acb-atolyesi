@@ -359,7 +359,7 @@ it('blocked accounts cannot upload or associate old URLs, but can delete picture
   const ch = await Chapter.create({ work: f.target, title: 'Draft' });
   await expect(saveChapter({ id: ch._id, userId: owner._id, expectedRevision: 0, content: '<p>Text</p>' })).resolves.toMatchObject({ revision: 1 });
 });
-it('chapter removal keeps text/history, survives draft saves, and requires revision-matched human approval', async () => {
+it('chapter removal keeps text, survives draft saves, and requires revision-matched human approval', async () => {
   const work = await Work.create({ user: owner._id, title: 'Book', status: 'published' });
   const chapter = await Chapter.create({ work: work._id, title: 'Chapter', content: '<p>Original context</p>', status: 'published' });
   await Work.updateOne({ _id: work._id }, { $set: { publishedChapterIds: [chapter._id] } });
